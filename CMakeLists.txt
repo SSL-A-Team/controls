@@ -12,7 +12,7 @@ endif()
 
 add_custom_command(
   OUTPUT ${IMPORTED_LIB_PATH}
-  COMMAND nix develop --command cargo build --workspace $<$<CONFIG:Release,RelWithDebInfo>:--release>
+  COMMAND cargo build --workspace $<$<CONFIG:Release,RelWithDebInfo>:--release>
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 add_custom_target(

@@ -15,8 +15,14 @@ The shared code is written primarily in Rust with C interface bindings.
   * Tests for the C-compatible bindings
 
 ## Dependencies
+### For Rust users
 * [nix](https://nixos.org/)
-* [CMake](https://cmake.org/) (Only required for using C bindings)
+
+### For C++ users
+* [Rust](https://rust-lang.org/)
+  * `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+* [CMake](https://cmake.org/)
+  * `apt install cmake`
 
 ## Building and Testing
 
