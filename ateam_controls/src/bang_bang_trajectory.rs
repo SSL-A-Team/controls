@@ -211,15 +211,17 @@ fn compute_bang_bang_traj_1d_state_at_t(traj: BangBangTraj1D, s: f64, sd: f64, c
 
     for (part_end_time, part_acceleration) in [(traj.t2, traj.sdd1), (traj.t3, traj.sdd2), (traj.t4, traj.sdd3)] {
         if current_time < part_end_time {
+            let time_in_part;
             if t < part_end_time {
-                let time_in_part = t - current_time;
-                s += sd * time_in_part + 0.5 * part_acceleration * time_in_part * time_in_part;  // v * t + 1/2 * a * t^2
-                sd += part_acceleration * time_in_part;  // a * t
+                time_in_part = t - current_time;
+            } else {
+                time_in_part = part_end_time - current_time;
+            }
+            s += sd * time_in_part + 0.5 * part_acceleration * time_in_part * time_in_part;  // v * t + 1/2 * a * t^2
+            sd += part_acceleration * time_in_part;  // a * t
+            if t < part_end_time {
                 return (s, sd)  // reached the desired time
             } else {
-                let time_in_part = part_end_time - current_time;
-                s += sd * time_in_part + 0.5 * part_acceleration * time_in_part * time_in_part;  // v * t + 1/2 * a * t^2
-                sd += part_acceleration * time_in_part;  // a * t
                 current_time = part_end_time;
             }
         }
