@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.28)
 
+# Set vcpkg toolchain file if not already set
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "C:/Tools/vcpkg/scripts/buildsystems/vcpkg.cmake")
+endif()
+
 project(ateam_controls LANGUAGES CXX)
 
 set(RUST_TARGET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/target)
