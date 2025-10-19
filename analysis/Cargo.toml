@@ -1,0 +1,11 @@
+[package]
+name = "analysis"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ateam_controls = { path = "../ateam_controls" }
+plotters = "0.3"
+nalgebra = "*"
+serde = { "version" = "*", features=["derive"] }
+serde_json = "*"

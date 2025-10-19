@@ -2,5 +2,6 @@
 members = [
   "ateam_controls",
   "ateam_controls_c",
+  "analysis",
 ]
 resolver = "3"
