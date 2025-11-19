@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "ateam_controls",
+  "ateam_controls_c",
+]
+resolver = "3"
