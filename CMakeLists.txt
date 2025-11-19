@@ -25,6 +25,7 @@ set_target_properties(
   ateam_controls PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/ateam_controls_c/include"
   IMPORTED_LOCATION ${IMPORTED_LIB_PATH}
+  IMPORTED_GLOBAL TRUE
 )
 add_dependencies(ateam_controls build_rust_lib)
 
