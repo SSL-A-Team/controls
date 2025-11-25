@@ -4,6 +4,7 @@ use core::f64::consts::PI;
 
 
 /// sdd1: t1 -> t2, sdd2: t2 -> t3, sdd3: t3 -> t4
+#[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct BangBangTraj1D {
     pub sdd1: f64,
@@ -24,6 +25,7 @@ impl BangBangTraj1D {
     }
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct BangBangTraj3D {
     pub x_traj: BangBangTraj1D,

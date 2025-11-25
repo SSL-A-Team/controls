@@ -5,6 +5,7 @@ pub mod robot_model;
 use nalgebra::{Vector3, Vector4};
 
 
+#[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct GlobalState {
     pub x: f64,
@@ -15,6 +16,7 @@ pub struct GlobalState {
     pub zd: f64,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct GlobalControl2Order {
     pub xdd: f64,
@@ -40,6 +42,7 @@ impl GlobalControl2Order {
     }
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct GlobalControl1Order {
     pub xd: f64,
@@ -65,6 +68,7 @@ impl GlobalControl1Order {
     }
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct WheelTorques {
     pub torque_fl: f64,
@@ -93,6 +97,7 @@ impl WheelTorques {
     }
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct WheelVelocities {
     pub velocity_fl: f64,
