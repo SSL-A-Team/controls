@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.28)
 
 project(ateam_controls LANGUAGES CXX)
 
+# Find ROS2 dependencies
+find_package(ament_cmake REQUIRED)
+
 set(RUST_TARGET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/target)
 
 if((CMAKE_BUILD_TYPE STREQUAL "Release") OR (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
@@ -20,7 +23,7 @@ add_custom_target(
   DEPENDS ${IMPORTED_LIB_PATH}
 )
 
-add_library(ateam_controls STATIC IMPORTED)
+add_library(ateam_controls STATIC IMPORTED GLOBAL)
 set_target_properties(
   ateam_controls PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/ateam_controls_c/include"
@@ -29,5 +32,23 @@ set_target_properties(
 )
 add_dependencies(ateam_controls build_rust_lib)
 
+# Install the library
+install(
+  FILES ${IMPORTED_LIB_PATH}
+  DESTINATION lib
+)
+
+# Install headers
+install(
+  DIRECTORY ateam_controls_c/include/
+  DESTINATION include
+)
+
+# Export the library so other packages can find it
+ament_export_include_directories(include)
+ament_export_libraries(ateam_controls)
+
 enable_testing()
 add_subdirectory(cpp_tests)
+
+ament_package()
