@@ -13,10 +13,23 @@ else()
   set(IMPORTED_LIB_PATH ${RUST_TARGET_DIR}/debug/libateam_controls_c.a)
 endif()
 
+# Glob all Rust source files and Cargo.toml files to track as dependencies
+file(GLOB_RECURSE RUST_SOURCES
+  "${CMAKE_CURRENT_SOURCE_DIR}/ateam_controls/src/*.rs"
+  "${CMAKE_CURRENT_SOURCE_DIR}/ateam_controls_c/src/*.rs"
+  "${CMAKE_CURRENT_SOURCE_DIR}/analysis/src/*.rs"
+)
+file(GLOB_RECURSE CARGO_TOMLS
+  "${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/*/Cargo.toml"
+)
+
 add_custom_command(
   OUTPUT ${IMPORTED_LIB_PATH}
   COMMAND cargo build --workspace $<$<CONFIG:Release,RelWithDebInfo>:--release>
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  DEPENDS ${RUST_SOURCES} ${CARGO_TOMLS}
+  COMMENT "Building Rust library with Cargo"
 )
 add_custom_target(
   build_rust_lib ALL
@@ -31,12 +44,6 @@ set_target_properties(
   IMPORTED_GLOBAL TRUE
 )
 add_dependencies(ateam_controls build_rust_lib)
-
-# Install the library
-install(
-  FILES ${IMPORTED_LIB_PATH}
-  DESTINATION lib
-)
 
 # Install the library
 install(
