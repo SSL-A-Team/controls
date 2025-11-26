@@ -38,6 +38,12 @@ install(
   DESTINATION lib
 )
 
+# Install the library
+install(
+  FILES ${IMPORTED_LIB_PATH}
+  DESTINATION lib
+)
+
 # Install headers
 install(
   DIRECTORY ateam_controls_c/include/
@@ -46,7 +52,8 @@ install(
 
 # Export the library so other packages can find it
 ament_export_include_directories(include)
-ament_export_libraries(ateam_controls)
+ament_export_libraries(ateam_controls_c)
+ament_export_link_flags("-L${CMAKE_INSTALL_PREFIX}/lib")
 
 enable_testing()
 add_subdirectory(cpp_tests)
