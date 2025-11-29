@@ -20,6 +20,22 @@ pub struct GlobalState {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
+pub struct GlobalPosition {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
+pub struct GlobalVelocity {
+    pub xd: f64,
+    pub yd: f64,
+    pub zd: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct GlobalControl2Order {
     pub xdd: f64,
     pub ydd: f64,

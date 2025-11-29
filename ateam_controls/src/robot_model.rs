@@ -1,9 +1,9 @@
-use crate::{GlobalState, WheelTorques, WheelVelocities, GlobalControl1Order, GlobalControl2Order};
+use crate::{GlobalControl1Order, GlobalControl2Order, GlobalState, GlobalVelocity, WheelTorques, WheelVelocities};
 use nalgebra::{Matrix3, Matrix3x4, Matrix4x3, Vector3};
 use libm::{sin, cos};
 
 
-struct RobotModel {
+pub struct RobotModel {
     wheel_conversion_mat: Matrix3x4<f64>,
     wheel_conversion_mat_inv: Matrix4x3<f64>,
 }
@@ -21,27 +21,27 @@ impl RobotModel {
 
     // TODO update to global_control_1order_to_wheel_velocities
     // z = 0 for local robot frame
-    pub fn global_state_to_wheel_velocities(&self, current_state: GlobalState) -> WheelVelocities {
-        let z = current_state.z;
+    pub fn global_state_to_wheel_velocities(&self, state: &GlobalState) -> WheelVelocities {
+        let z = state.z;
         let rotation_mat = Matrix3::<f64>::new(
             cos(z), -sin(z), 0.0,
             sin(z),  cos(z), 0.0,
             0.0   ,  0.0   , 1.0,
         );
         let cartesian_velocities = Vector3::<f64>::new(
-            current_state.xd, current_state.yd, current_state.zd,
+            state.xd, state.yd, state.zd,
         );
         let wheel_velocities = (rotation_mat * self.wheel_conversion_mat).transpose() * cartesian_velocities;
         WheelVelocities::from_vec(&wheel_velocities)
     }
 
     // z = 0 for local robot frame
-    pub fn wheel_velocities_to_global_control_1order(&self, wheel_velocities: WheelVelocities, z: f64) -> GlobalControl1Order {
+    pub fn wheel_velocities_to_global_velocity(&self, wheel_velocities: &WheelVelocities, z: f64) -> GlobalVelocity {
         todo!();
     }
 
     // z = 0 for local robot frame
-    pub fn wheel_torques_to_global_control_2order(&self, torques: WheelTorques, z: f64) -> GlobalControl2Order {
+    pub fn wheel_torques_to_global_control_2order(&self, torques: &WheelTorques, z: f64) -> GlobalControl2Order {
         let rotation_mat = Matrix3::<f64>::new(
             cos(z),-sin(z), 0.0,
             sin(z), cos(z), 0.0,
@@ -53,7 +53,7 @@ impl RobotModel {
     }
 
     // z = 0 for local robot frame
-    pub fn global_control_2order_to_wheel_torques(&self, global_control: GlobalControl2Order, z: f64) -> WheelTorques {
+    pub fn global_control_2order_to_wheel_torques(&self, global_control: &GlobalControl2Order, z: f64) -> WheelTorques {
         let rotation_mat = Matrix3::<f64>::new(
             cos(-z), sin(z) , 0.0,
             sin(-z), cos(-z), 0.0,

@@ -1,5 +1,5 @@
 use crate::trajectory_params::*;
-use crate::GlobalState;
+use crate::{GlobalState, GlobalControl2Order};
 use core::f64::consts::PI;
 use libm::{cos, sin};
 
@@ -78,6 +78,27 @@ pub fn compute_bang_bang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state:
     let (y_f, yd_f) = compute_bang_bang_traj_1d_state_at_t(traj.y_traj, current_state.y, current_state.yd, current_time, t);
     let (z_f, zd_f) = compute_bang_bang_traj_1d_state_at_t(traj.z_traj, current_state.z, current_state.zd, current_time, t);
     GlobalState { x: x_f, y: y_f, z: z_f, xd: xd_f, yd: yd_f, zd: zd_f }
+}
+
+pub fn compute_bang_bang_traj_3d_global_control_2order_at_t(traj: BangBangTraj3D, t: f64) -> GlobalControl2Order {
+    GlobalControl2Order {
+        xdd: compute_bang_bang_traj_1d_global_control_2order_at_t(traj.x_traj, t),
+        ydd: compute_bang_bang_traj_1d_global_control_2order_at_t(traj.y_traj, t),
+        zdd: compute_bang_bang_traj_1d_global_control_2order_at_t(traj.z_traj, t),
+    }
+}
+
+fn compute_bang_bang_traj_1d_global_control_2order_at_t(traj: BangBangTraj1D, t: f64) -> f64 {
+    if t >= traj.t3 {
+        return traj.sdd3;
+    }
+    if t >= traj.t2 {
+        return traj.sdd2;
+    }
+    if t >= traj.t1 {
+        return traj.sdd1;
+    }
+    panic!("Tried to use a trajectory that hasn't started yet!")
 }
 
 /// Takes the initial velocity sd0, the desired positive change in position ds, and the bang-bang acceleration sdd
