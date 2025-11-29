@@ -1,6 +1,7 @@
 use crate::trajectory_params::*;
 use crate::GlobalState;
 use core::f64::consts::PI;
+use libm::{cos, sin};
 
 
 /// sdd1: t1 -> t2, sdd2: t2 -> t3, sdd3: t3 -> t4
@@ -48,8 +49,8 @@ pub fn compute_optimal_bang_bang_traj_3d(init_state: GlobalState, target_state: 
     let mut x_traj;
     let mut y_traj;
     loop {
-        let cos_alpha = alpha.cos();
-        let sin_alpha = alpha.sin();
+        let cos_alpha = cos(alpha);
+        let sin_alpha = sin(alpha);
         x_traj = compute_bang_bang_traj_1d(init_state.x, init_state.xd, target_state.x, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION, cos_alpha * MAX_TRANSLATIONAL_VELOCITY);
         y_traj = compute_bang_bang_traj_1d(init_state.y, init_state.yd, target_state.y, sin_alpha * MAX_TRANSLATIONAL_ACCELERATION, sin_alpha * MAX_TRANSLATIONAL_VELOCITY);
         // x_traj = compute_bang_bang_traj_1d(init_state.x, init_state.xd, target_state.x, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION, (PI / 4.0).cos() * MAX_TRANSLATIONAL_VELOCITY);
@@ -86,7 +87,7 @@ fn compute_positive_triangular_profile(sd0: f64, ds: f64, sdd: f64) -> (f64, f64
         panic!("compute_positive_triangular_profile: All values should be positive")
     }
 
-    let t2 = ((sdd * ds + 0.5 * sd0 * sd0) / (sdd * sdd)).sqrt();
+    let t2 = libm::sqrt(((sdd * ds + 0.5 * sd0 * sd0) / (sdd * sdd)));
     let t1 = t2 - sd0 / sdd;
     let vpeak = sdd * t2;
     (t1, t2, vpeak)

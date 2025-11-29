@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ateam_controls = { path = "../ateam_controls" }
+ateam-controls = { path = "../ateam_controls", features = ["std"] }
 plotters = "0.3"
 nalgebra = "*"
 serde = { "version" = "*", features=["derive"] }
