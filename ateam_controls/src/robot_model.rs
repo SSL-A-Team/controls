@@ -1,7 +1,49 @@
-use crate::{GlobalControl1Order, GlobalControl2Order, GlobalState, GlobalVelocity, WheelTorques, WheelVelocities};
-use nalgebra::{Matrix3, Matrix3x4, Matrix4x3, Vector3};
+use nalgebra::{Matrix3, Matrix3x4, Matrix4x3};
 use libm::{sin, cos};
+use crate::geometry::{Accel, RigidBodyState, Twist, Vector3, Vector4};
 
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
+pub struct WheelTorques {
+    fl: f64,
+    bl: f64,
+    br: f64,
+    fr: f64,
+}
+
+impl From<nalgebra::Vector4<f64>> for WheelTorques {
+    fn from(v: nalgebra::Vector4<f64>) -> Self {
+        WheelTorques {fl: v.x, bl: v.y, br: v.z, fr: v.w}
+    }
+}
+
+impl From<WheelTorques> for nalgebra::Vector4<f64> {
+    fn from(torques: WheelTorques) -> Self {
+        Self::new(torques.fl, torques.bl, torques.br, torques.fr)
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
+pub struct WheelVelocities {
+    fl: f64,
+    bl: f64,
+    br: f64,
+    fr: f64,
+}
+
+impl From<nalgebra::Vector4<f64>> for WheelVelocities {
+    fn from(v: nalgebra::Vector4<f64>) -> Self {
+        WheelVelocities {fl: v.x, bl: v.y, br: v.z, fr: v.w}
+    }
+}
+
+impl From<WheelVelocities> for nalgebra::Vector4<f64> {
+    fn from(velocities: WheelVelocities) -> Self {
+        Self::new(velocities.fl, velocities.bl, velocities.br, velocities.fr)
+    }
+}
 
 pub struct RobotModel {
     wheel_conversion_mat: Matrix3x4<f64>,
@@ -19,49 +61,72 @@ impl RobotModel {
         RobotModel {wheel_conversion_mat: mat, wheel_conversion_mat_inv: mat_inv}
     }
 
-    // TODO update to global_control_1order_to_wheel_velocities
-    // z = 0 for local robot frame
-    pub fn global_state_to_wheel_velocities(&self, state: &GlobalState) -> WheelVelocities {
-        let z = state.z;
+    /// Calculate wheel velocities from global frame twist and yaw
+    pub fn global_twist_to_wheel_velocities(&self, twist: &Twist, yaw: f64) -> WheelVelocities {
         let rotation_mat = Matrix3::<f64>::new(
-            cos(z), -sin(z), 0.0,
-            sin(z),  cos(z), 0.0,
-            0.0   ,  0.0   , 1.0,
+            cos(yaw), -sin(yaw), 0.0,
+            sin(yaw),  cos(yaw), 0.0,
+            0.0     ,  0.0     , 1.0,
         );
-        let cartesian_velocities = Vector3::<f64>::new(
-            state.xd, state.yd, state.zd,
+        let velocities = nalgebra::Vector3::<f64>::new(
+            twist.linear.x, twist.linear.y, twist.angular.z,
         );
-        let wheel_velocities = (rotation_mat * self.wheel_conversion_mat).transpose() * cartesian_velocities;
-        WheelVelocities::from_vec(&wheel_velocities)
+        WheelVelocities::from((rotation_mat * self.wheel_conversion_mat).transpose() * velocities)
     }
 
-    // z = 0 for local robot frame
-    pub fn wheel_velocities_to_global_velocity(&self, wheel_velocities: &WheelVelocities, z: f64) -> GlobalVelocity {
+    /// Calculate wheel velocities from local frame twist
+    pub fn twist_to_wheel_velocities(&self, twist: &Twist) -> WheelVelocities {
+        let velocities = nalgebra::Vector3::<f64>::new(
+            twist.linear.x, twist.linear.y, twist.angular.z,
+        );
+        WheelVelocities::from(self.wheel_conversion_mat.transpose() * velocities)
+    }
+
+    /// Calculate local frame twist from wheel velocities
+    pub fn wheel_velocities_to_twist(&self, wheel_velocities: &WheelVelocities) -> Twist {
         todo!();
     }
 
-    // z = 0 for local robot frame
-    pub fn wheel_torques_to_global_control_2order(&self, torques: &WheelTorques, z: f64) -> GlobalControl2Order {
-        let rotation_mat = Matrix3::<f64>::new(
-            cos(z),-sin(z), 0.0,
-            sin(z), cos(z), 0.0,
-            0.0   , 0.0   , 1.0,
-        );
-        let wheel_torques = torques.to_vec();
-        let accelerations = rotation_mat * self.wheel_conversion_mat * wheel_torques;
-        GlobalControl2Order::from_vec(&accelerations)
+    // Calculate local frame accel from wheel torques
+    pub fn wheel_torques_to_accel(&self, torques: &WheelTorques) -> Accel {
+        let torques_vec = nalgebra::Vector4::from(*torques);
+        let accelerations = self.wheel_conversion_mat * torques_vec;
+        Accel {
+            linear: Vector3 { x: accelerations[(0, 0)], y: accelerations[(1, 0)], z: 0.0 },
+            angular: Vector3 { x: 0.0, y: 0.0, z: accelerations[(2, 0)] },
+        }
     }
 
-    // z = 0 for local robot frame
-    pub fn global_control_2order_to_wheel_torques(&self, global_control: &GlobalControl2Order, z: f64) -> WheelTorques {
+    // Calculate global frame accel from wheel torques and yaw
+    pub fn wheel_torques_to_global_accel(&self, torques: &WheelTorques, yaw: f64) -> Accel {
         let rotation_mat = Matrix3::<f64>::new(
-            cos(-z), sin(z) , 0.0,
-            sin(-z), cos(-z), 0.0,
-            0.0    , 0.0    , 1.0,
+            cos(yaw),-sin(yaw), 0.0,
+            sin(yaw), cos(yaw), 0.0,
+            0.0   , 0.0   , 1.0,
         );
-        let control = global_control.to_vec();
-        let torques = self.wheel_conversion_mat_inv * rotation_mat * control;
-        WheelTorques::from_vec(&torques)
+        let torques_vec = nalgebra::Vector4::from(*torques);
+        let accelerations = rotation_mat * self.wheel_conversion_mat * torques_vec;
+        Accel {
+            linear: Vector3 { x: accelerations[(0, 0)], y: accelerations[(1, 0)], z: 0.0 },
+            angular: Vector3 { x: 0.0, y: 0.0, z: accelerations[(2, 0)] },
+        }
+    }
+
+    // Calculate wheel torques from local frame accel
+    pub fn accel_to_wheel_torques(&self, accel: &Accel) -> WheelTorques {
+        let accel_vec = nalgebra::Vector3::new(accel.linear.x, accel.linear.y, accel.angular.z);
+        WheelTorques::from(self.wheel_conversion_mat_inv * accel_vec)
+    }
+
+    // Calculate wheel torques from global frame accel and yaw
+    pub fn global_accel_to_wheel_torques(&self, accel: &Accel, yaw: f64) -> WheelTorques {
+        let rotation_mat = Matrix3::<f64>::new(
+            cos(-yaw), sin(yaw) , 0.0,
+            sin(-yaw), cos(-yaw), 0.0,
+            0.0      , 0.0      , 1.0,
+        );
+        let accel_vec = nalgebra::Vector3::new(accel.linear.x, accel.linear.y, accel.angular.z);
+        WheelTorques::from(self.wheel_conversion_mat_inv * rotation_mat * accel_vec)
     }
 }
 

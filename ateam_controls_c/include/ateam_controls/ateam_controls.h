@@ -5,26 +5,43 @@
 
 extern "C" {
 
-typedef struct GlobalState {
+typedef struct Vector3 {
     double x;
     double y;
     double z;
-    double xd;
-    double yd;
-    double zd;
-} GlobalState_t;
+} Vecotr3_t;
 
-typedef struct GlobalControl2Order {
-    double xdd;
-    double ydd;
-    double zdd;
-} GlobalControl2Order_t;
+typedef struct Vector4 {
+    double x;
+    double y;
+    double z;
+    double w;
+} Vector4_t;
 
-typedef struct GlobalControl1Order {
-    double xd;
-    double yd;
-    double zd;
-} GlobalControl1Order_t;
+typedef struct Pose {
+    Vector3 position;
+    Vector4 orientation;  // Quaternion
+} Pose_t;
+
+typedef struct Twist {
+    Vector3 linear;
+    Vector3 angular;
+} Twist_t;
+
+typedef struct Accel {
+    Vector3 linear;
+    Vector3 angular;
+} Accel_t;
+
+typedef struct Wrench {
+    Vector3 force;
+    Vector3 torque;
+} Wrnech_t;
+
+typedef struct RigidBodyState {
+    Pose pose;
+    Twist twist;
+} RigidBodyState_t;
 
 typedef struct WheelTorques {
     double torque_fl;
@@ -36,7 +53,7 @@ typedef struct WheelTorques {
 typedef struct WheelVelocities {
     double velocity_fl;
     double velocity_bl;
-    double veloci;
+    double velocity_br;
     double velocity_fr;
 } WheelVelocities_t;
 
@@ -57,9 +74,8 @@ typedef struct BangBangTraj3D {
 } BangBangTraj3D_t;
 
 uint64_t ateam_controls_add(uint64_t left, uint64_t right);
-BangBangTraj3D_t ateam_controls_compute_optimal_bang_bang_traj_3d(GlobalState_t init_state, GlobalState_t target_state);
-GlobalState_t ateam_controls_compute_bang_bang_traj_3d_state_at_t(BangBangTraj3D_t traj, GlobalState_t current_state, double current_time, double t);
-
+BangBangTraj3D_t ateam_controls_compute_optimal_bangbang_traj_3d(RigidBodyState init_state, RigidBodyState target_state);
+RigidBodyState_t ateam_controls_compute_bangbang_traj_3d_state_at_t(BangBangTraj3D_t traj, RigidBodyState_t current_state, double current_time, double t);
 
 }
 

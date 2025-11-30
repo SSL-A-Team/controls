@@ -1,4 +1,4 @@
-use ateam_controls::bang_bang_trajectory::{BangBangTraj1D, compute_optimal_bang_bang_traj_3d, compute_bang_bang_traj_3d_state_at_t};
+use ateam_controls::bangbang_trajectory::{BangBangTraj1D, compute_optimal_bangbang_traj_3d, compute_bangbang_traj_3d_state_at_t};
 use ateam_controls::{GlobalState, GlobalControl2Order};
 use ateam_controls::trajectory_params::{ALLOWABLE_ERROR_POS, ALLOWABLE_ERROR_VEL};
 
@@ -63,7 +63,7 @@ fn run_simulation(init_state: GlobalState, dt: f64) -> (LinkedList<GlobalState>,
         states.push_back(current_state);
         // compute optimal trajectory
         let target = GlobalState::default();
-        let mut traj = compute_optimal_bang_bang_traj_3d(current_state, target);
+        let mut traj = compute_optimal_bangbang_traj_3d(current_state, target);
         traj.time_shift(t);
         // set the accelerations for current time to next time
         current_control = GlobalControl2Order {
@@ -202,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Write the computed velocities to a file for playback to real robot
     let target_state = GlobalState::default();
-    let traj = compute_optimal_bang_bang_traj_3d(init_state, target_state);
+    let traj = compute_optimal_bangbang_traj_3d(init_state, target_state);
     let mut states = LinkedList::<GlobalState>::new();
     let mut controls = LinkedList::<GlobalControl2Order>::new();
     let mut t = 0.0;
@@ -210,7 +210,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
           t < traj.y_traj.t4 ||
           t < traj.z_traj.t4 {
         states.push_back(
-            compute_bang_bang_traj_3d_state_at_t(traj, init_state, 0.0, t)
+            compute_bangbang_traj_3d_state_at_t(traj, init_state, 0.0, t)
         );
         controls.push_back(GlobalControl2Order {
             xdd: set_acceleration(traj.x_traj, t),
