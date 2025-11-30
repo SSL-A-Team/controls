@@ -8,13 +8,13 @@ use libm::{cos, sin};
 #[derive(Clone, Copy, Default, Debug)]
 /// sdd1: t1 -> t2, sdd2: t2 -> t3, sdd3: t3 -> t4
 pub struct BangBangTraj1D {
-    sdd1: f64,
-    sdd2: f64,
-    sdd3: f64,
-    t1: f64,
-    t2: f64,
-    t3: f64,
-    t4: f64,
+    pub sdd1: f64,
+    pub sdd2: f64,
+    pub sdd3: f64,
+    pub t1: f64,
+    pub t2: f64,
+    pub t3: f64,
+    pub t4: f64,
 }
 
 impl BangBangTraj1D {
@@ -29,9 +29,9 @@ impl BangBangTraj1D {
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct BangBangTraj3D {
-    x: BangBangTraj1D,
-    y: BangBangTraj1D,
-    z: BangBangTraj1D,
+    pub x: BangBangTraj1D,
+    pub y: BangBangTraj1D,
+    pub z: BangBangTraj1D,
 }
 
 impl BangBangTraj3D {
@@ -118,7 +118,7 @@ fn compute_positive_triangular_profile(sd0: f64, ds: f64, sdd: f64) -> (f64, f64
         panic!("compute_positive_triangular_profile: All values should be positive")
     }
 
-    let t2 = libm::sqrt(((sdd * ds + 0.5 * sd0 * sd0) / (sdd * sdd)));
+    let t2 = libm::sqrt((sdd * ds + 0.5 * sd0 * sd0) / (sdd * sdd));
     let t1 = t2 - sd0 / sdd;
     let vpeak = sdd * t2;
     (t1, t2, vpeak)
