@@ -61,7 +61,36 @@ impl RobotModel {
         RobotModel {wheel_transform_mat: mat, wheel_transform_mat_inv: mat_inv}
     }
 
-    /// Calculate wheel velocities from global frame twist and yaw
+    /// Calculate local frame twist from wheel velocities
+    pub fn wheel_velocities_to_local_twist(&self, wheel_velocities: &WheelVelocities) -> Twist {
+        todo!();
+    }
+
+    /// Calculate wheel velocities from local frame twist
+    pub fn local_twist_to_wheel_velocities(&self, twist: &Twist) -> WheelVelocities {
+        let velocities = nalgebra::Vector3::<f64>::new(
+            twist.linear.x, twist.linear.y, twist.angular.z,
+        );
+        WheelVelocities::from(self.wheel_transform_mat.transpose() * velocities)
+    }
+
+    // Calculate local frame accel from wheel torques
+    pub fn wheel_torques_to_local_accel(&self, torques: &WheelTorques) -> Accel {
+        let torques_vec = nalgebra::Vector4::from(*torques);
+        let accelerations = self.wheel_transform_mat * torques_vec;
+        Accel {
+            linear: Vector3 { x: accelerations[(0, 0)], y: accelerations[(1, 0)], z: 0.0 },
+            angular: Vector3 { x: 0.0, y: 0.0, z: accelerations[(2, 0)] },
+        }
+    }
+
+    // Calculate wheel torques from local frame accel
+    pub fn local_accel_to_wheel_torques(&self, accel: &Accel) -> WheelTorques {
+        let accel_vec = nalgebra::Vector3::new(accel.linear.x, accel.linear.y, accel.angular.z);
+        WheelTorques::from(self.wheel_transform_mat_inv * accel_vec)
+    }
+
+    /// Calculate wheel velocities from global frame twist and robot yaw
     pub fn global_twist_to_wheel_velocities(&self, twist: &Twist, yaw: f64) -> WheelVelocities {
         let rotation_mat = Matrix3::<f64>::new(
             cos(yaw), -sin(yaw), 0.0,
@@ -72,29 +101,6 @@ impl RobotModel {
             twist.linear.x, twist.linear.y, twist.angular.z,
         );
         WheelVelocities::from((rotation_mat * self.wheel_transform_mat).transpose() * velocities)
-    }
-
-    /// Calculate wheel velocities from local frame twist
-    pub fn twist_to_wheel_velocities(&self, twist: &Twist) -> WheelVelocities {
-        let velocities = nalgebra::Vector3::<f64>::new(
-            twist.linear.x, twist.linear.y, twist.angular.z,
-        );
-        WheelVelocities::from(self.wheel_transform_mat.transpose() * velocities)
-    }
-
-    /// Calculate local frame twist from wheel velocities
-    pub fn wheel_velocities_to_twist(&self, wheel_velocities: &WheelVelocities) -> Twist {
-        todo!();
-    }
-
-    // Calculate local frame accel from wheel torques
-    pub fn wheel_torques_to_accel(&self, torques: &WheelTorques) -> Accel {
-        let torques_vec = nalgebra::Vector4::from(*torques);
-        let accelerations = self.wheel_transform_mat * torques_vec;
-        Accel {
-            linear: Vector3 { x: accelerations[(0, 0)], y: accelerations[(1, 0)], z: 0.0 },
-            angular: Vector3 { x: 0.0, y: 0.0, z: accelerations[(2, 0)] },
-        }
     }
 
     // Calculate global frame accel from wheel torques and yaw
@@ -110,12 +116,6 @@ impl RobotModel {
             linear: Vector3 { x: accelerations[(0, 0)], y: accelerations[(1, 0)], z: 0.0 },
             angular: Vector3 { x: 0.0, y: 0.0, z: accelerations[(2, 0)] },
         }
-    }
-
-    // Calculate wheel torques from local frame accel
-    pub fn accel_to_wheel_torques(&self, accel: &Accel) -> WheelTorques {
-        let accel_vec = nalgebra::Vector3::new(accel.linear.x, accel.linear.y, accel.angular.z);
-        WheelTorques::from(self.wheel_transform_mat_inv * accel_vec)
     }
 
     // Calculate wheel torques from global frame accel and yaw
