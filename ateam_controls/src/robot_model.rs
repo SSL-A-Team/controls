@@ -1,6 +1,6 @@
 use nalgebra::{Matrix3, Matrix3x4, Matrix4x3};
 use libm::{sin, cos};
-use crate::geometry::{Accel, Twist, Vector3};
+use crate::geometry::{Accel, Twist, Pose, Vector3};
 
 
 #[repr(C)]
@@ -43,6 +43,30 @@ impl From<WheelVelocities> for nalgebra::Vector4<f64> {
     fn from(velocities: WheelVelocities) -> Self {
         Self::new(velocities.fl, velocities.bl, velocities.br, velocities.fr)
     }
+}
+
+pub fn global_frame_to_robot_frame_pose(pose: Pose) -> Pose {
+    todo!()
+}
+
+pub fn robot_frame_to_global_frame_pose(pose: Pose) -> Pose {
+    todo!()
+}
+
+pub fn global_frame_to_robot_frame_twist(twist: Twist) -> Twist {
+    todo!()
+}
+
+pub fn robot_frame_to_global_frame_twist(twist: Twist) -> Twist {
+    todo!()
+}
+
+pub fn global_frame_to_robot_frame_accel(accel: Accel) -> Accel {
+    todo!()
+}
+
+pub fn robot_frame_to_global_frame_accel(accel: Accel) -> Accel {
+    todo!()
 }
 
 pub struct RobotModel {
