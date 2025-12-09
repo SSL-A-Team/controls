@@ -15,16 +15,16 @@ fn next_state(mut current_state: RigidBodyState, current_control: Accel, dt: f64
     if current_state.pose.position.y.abs() <= ALLOWABLE_ERROR_POS && current_state.twist.linear.y.abs() <= ALLOWABLE_ERROR_VEL {
         current_state.twist.linear.y = 0.0;
     }
-    if current_state.pose.to_xy_yaw().z.abs() <= ALLOWABLE_ERROR_POS && current_state.twist.angular.z.abs() <= ALLOWABLE_ERROR_VEL {
+    if current_state.pose.to_xy_theta().z.abs() <= ALLOWABLE_ERROR_POS && current_state.twist.angular.z.abs() <= ALLOWABLE_ERROR_VEL {
         current_state.twist.angular.z = 0.0;
     }
     let next_x = current_state.pose.position.x + current_state.twist.linear.x * dt + 0.5 * current_control.linear.x * dt * dt;
     let next_y = current_state.pose.position.y + current_state.twist.linear.y * dt + 0.5 * current_control.linear.y * dt * dt;
-    let next_z = current_state.pose.to_xy_yaw().z + current_state.twist.angular.z * dt + 0.5 * current_control.angular.z * dt * dt;
+    let next_z = current_state.pose.to_xy_theta().z + current_state.twist.angular.z * dt + 0.5 * current_control.angular.z * dt * dt;
     let next_xd = current_state.twist.linear.x + current_control.linear.x * dt;
     let next_yd = current_state.twist.linear.y + current_control.linear.y * dt;
     let next_zd = current_state.twist.angular.z + current_control.angular.z * dt;
-    let next_pose = Pose::from_xy_yaw(next_x, next_y, next_z);
+    let next_pose = Pose::from_xy_theta(next_x, next_y, next_z);
     let next_twist = Twist {
         linear: Vector3 { x: next_xd, y: next_yd, z: 0.0 },
         angular: Vector3 { x: 0.0, y: 0.0, z: next_zd }
@@ -41,7 +41,7 @@ fn run_simulation(init_state: RigidBodyState, dt: f64) -> (LinkedList<RigidBodyS
     while 
         current_state.pose.position.x.abs() > ALLOWABLE_ERROR_POS ||
         current_state.pose.position.y.abs() > ALLOWABLE_ERROR_POS ||
-        current_state.pose.to_xy_yaw().z.abs() > ALLOWABLE_ERROR_POS {
+        current_state.pose.to_xy_theta().z.abs() > ALLOWABLE_ERROR_POS {
         // if not the first iteration, update the state using previous iteration accelerations
         if t != 0.0 {
             current_state = next_state(current_state, current_control, dt);
@@ -80,7 +80,7 @@ fn plot_simulation(states: LinkedList<RigidBodyState>, controls: LinkedList<Acce
         xd_vals.push(state.twist.linear.x);
         y_vals.push(state.pose.position.y);
         yd_vals.push(state.twist.linear.y);
-        z_vals.push(state.pose.to_xy_yaw().z);
+        z_vals.push(state.pose.to_xy_theta().z);
         zd_vals.push(state.twist.linear.z);
         times.push(time);
         time += dt;
@@ -149,7 +149,7 @@ fn plot_simulation(states: LinkedList<RigidBodyState>, controls: LinkedList<Acce
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let init_state = RigidBodyState {
-        pose: Pose::from_xy_yaw(1.0, 1.0, 1.0),
+        pose: Pose::from_xy_theta(1.0, 1.0, 1.0),
         twist: Twist::default(),
     };
     // let init_state = GlobalState {

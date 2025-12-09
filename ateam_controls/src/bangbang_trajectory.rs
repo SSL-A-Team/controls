@@ -42,7 +42,7 @@ impl BangBangTraj3D {
     }
 }
 
-pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_state: RigidBodyState) -> BangBangTraj3D {
+pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_pose: Pose) -> BangBangTraj3D {
     let mut alpha = PI / 4.0;
     let mut increment = PI / 8.0;
     let precision = 0.0000001;
@@ -51,10 +51,10 @@ pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_state
     loop {
         let cos_alpha = cos(alpha);
         let sin_alpha = sin(alpha);
-        x_traj = compute_bangbang_traj_1d(init_state.pose.position.x, init_state.twist.linear.x, target_state.pose.position.x, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION, cos_alpha * MAX_TRANSLATIONAL_VELOCITY);
-        y_traj = compute_bangbang_traj_1d(init_state.pose.position.y, init_state.twist.linear.y, target_state.pose.position.y, sin_alpha * MAX_TRANSLATIONAL_ACCELERATION, sin_alpha * MAX_TRANSLATIONAL_VELOCITY);
-        // x_traj = compute_bangbang_traj_1d(init_state.x, init_state.xd, target_state.x, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION, (PI / 4.0).cos() * MAX_TRANSLATIONAL_VELOCITY);
-        // y_traj = compute_bangbang_traj_1d(init_state.y, init_state.yd, target_state.y, sin_alpha * MAX_TRANSLATIONAL_ACCELERATION, (PI / 4.0).sin() * MAX_TRANSLATIONAL_VELOCITY);
+        x_traj = compute_bangbang_traj_1d(init_state.pose.position.x, init_state.twist.linear.x, target_pose.position.x, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION, cos_alpha * MAX_TRANSLATIONAL_VELOCITY);
+        y_traj = compute_bangbang_traj_1d(init_state.pose.position.y, init_state.twist.linear.y, target_pose.position.y, sin_alpha * MAX_TRANSLATIONAL_ACCELERATION, sin_alpha * MAX_TRANSLATIONAL_VELOCITY);
+        // x_traj = compute_bangbang_traj_1d(init_state.x, init_state.xd, target_pose.position.x, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION, (PI / 4.0).cos() * MAX_TRANSLATIONAL_VELOCITY);
+        // y_traj = compute_bangbang_traj_1d(init_state.y, init_state.yd, target_pose.position_y, sin_alpha * MAX_TRANSLATIONAL_ACCELERATION, (PI / 4.0).sin() * MAX_TRANSLATIONAL_VELOCITY);
         if x_traj.t4 > y_traj.t4 {
             alpha -= increment;
         } else {
@@ -68,7 +68,7 @@ pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_state
     let traj = BangBangTraj3D { 
         x: x_traj,
         y: y_traj,
-        z: compute_bangbang_traj_1d(init_state.pose.to_xy_yaw().z, init_state.twist.linear.z, target_state.pose.to_xy_yaw().z, MAX_ROTATIONAL_ACCELERATION, MAX_ROTATIONAL_VELOCITY),
+        z: compute_bangbang_traj_1d(init_state.pose.to_xy_theta().z, init_state.twist.linear.z, target_pose.to_xy_theta().z, MAX_ROTATIONAL_ACCELERATION, MAX_ROTATIONAL_VELOCITY),
     };
     return traj;
 }
@@ -76,9 +76,9 @@ pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_state
 pub fn compute_bangbang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state: RigidBodyState, current_time: f64, t: f64) -> RigidBodyState {
     let (x_f, xd_f) = compute_bangbang_traj_1d_state_at_t(traj.x, current_state.pose.position.x, current_state.twist.linear.x, current_time, t);
     let (y_f, yd_f) = compute_bangbang_traj_1d_state_at_t(traj.y, current_state.pose.position.y, current_state.twist.linear.y, current_time, t);
-    let (z_f, zd_f) = compute_bangbang_traj_1d_state_at_t(traj.z, current_state.pose.to_xy_yaw().z, current_state.twist.angular.z, current_time, t);
+    let (z_f, zd_f) = compute_bangbang_traj_1d_state_at_t(traj.z, current_state.pose.to_xy_theta().z, current_state.twist.angular.z, current_time, t);
     RigidBodyState { 
-        pose: Pose::from_xy_yaw(x_f, y_f, z_f),
+        pose: Pose::from_xy_theta(x_f, y_f, z_f),
         twist: Twist { linear: Vector3 {x: xd_f, y: yd_f, z: 0.0}, angular: Vector3 {x: 0.0, y: 0.0, z: zd_f} }
     }
 }

@@ -49,11 +49,11 @@ pub struct Pose {
 }
 
 impl Pose {
-    /// Create a Pose from x, y, and yaw values. x and y are cartesian
-    /// coordinates for a point on the xy plane (z=0) and yaw is the rotation
+    /// Create a Pose from x, y, and theta values. x and y are cartesian
+    /// coordinates for a point on the xy plane (z=0) and theta is the rotation
     /// about the z axis in radians.
-    pub fn from_xy_yaw(x: f64, y: f64, yaw: f64) -> Self{
-        let half = yaw * 0.5;
+    pub fn from_xy_theta(x: f64, y: f64, theta: f64) -> Self{
+        let half = theta * 0.5;
         let sin_half = libm::sin(half);
         let cos_half = libm::cos(half);
         Self {
@@ -62,17 +62,17 @@ impl Pose {
         }
     }
 
-    /// Returns the x, y, and yaw values of a pose. x and y are cartesian
-    /// coordinates for a point on the xy plane (z=0) and yaw is the rotation
+    /// Returns the x, y, and theta values of a pose. x and y are cartesian
+    /// coordinates for a point on the xy plane (z=0) and theta is the rotation
     /// about the z axis in radians.
-    pub fn to_xy_yaw(&self) -> Vector3 {
+    pub fn to_xy_theta(&self) -> Vector3 {
         let siny_cosp = 2.0 * (self.orientation.w * self.orientation.z + self.orientation.x * self.orientation.y);
         let cosy_cosp = 1.0 - 2.0 * (self.orientation.y * self.orientation.y + self.orientation.z * self.orientation.z);
-        let yaw = libm::atan2(siny_cosp, cosy_cosp);
+        let theta = libm::atan2(siny_cosp, cosy_cosp);
         Vector3 { 
             x: self.position.x,
             y: self.position.y,
-            z: yaw,
+            z: theta,
         }
     }
 }
