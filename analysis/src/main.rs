@@ -8,7 +8,7 @@ use plotters::prelude::*;
 // use serde::{Serialize, Deserialize};
 
 
-fn next_state(mut current_state: RigidBodyState, current_control: Accel, dt: f64) -> RigidBodyState {
+fn next_state(mut current_state: RigidBodyState, current_control: Accel, dt: f32) -> RigidBodyState {
     if current_state.pose.position.x.abs() <= ALLOWABLE_ERROR_POS && current_state.twist.linear.x.abs() <= ALLOWABLE_ERROR_VEL {
         current_state.twist.linear.x = 0.0;
     }
@@ -32,7 +32,7 @@ fn next_state(mut current_state: RigidBodyState, current_control: Accel, dt: f64
     RigidBodyState { pose: next_pose, twist: next_twist }
 }
 
-fn run_simulation(init_state: RigidBodyState, dt: f64) -> (LinkedList<RigidBodyState>, LinkedList<Accel>) {
+fn run_simulation(init_state: RigidBodyState, dt: f32) -> (LinkedList<RigidBodyState>, LinkedList<Accel>) {
     let mut states: LinkedList<RigidBodyState> = LinkedList::new();
     let mut controls: LinkedList<Accel> = LinkedList::new();
     let mut current_state = init_state;
@@ -61,7 +61,7 @@ fn run_simulation(init_state: RigidBodyState, dt: f64) -> (LinkedList<RigidBodyS
     (states, controls)
 }
 
-fn plot_simulation(states: LinkedList<RigidBodyState>, controls: LinkedList<Accel>, dt: f64) -> Result<(), Box<dyn std::error::Error>> {
+fn plot_simulation(states: LinkedList<RigidBodyState>, controls: LinkedList<Accel>, dt: f32) -> Result<(), Box<dyn std::error::Error>> {
     // Collect data for plotting
     let mut time = 0.0;
     let mut x_vals = Vec::new();
@@ -99,15 +99,15 @@ fn plot_simulation(states: LinkedList<RigidBodyState>, controls: LinkedList<Acce
     let areas = root.split_evenly((3, 3)); // 3 rows, 3 columns
 
     // Helper to plot a single variable
-    let plot_var = |area: DrawingArea<_, _>, caption: &str, data: &Vec<f64>| -> Result<(), Box<dyn std::error::Error>> {
-        let min = data.iter().cloned().fold(f64::INFINITY, f64::min);
-        let max = data.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let plot_var = |area: DrawingArea<_, _>, caption: &str, data: &Vec<f32>| -> Result<(), Box<dyn std::error::Error>> {
+        let min = data.iter().cloned().fold(f32::INFINITY, f32::min);
+        let max = data.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         let mut chart = ChartBuilder::on(&area)
             .caption(caption, ("sans-serif", 30))
             .margin(10)
             .x_label_area_size(30)
             .y_label_area_size(40)
-            .build_cartesian_2d(0f64..(times.last().copied().unwrap_or(0.0)), min..max)?;
+            .build_cartesian_2d(0f32..(times.last().copied().unwrap_or(0.0)), min..max)?;
         chart.configure_mesh().draw()?;
         chart.draw_series(LineSeries::new(
             times.iter().cloned().zip(data.iter().cloned()),

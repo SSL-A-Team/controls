@@ -6,19 +6,19 @@ use crate::geometry::{Accel, Twist, Pose, Vector3};
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct WheelTorques {
-    pub fl: f64,
-    pub bl: f64,
-    pub br: f64,
-    pub fr: f64,
+    pub fl: f32,
+    pub bl: f32,
+    pub br: f32,
+    pub fr: f32,
 }
 
-impl From<nalgebra::Vector4<f64>> for WheelTorques {
-    fn from(v: nalgebra::Vector4<f64>) -> Self {
+impl From<nalgebra::Vector4<f32>> for WheelTorques {
+    fn from(v: nalgebra::Vector4<f32>) -> Self {
         WheelTorques {fl: v.x, bl: v.y, br: v.z, fr: v.w}
     }
 }
 
-impl From<WheelTorques> for nalgebra::Vector4<f64> {
+impl From<WheelTorques> for nalgebra::Vector4<f32> {
     fn from(torques: WheelTorques) -> Self {
         Self::new(torques.fl, torques.bl, torques.br, torques.fr)
     }
@@ -27,55 +27,55 @@ impl From<WheelTorques> for nalgebra::Vector4<f64> {
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct WheelVelocities {
-    pub fl: f64,
-    pub bl: f64,
-    pub br: f64,
-    pub fr: f64,
+    pub fl: f32,
+    pub bl: f32,
+    pub br: f32,
+    pub fr: f32,
 }
 
-impl From<nalgebra::Vector4<f64>> for WheelVelocities {
-    fn from(v: nalgebra::Vector4<f64>) -> Self {
+impl From<nalgebra::Vector4<f32>> for WheelVelocities {
+    fn from(v: nalgebra::Vector4<f32>) -> Self {
         WheelVelocities {fl: v.x, bl: v.y, br: v.z, fr: v.w}
     }
 }
 
-impl From<WheelVelocities> for nalgebra::Vector4<f64> {
+impl From<WheelVelocities> for nalgebra::Vector4<f32> {
     fn from(velocities: WheelVelocities) -> Self {
         Self::new(velocities.fl, velocities.bl, velocities.br, velocities.fr)
     }
 }
 
-pub fn global_frame_to_robot_frame_pose(pose: Pose) -> Pose {
+pub fn global_frame_to_robot_frame_pose(robot_pose: &Pose, pose: Pose) -> Pose {
     todo!()
 }
 
-pub fn robot_frame_to_global_frame_pose(pose: Pose) -> Pose {
+pub fn robot_frame_to_global_frame_pose(robot_pose: &Pose, pose: Pose) -> Pose {
     todo!()
 }
 
-pub fn global_frame_to_robot_frame_twist(twist: Twist) -> Twist {
+pub fn global_frame_to_robot_frame_twist(robot_pose: &Pose, twist: Twist) -> Twist {
     todo!()
 }
 
-pub fn robot_frame_to_global_frame_twist(twist: Twist) -> Twist {
+pub fn robot_frame_to_global_frame_twist(robot_pose: &Pose, twist: Twist) -> Twist {
     todo!()
 }
 
-pub fn global_frame_to_robot_frame_accel(accel: Accel) -> Accel {
+pub fn global_frame_to_robot_frame_accel(robot_pose: &Pose, accel: Accel) -> Accel {
     todo!()
 }
 
-pub fn robot_frame_to_global_frame_accel(accel: Accel) -> Accel {
+pub fn robot_frame_to_global_frame_accel(robot_pose: &Pose, accel: Accel) -> Accel {
     todo!()
 }
 
-pub struct RobotModel {
-    wheel_transform_mat: Matrix3x4<f64>,
-    wheel_transform_mat_inv: Matrix4x3<f64>,
+struct RobotModel {
+    wheel_transform_mat: Matrix3x4<f32>,
+    wheel_transform_mat_inv: Matrix4x3<f32>,
 }
 
 impl RobotModel {
-    pub fn new_from_alpha_beta_l(alpha: f64, beta: f64, l: f64) -> RobotModel {
+    pub fn new_from_alpha_beta_l(alpha: f32, beta: f32, l: f32) -> RobotModel {
         let mat = Matrix3x4::new(
             -cos(alpha), -cos(beta),  cos(beta), cos(alpha),
              sin(alpha), -sin(beta), -sin(beta), sin(alpha),
@@ -91,13 +91,13 @@ impl RobotModel {
     }
 
     /// Calculate local frame twist from wheel velocities
-    pub fn wheel_velocities_to_global_twist(&self, wheel_velocities: &WheelVelocities, theta: f64) -> Twist {
+    pub fn wheel_velocities_to_global_twist(&self, wheel_velocities: &WheelVelocities, theta: f32) -> Twist {
         todo!();
     }
 
     /// Calculate wheel velocities from local frame twist
     pub fn local_twist_to_wheel_velocities(&self, twist: &Twist) -> WheelVelocities {
-        let velocities = nalgebra::Vector3::<f64>::new(
+        let velocities = nalgebra::Vector3::<f32>::new(
             twist.linear.x, twist.linear.y, twist.angular.z,
         );
         WheelVelocities::from(self.wheel_transform_mat.transpose() * velocities)
@@ -120,21 +120,21 @@ impl RobotModel {
     }
 
     /// Calculate wheel velocities from global frame twist and robot theta
-    pub fn global_twist_to_wheel_velocities(&self, twist: &Twist, theta: f64) -> WheelVelocities {
-        let rotation_mat = Matrix3::<f64>::new(
+    pub fn global_twist_to_wheel_velocities(&self, twist: &Twist, theta: f32) -> WheelVelocities {
+        let rotation_mat = Matrix3::<f32>::new(
             cos(theta), -sin(theta), 0.0,
             sin(theta),  cos(theta), 0.0,
             0.0     ,  0.0     , 1.0,
         );
-        let velocities = nalgebra::Vector3::<f64>::new(
+        let velocities = nalgebra::Vector3::<f32>::new(
             twist.linear.x, twist.linear.y, twist.angular.z,
         );
         WheelVelocities::from((rotation_mat * self.wheel_transform_mat).transpose() * velocities)
     }
 
     // Calculate global frame accel from wheel torques and theta
-    pub fn wheel_torques_to_global_accel(&self, torques: &WheelTorques, theta: f64) -> Accel {
-        let rotation_mat = Matrix3::<f64>::new(
+    pub fn wheel_torques_to_global_accel(&self, torques: &WheelTorques, theta: f32) -> Accel {
+        let rotation_mat = Matrix3::<f32>::new(
             cos(theta),-sin(theta), 0.0,
             sin(theta), cos(theta), 0.0,
             0.0   , 0.0   , 1.0,
@@ -148,8 +148,8 @@ impl RobotModel {
     }
 
     // Calculate wheel torques from global frame accel and theta
-    pub fn global_accel_to_wheel_torques(&self, accel: &Accel, theta: f64) -> WheelTorques {
-        let rotation_mat = Matrix3::<f64>::new(
+    pub fn global_accel_to_wheel_torques(&self, accel: &Accel, theta: f32) -> WheelTorques {
+        let rotation_mat = Matrix3::<f32>::new(
             cos(-theta), sin(theta) , 0.0,
             sin(-theta), cos(-theta), 0.0,
             0.0      , 0.0      , 1.0,
@@ -159,7 +159,7 @@ impl RobotModel {
     }
 }
 
-fn pinv_3x4(a: Matrix3x4<f64>) -> Matrix4x3<f64> {
+fn pinv_3x4(a: Matrix3x4<f32>) -> Matrix4x3<f32> {
     let a_t = a.clone().transpose();
     let a_at = a * a_t.clone();
     let a_at_inv = a_at.try_inverse().unwrap();

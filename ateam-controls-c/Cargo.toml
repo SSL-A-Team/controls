@@ -7,4 +7,4 @@ edition = "2024"
 crate-type = ["staticlib"]
 
 [dependencies]
-ateam-controls = { path = "../ateam_controls", features = ["std"] }
+ateam-controls = { path = "../ateam-controls", features = ["std"] }

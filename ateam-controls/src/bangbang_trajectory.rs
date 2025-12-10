@@ -1,6 +1,6 @@
 use crate::{trajectory_params::*};
 use crate::geometry::{Accel, Pose, RigidBodyState, Twist, Vector3};
-use core::f64::consts::PI;
+use core::f32::consts::PI;
 use libm::{cos, sin};
 
 
@@ -8,17 +8,17 @@ use libm::{cos, sin};
 #[derive(Clone, Copy, Default, Debug)]
 /// sdd1: t1 -> t2, sdd2: t2 -> t3, sdd3: t3 -> t4
 pub struct BangBangTraj1D {
-    pub sdd1: f64,
-    pub sdd2: f64,
-    pub sdd3: f64,
-    pub t1: f64,
-    pub t2: f64,
-    pub t3: f64,
-    pub t4: f64,
+    pub sdd1: f32,
+    pub sdd2: f32,
+    pub sdd3: f32,
+    pub t1: f32,
+    pub t2: f32,
+    pub t3: f32,
+    pub t4: f32,
 }
 
 impl BangBangTraj1D {
-    pub fn time_shift(&mut self, dt: f64) {
+    pub fn time_shift(&mut self, dt: f32) {
         self.t1 += dt;
         self.t2 += dt;
         self.t3 += dt;
@@ -35,7 +35,7 @@ pub struct BangBangTraj3D {
 }
 
 impl BangBangTraj3D {
-    pub fn time_shift(&mut self, dt: f64) {
+    pub fn time_shift(&mut self, dt: f32) {
         self.x.time_shift(dt);
         self.y.time_shift(dt);
         self.z.time_shift(dt);
@@ -73,7 +73,7 @@ pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_pose:
     return traj;
 }
 
-pub fn compute_bangbang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state: RigidBodyState, current_time: f64, t: f64) -> RigidBodyState {
+pub fn compute_bangbang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state: RigidBodyState, current_time: f32, t: f32) -> RigidBodyState {
     let (x_f, xd_f) = compute_bangbang_traj_1d_state_at_t(traj.x, current_state.pose.position.x, current_state.twist.linear.x, current_time, t);
     let (y_f, yd_f) = compute_bangbang_traj_1d_state_at_t(traj.y, current_state.pose.position.y, current_state.twist.linear.y, current_time, t);
     let (z_f, zd_f) = compute_bangbang_traj_1d_state_at_t(traj.z, current_state.pose.to_xy_theta().z, current_state.twist.angular.z, current_time, t);
@@ -83,7 +83,7 @@ pub fn compute_bangbang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state: 
     }
 }
 
-pub fn compute_bangbang_traj_3d_accel_at_t(traj: BangBangTraj3D, t: f64) -> Accel {
+pub fn compute_bangbang_traj_3d_accel_at_t(traj: BangBangTraj3D, t: f32) -> Accel {
     Accel {
         linear: Vector3 {
             x: compute_bangbang_traj_1d_accel_at_t(traj.x, t),
@@ -98,7 +98,7 @@ pub fn compute_bangbang_traj_3d_accel_at_t(traj: BangBangTraj3D, t: f64) -> Acce
     }
 }
 
-fn compute_bangbang_traj_1d_accel_at_t(traj: BangBangTraj1D, t: f64) -> f64 {
+fn compute_bangbang_traj_1d_accel_at_t(traj: BangBangTraj1D, t: f32) -> f32 {
     if t >= traj.t3 {
         return traj.sdd3;
     }
@@ -113,7 +113,7 @@ fn compute_bangbang_traj_1d_accel_at_t(traj: BangBangTraj1D, t: f64) -> f64 {
 
 /// Takes the initial velocity sd0, the desired positive change in position ds, and the bang-bang acceleration sdd
 /// Returns the positive acceleration time T1, the negative acceleration time T2, and the peak velocity reached Vpeak
-fn compute_positive_triangular_profile(sd0: f64, ds: f64, sdd: f64) -> (f64, f64, f64) {
+fn compute_positive_triangular_profile(sd0: f32, ds: f32, sdd: f32) -> (f32, f32, f32) {
     if sd0 < 0.0 || ds < 0.0 || sdd < 0.0 {
         panic!("compute_positive_triangular_profile: All values should be positive")
     }
@@ -126,7 +126,7 @@ fn compute_positive_triangular_profile(sd0: f64, ds: f64, sdd: f64) -> (f64, f64
 
 /// Takes the initial velocity sd0, the desired positive change in position ds, the bang-bang acceleration sdd, and the max velocity contraint sd_max
 /// Returns the acceleration or deceleration time T1, the coasting time T2, the negative acceleration time T3, and the acceleration used for T1 (sdd1)
-fn compute_positive_trapezoidal_profile(sd0: f64, ds: f64, sdd: f64, sd_max: f64) -> (f64, f64, f64, f64) {
+fn compute_positive_trapezoidal_profile(sd0: f32, ds: f32, sdd: f32, sd_max: f32) -> (f32, f32, f32, f32) {
     if sd0 < 0.0 || ds <= 0.0 || sdd <= 0.0 || sd_max <= 0.0 {  // allow sd0 to be zero
         panic!("compute_positive_triangular_profile: All values should be positive")
     }
@@ -155,13 +155,13 @@ fn compute_positive_trapezoidal_profile(sd0: f64, ds: f64, sdd: f64, sd_max: f64
 }
 
 /// Returns the time it took to break and the resulting position
-fn compute_break(s0: f64, sd0: f64, sdd: f64) -> (f64, f64) {
+fn compute_break(s0: f32, sd0: f32, sdd: f32) -> (f32, f32) {
     let time_to_rest = sd0.abs() / sdd.abs();
     let sf = s0 + 0.5 * sd0 * time_to_rest;
     (time_to_rest, sf)
 }
 
-fn compute_bangbang_traj_1d(s0: f64, sd0: f64, s_trg: f64, sd_max: f64, sdd_max: f64) -> BangBangTraj1D {
+fn compute_bangbang_traj_1d(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> BangBangTraj1D {
     if sdd_max <= 0.0 || sd_max <= 0.0 {
         panic!("compute_optimal_traj1d: Can't compute trajectory when max velocity or acceleration is 0.0")
     }
@@ -231,7 +231,7 @@ fn compute_bangbang_traj_1d(s0: f64, sd0: f64, s_trg: f64, sd_max: f64, sdd_max:
     traj
 }
 
-fn compute_bangbang_traj_1d_state_at_t(traj: BangBangTraj1D, s: f64, sd: f64, current_time: f64, t: f64) -> (f64, f64) {
+fn compute_bangbang_traj_1d_state_at_t(traj: BangBangTraj1D, s: f32, sd: f32, current_time: f32, t: f32) -> (f32, f32) {
     let mut s = s;
     let mut sd = sd;
     let mut current_time = current_time;
