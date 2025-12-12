@@ -1,0 +1,15 @@
+[package]
+name = "ateam-controls"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+std = []
+
+[dependencies]
+libm = "0.2"
+nalgebra = { version = "0.34.0", default-features = false, features = [
+        "libm",
+        "macros",
+] }
