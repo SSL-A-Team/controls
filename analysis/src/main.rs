@@ -1,7 +1,8 @@
 use ateam_controls::bangbang_trajectory::{BangBangTraj1D, BangBangTraj3D, compute_bangbang_traj_3d_accel_at_t, compute_bangbang_traj_3d_state_at_t, compute_optimal_bangbang_traj_3d};
-use ateam_controls::geometry::{Accel, Pose, RigidBodyState, Twist, Vector3};
+use ateam_controls::geometry::{Accel, Pose, RigidBodyState, Twist};
 use ateam_controls::trajectory_params::{ALLOWABLE_ERROR_POS, ALLOWABLE_ERROR_VEL};
 
+use nalgebra::Vector3;
 use std::collections::LinkedList;
 use plotters::prelude::*;
 // use std::{fs::File, io::Write};
@@ -26,8 +27,8 @@ fn next_state(mut current_state: RigidBodyState, current_control: Accel, dt: f32
     let next_zd = current_state.twist.angular.z + current_control.angular.z * dt;
     let next_pose = Pose::from_xy_theta(next_x, next_y, next_z);
     let next_twist = Twist {
-        linear: Vector3 { x: next_xd, y: next_yd, z: 0.0 },
-        angular: Vector3 { x: 0.0, y: 0.0, z: next_zd }
+        linear: Vector3::<f32>::new(next_xd, next_yd, 0.0),
+        angular: Vector3::<f32>::new(0.0, 0.0, next_zd),
     };
     RigidBodyState { pose: next_pose, twist: next_twist }
 }
@@ -49,7 +50,7 @@ fn run_simulation(init_state: RigidBodyState, dt: f32) -> (LinkedList<RigidBodyS
         // push the current state to the list of states
         states.push_back(current_state);
         // compute optimal trajectory
-        let target = RigidBodyState::default();
+        let target = Pose::default();
         let mut traj = compute_optimal_bangbang_traj_3d(current_state, target);
         traj.time_shift(t);
         // set the accelerations for current time to next time
@@ -180,8 +181,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dt = 0.01;
 
     // Write the computed velocities to a file for playback to real robot
-    let target_state = RigidBodyState::default();
-    let traj = compute_optimal_bangbang_traj_3d(init_state, target_state);
+    let target = Pose::default();
+    let traj = compute_optimal_bangbang_traj_3d(init_state, target);
     let mut states = LinkedList::<RigidBodyState>::new();
     let mut controls = LinkedList::<Accel>::new();
     let mut t = 0.0;

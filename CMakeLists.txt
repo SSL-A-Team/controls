@@ -15,8 +15,8 @@ endif()
 
 # Glob all Rust source files and Cargo.toml files to track as dependencies
 file(GLOB_RECURSE RUST_SOURCES
-  "${CMAKE_CURRENT_SOURCE_DIR}/ateam_controls/src/*.rs"
-  "${CMAKE_CURRENT_SOURCE_DIR}/ateam_controls_c/src/*.rs"
+  "${CMAKE_CURRENT_SOURCE_DIR}/ateam-controls/src/*.rs"
+  "${CMAKE_CURRENT_SOURCE_DIR}/ateam-controls-c/src/*.rs"
   "${CMAKE_CURRENT_SOURCE_DIR}/analysis/src/*.rs"
 )
 file(GLOB_RECURSE CARGO_TOMLS
@@ -39,7 +39,7 @@ add_custom_target(
 add_library(ateam_controls STATIC IMPORTED GLOBAL)
 set_target_properties(
   ateam_controls PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/ateam_controls_c/include"
+  INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/ateam-controls-c/include"
   IMPORTED_LOCATION ${IMPORTED_LIB_PATH}
   IMPORTED_GLOBAL TRUE
 )
@@ -53,7 +53,7 @@ install(
 
 # Install headers
 install(
-  DIRECTORY ateam_controls_c/include/
+  DIRECTORY ateam-controls-c/include/
   DESTINATION include
 )
 

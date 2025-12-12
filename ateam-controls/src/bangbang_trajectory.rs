@@ -1,7 +1,8 @@
 use crate::{trajectory_params::*};
-use crate::geometry::{Accel, Pose, RigidBodyState, Twist, Vector3};
+use crate::geometry::{Accel, Pose, RigidBodyState, Twist};
 use core::f32::consts::PI;
-use libm::{cos, sin};
+use libm::{cosf, sinf, sqrtf};
+use nalgebra::Vector3;
 
 
 #[repr(C)]
@@ -49,8 +50,8 @@ pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_pose:
     let mut x_traj;
     let mut y_traj;
     loop {
-        let cos_alpha = cos(alpha);
-        let sin_alpha = sin(alpha);
+        let cos_alpha = cosf(alpha);
+        let sin_alpha = sinf(alpha);
         x_traj = compute_bangbang_traj_1d(init_state.pose.position.x, init_state.twist.linear.x, target_pose.position.x, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION, cos_alpha * MAX_TRANSLATIONAL_VELOCITY);
         y_traj = compute_bangbang_traj_1d(init_state.pose.position.y, init_state.twist.linear.y, target_pose.position.y, sin_alpha * MAX_TRANSLATIONAL_ACCELERATION, sin_alpha * MAX_TRANSLATIONAL_VELOCITY);
         // x_traj = compute_bangbang_traj_1d(init_state.x, init_state.xd, target_pose.position.x, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION, (PI / 4.0).cos() * MAX_TRANSLATIONAL_VELOCITY);
@@ -79,22 +80,22 @@ pub fn compute_bangbang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state: 
     let (z_f, zd_f) = compute_bangbang_traj_1d_state_at_t(traj.z, current_state.pose.to_xy_theta().z, current_state.twist.angular.z, current_time, t);
     RigidBodyState { 
         pose: Pose::from_xy_theta(x_f, y_f, z_f),
-        twist: Twist { linear: Vector3 {x: xd_f, y: yd_f, z: 0.0}, angular: Vector3 {x: 0.0, y: 0.0, z: zd_f} }
+        twist: Twist { linear: Vector3::<f32>::new(xd_f, yd_f, 0.0), angular: Vector3::<f32>::new(0.0, 0.0, zd_f) }
     }
 }
 
 pub fn compute_bangbang_traj_3d_accel_at_t(traj: BangBangTraj3D, t: f32) -> Accel {
     Accel {
-        linear: Vector3 {
-            x: compute_bangbang_traj_1d_accel_at_t(traj.x, t),
-            y: compute_bangbang_traj_1d_accel_at_t(traj.y, t),
-            z: 0.0,
-        },
-        angular: Vector3 {
-            x: 0.0,
-            y: 0.0,
-            z: compute_bangbang_traj_1d_accel_at_t(traj.z, t),
-        }
+        linear: Vector3::<f32>::new(
+            compute_bangbang_traj_1d_accel_at_t(traj.x, t),
+            compute_bangbang_traj_1d_accel_at_t(traj.y, t),
+            0.0,
+        ),
+        angular: Vector3::<f32>::new(
+            0.0,
+            0.0,
+            compute_bangbang_traj_1d_accel_at_t(traj.z, t),
+        )
     }
 }
 
@@ -118,7 +119,7 @@ fn compute_positive_triangular_profile(sd0: f32, ds: f32, sdd: f32) -> (f32, f32
         panic!("compute_positive_triangular_profile: All values should be positive")
     }
 
-    let t2 = libm::sqrt((sdd * ds + 0.5 * sd0 * sd0) / (sdd * sdd));
+    let t2 = sqrtf((sdd * ds + 0.5 * sd0 * sd0) / (sdd * sdd));
     let t1 = t2 - sd0 / sdd;
     let vpeak = sdd * t2;
     (t1, t2, vpeak)

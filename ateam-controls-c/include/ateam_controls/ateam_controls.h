@@ -5,37 +5,37 @@
 
 extern "C" {
 
-typedef struct Vector3 {
+typedef struct Vector3C {
     double x;
     double y;
     double z;
-} Vecotr3_t;
+} Vector3C_t;
 
-typedef struct Vector4 {
+typedef struct Vector4C {
     double x;
     double y;
     double z;
     double w;
-} Vector4_t;
+} Vector4C_t;
 
 typedef struct Pose {
-    Vector3 position;
-    Vector4 orientation;  // Quaternion
+    Vector3C_t position;
+    Vector4C_t orientation;  // Quaternion
 } Pose_t;
 
 typedef struct Twist {
-    Vector3 linear;
-    Vector3 angular;
+    Vector3C linear;
+    Vector3C angular;
 } Twist_t;
 
 typedef struct Accel {
-    Vector3 linear;
-    Vector3 angular;
+    Vector3C linear;
+    Vector3C angular;
 } Accel_t;
 
 typedef struct Wrench {
-    Vector3 force;
-    Vector3 torque;
+    Vector3C force;
+    Vector3C torque;
 } Wrnech_t;
 
 typedef struct RigidBodyState {
@@ -75,7 +75,8 @@ typedef struct BangBangTraj3D {
 
 uint64_t ateam_controls_add(uint64_t left, uint64_t right);
 BangBangTraj3D_t ateam_controls_compute_optimal_bangbang_traj_3d(RigidBodyState init_state, RigidBodyState target_state);
-RigidBodyState_t ateam_controls_compute_bangbang_traj_3d_state_at_t(BangBangTraj3D_t traj, RigidBodyState_t current_state, double current_time, double t);
+RigidBodyState_t ateam_controls_compute_bangbang_traj_3d_state_at_t(BangBangTraj3D_t traj, RigidBodyState_t current_state, float current_time, float t);
+Accel_t ateam_controls_compute_bangbang_traj_3d_accel_at_t(BangBangTraj3D_t traj, float t);
 
 }
 

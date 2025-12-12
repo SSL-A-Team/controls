@@ -1,6 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub mod geometry;
+pub mod algebra;
 pub mod trajectory_params;
 pub mod robot_physical_params;
 pub mod bangbang_trajectory;

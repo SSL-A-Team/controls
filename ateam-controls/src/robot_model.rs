@@ -1,6 +1,6 @@
-use nalgebra::{Matrix3, Matrix3x4, Matrix4x3};
-use libm::{sin, cos};
-use crate::geometry::{Accel, Twist, Pose, Vector3};
+use nalgebra::{Matrix3, Matrix3x4, Matrix4x3, Vector3};
+use libm::{sinf, cosf};
+use crate::geometry::{Accel, Twist, Pose};
 
 
 #[repr(C)]
@@ -77,8 +77,8 @@ struct RobotModel {
 impl RobotModel {
     pub fn new_from_alpha_beta_l(alpha: f32, beta: f32, l: f32) -> RobotModel {
         let mat = Matrix3x4::new(
-            -cos(alpha), -cos(beta),  cos(beta), cos(alpha),
-             sin(alpha), -sin(beta), -sin(beta), sin(alpha),
+            -cosf(alpha), -cosf(beta),  cosf(beta), cosf(alpha),
+             sinf(alpha), -sinf(beta), -sinf(beta), sinf(alpha),
              l         ,  l        ,  l        , l
         );
         let mat_inv = pinv_3x4(mat);
@@ -108,8 +108,8 @@ impl RobotModel {
         let torques_vec = nalgebra::Vector4::from(*torques);
         let accelerations = self.wheel_transform_mat * torques_vec;
         Accel {
-            linear: Vector3 { x: accelerations[(0, 0)], y: accelerations[(1, 0)], z: 0.0 },
-            angular: Vector3 { x: 0.0, y: 0.0, z: accelerations[(2, 0)] },
+            linear: Vector3::<f32>::new(accelerations[(0, 0)], accelerations[(1, 0)], 0.0 ),
+            angular: Vector3::<f32>::new(0.0, 0.0, accelerations[(2, 0)]),
         }
     }
 
@@ -122,8 +122,8 @@ impl RobotModel {
     /// Calculate wheel velocities from global frame twist and robot theta
     pub fn global_twist_to_wheel_velocities(&self, twist: &Twist, theta: f32) -> WheelVelocities {
         let rotation_mat = Matrix3::<f32>::new(
-            cos(theta), -sin(theta), 0.0,
-            sin(theta),  cos(theta), 0.0,
+            cosf(theta), -sinf(theta), 0.0,
+            sinf(theta),  cosf(theta), 0.0,
             0.0     ,  0.0     , 1.0,
         );
         let velocities = nalgebra::Vector3::<f32>::new(
@@ -135,23 +135,23 @@ impl RobotModel {
     // Calculate global frame accel from wheel torques and theta
     pub fn wheel_torques_to_global_accel(&self, torques: &WheelTorques, theta: f32) -> Accel {
         let rotation_mat = Matrix3::<f32>::new(
-            cos(theta),-sin(theta), 0.0,
-            sin(theta), cos(theta), 0.0,
+            cosf(theta),-sinf(theta), 0.0,
+            sinf(theta), cosf(theta), 0.0,
             0.0   , 0.0   , 1.0,
         );
         let torques_vec = nalgebra::Vector4::from(*torques);
         let accelerations = rotation_mat * self.wheel_transform_mat * torques_vec;
         Accel {
-            linear: Vector3 { x: accelerations[(0, 0)], y: accelerations[(1, 0)], z: 0.0 },
-            angular: Vector3 { x: 0.0, y: 0.0, z: accelerations[(2, 0)] },
+            linear: Vector3::<f32>::new(accelerations[(0, 0)], accelerations[(1, 0)], 0.0),
+            angular: Vector3::<f32>::new(0.0, 0.0, accelerations[(2, 0)]),
         }
     }
 
     // Calculate wheel torques from global frame accel and theta
     pub fn global_accel_to_wheel_torques(&self, accel: &Accel, theta: f32) -> WheelTorques {
         let rotation_mat = Matrix3::<f32>::new(
-            cos(-theta), sin(theta) , 0.0,
-            sin(-theta), cos(-theta), 0.0,
+            cosf(-theta), sinf(theta) , 0.0,
+            sinf(-theta), cosf(-theta), 0.0,
             0.0      , 0.0      , 1.0,
         );
         let accel_vec = nalgebra::Vector3::new(accel.linear.x, accel.linear.y, accel.angular.z);

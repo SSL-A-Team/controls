@@ -8,16 +8,16 @@ pub extern "C" fn ateam_controls_add(left: u64, right: u64) -> u64 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_pose: Pose) -> BangBangTraj3D {
-  compute_optimal_bangbang_traj_3d(init_state, target_pose)
+pub extern "C" fn ateam_controls_compute_optimal_bangbang_traj_3d(init_state: RigidBodyStateC, target_pose: PoseC) -> BangBangTraj3D {
+  compute_optimal_bangbang_traj_3d(init_state.into(), target_pose.into())
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_compute_bangbang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state: RigidBodyState, current_time: f32, t: f32) -> RigidBodyState {
-  compute_bangbang_traj_3d_state_at_t(traj, current_state, current_time, t)
+pub extern "C" fn ateam_controls_compute_bangbang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state: RigidBodyStateC, current_time: f32, t: f32) -> RigidBodyStateC {
+  compute_bangbang_traj_3d_state_at_t(traj, current_state.into(), current_time, t).into()
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_compute_bangbang_traj_3d_accel_at_t(traj: BangBangTraj3D, t: f32) -> Accel {
-  compute_bangbang_traj_3d_accel_at_t(traj, t)
+pub extern "C" fn ateam_controls_compute_bangbang_traj_3d_accel_at_t(traj: BangBangTraj3D, t: f32) -> AccelC {
+  compute_bangbang_traj_3d_accel_at_t(traj, t).into()
 }
