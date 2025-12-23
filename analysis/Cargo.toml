@@ -5,3 +5,8 @@ edition = "2024"
 
 [dependencies]
 ateam-controls = { path = "../ateam-controls", features = ["std"] }
+
+[[bin]]
+name = "trajectory_sim"
+test = false
+harness = false
