@@ -15,6 +15,13 @@ pub type Matrix4x3f = nalgebra::Matrix4x3<f32>;
 pub type Matrix3f = nalgebra::Matrix3<f32>;
 pub type Rotation3f = nalgebra::Rotation3<f32>;
 
+
+#[derive(Clone, Copy, Default, Debug)]
+pub struct RigidBodyState {
+    pub pose: Vector3f,
+    pub twist: Vector3f,
+}
+
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }
