@@ -121,7 +121,7 @@ def create_animation():
 
 if __name__ == "__main__":
     # Load simulation data
-    # data = pd.read_csv(sys.stdin)
-    data = pd.read_csv('sim_data.csv')  # For testing purposes
+    data = pd.read_csv(sys.stdin)
+    # data = pd.read_csv('sim_data.csv')  # For testing purposes
     create_plots()
     create_animation()

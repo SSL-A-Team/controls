@@ -110,12 +110,12 @@ impl RobotModel {
 
     /// Calculate robot frame twist from wheel velocities
     pub fn wheel_velocities_to_twist(&self, wheel_velocities: Vector4f) -> Vector3f {
-        self.wheel_transform_mat_inv.transpose() * wheel_velocities
+        self.wheel_radius * self.wheel_transform_mat_inv.transpose() * wheel_velocities
     }
 
     /// Calculate wheel velocities from robot frame twist
     pub fn twist_to_wheel_velocities(&self, twist: Vector3f) -> Vector4f {
-        self.wheel_transform_mat.transpose() * twist
+        self.wheel_transform_mat.transpose() * twist / self.wheel_radius
     }
 
     /// Calculate robot frame accel from wheel torques
