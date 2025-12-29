@@ -1,7 +1,7 @@
 use core::f32::consts::PI;
 use libm::{cosf, sinf, sqrtf};
 use crate::{trajectory_params::*};
-use crate::{Vector3f, RigidBodyState};
+use crate::{Vector3f, Vector6f};
 
 
 #[repr(C)]
@@ -46,7 +46,7 @@ impl BangBangTraj3D {
     }
 }
 
-pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_pose: Vector3f) -> BangBangTraj3D {
+pub fn compute_optimal_bangbang_traj_3d(init_state: Vector6f, target_pose: Vector3f) -> BangBangTraj3D {
     let mut alpha = PI / 4.0;
     let mut increment = PI / 8.0;
     let precision = 0.0000001;
@@ -55,8 +55,8 @@ pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_pose:
     loop {
         let cos_alpha = cosf(alpha);
         let sin_alpha = sinf(alpha);
-        x_traj = compute_bangbang_traj_1d(init_state.pose.x, init_state.twist.x, target_pose.x, cos_alpha * MAX_TRANSLATIONAL_VELOCITY, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION);
-        y_traj = compute_bangbang_traj_1d(init_state.pose.y, init_state.twist.y, target_pose.y, sin_alpha * MAX_TRANSLATIONAL_VELOCITY, sin_alpha * MAX_TRANSLATIONAL_ACCELERATION);
+        x_traj = compute_bangbang_traj_1d(init_state[0], init_state[3], target_pose[0], cos_alpha * MAX_TRANSLATIONAL_VELOCITY, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION);
+        y_traj = compute_bangbang_traj_1d(init_state[1], init_state[4], target_pose[1], sin_alpha * MAX_TRANSLATIONAL_VELOCITY, sin_alpha * MAX_TRANSLATIONAL_ACCELERATION);
         // x_traj = compute_bangbang_traj_1d(init_state.pose.x, init_state.twist.x, target_pose.x, (PI / 4.0).sin() * MAX_TRANSLATIONAL_VELOCITY, cos_alpha * MAX_TRANSLATIONAL_ACCELERATION);
         // y_traj = compute_bangbang_traj_1d(init_state.pose.y, init_state.twist.y, target_pose.y, (PI / 4.0).cos() * MAX_TRANSLATIONAL_VELOCITY, sin_alpha * MAX_TRANSLATIONAL_ACCELERATION);
         if x_traj.t4 > y_traj.t4 {
@@ -72,19 +72,16 @@ pub fn compute_optimal_bangbang_traj_3d(init_state: RigidBodyState, target_pose:
     let traj = BangBangTraj3D { 
         x: x_traj,
         y: y_traj,
-        z: compute_bangbang_traj_1d(init_state.pose.z, init_state.twist.z, target_pose.z, MAX_ROTATIONAL_VELOCITY, MAX_ROTATIONAL_ACCELERATION),
+        z: compute_bangbang_traj_1d(init_state[2], init_state[5], target_pose[2], MAX_ROTATIONAL_VELOCITY, MAX_ROTATIONAL_ACCELERATION),
     };
     return traj;
 }
 
-pub fn compute_bangbang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state: RigidBodyState, current_time: f32, t: f32) -> RigidBodyState {
-    let (x_f, xd_f) = compute_bangbang_traj_1d_state_at_t(traj.x, current_state.pose.x, current_state.twist.x, current_time, t);
-    let (y_f, yd_f) = compute_bangbang_traj_1d_state_at_t(traj.y, current_state.pose.y, current_state.twist.y, current_time, t);
-    let (z_f, zd_f) = compute_bangbang_traj_1d_state_at_t(traj.z, current_state.pose.z, current_state.twist.z, current_time, t);
-    RigidBodyState { 
-        pose: Vector3f::new(x_f, y_f, z_f),
-        twist: Vector3f::new(xd_f, yd_f, zd_f)
-    }
+pub fn compute_bangbang_traj_3d_state_at_t(traj: BangBangTraj3D, current_state: Vector6f, current_time: f32, t: f32) -> Vector6f {
+    let (x_f, xd_f) = compute_bangbang_traj_1d_state_at_t(traj.x, current_state[0], current_state[3], current_time, t);
+    let (y_f, yd_f) = compute_bangbang_traj_1d_state_at_t(traj.y, current_state[1], current_state[4], current_time, t);
+    let (z_f, zd_f) = compute_bangbang_traj_1d_state_at_t(traj.z, current_state[2], current_state[5], current_time, t);
+    Vector6f::new(x_f, y_f, z_f, xd_f, yd_f, zd_f)
 }
 
 pub fn compute_bangbang_traj_3d_accel_at_t(traj: BangBangTraj3D, t: f32) -> Vector3f {

@@ -1,86 +1,110 @@
-use ateam_controls::{RigidBodyState, Vector3f};
-use ateam_controls::robot_model::{RobotModel, transform_frame_global2robot_accel, transform_frame_robot2global_accel, transform_frame_global2robot_twist};
+use ateam_controls::{Matrix6f, Matrix6x3f, RigidBodyState, Vector3f, Vector4f, Vector6f};
+use ateam_controls::robot_model::{RobotModel};
 use ateam_controls::bangbang_trajectory::{compute_optimal_bangbang_traj_3d, compute_bangbang_traj_3d_accel_at_t};
 use ateam_controls::robot_physical_params::*;
 use ateam_controls::trajectory_params::*;
 use core::f32::consts::PI;
 
 fn main() {
-    let model = RobotModel::new(
-        WHEEL_ANGLE_ALPHA, 
-        WHEEL_ANGLE_BETA, 
-        WHEEL_DISTANCE, 
-        WHEEL_RADIUS,
-        BODY_MASS,
-        BODY_MOMENT_Z,
-    );
+    // Timing constants
+    // let control_dt = 0.02;     // 50 Hz controller
+    // let sim_dt = 0.001; // 1000 Hz physics engine
+    let control_dt = 0.001;     // 1 KHz controller
+    let sim_dt = 0.00001; // 100 KHz physics engine
+    let steps_per_control_cycle = (control_dt / sim_dt) as usize;
+    let mut total_sim_time = 0.0;
 
-    let mut current_state = RigidBodyState {
-        pose: Vector3f::new(0.5, 0.5, 0.0),
-        twist: Vector3f::new(1.0, -1.0, 0.0),
-    };
+    let mut model = RobotModel::new_from_constants(control_dt);
+
+    let mut sim_state = Vector6f::new(
+        0.5, 0.5, 0.0,
+        1.0, -1.0, 0.0,
+    );
+    let sim_a = Matrix6f::new(
+        1., 0., 0., sim_dt, 0., 0.,
+        0., 1., 0., 0., sim_dt, 0.,
+        0., 0., 1., 0., 0., sim_dt,
+        0., 0., 0., 1., 0., 0.,
+        0., 0., 0., 0., 1., 0.,
+        0., 0., 0., 0., 0., 1.,
+    );
+    let sim_b = Matrix6x3f::new(
+        0., 0., 0.,
+        0., 0., 0.,
+        0., 0., 0.,
+        sim_dt, 0., 0.,
+        0., sim_dt, 0.,
+        0., 0., sim_dt,
+    );
 
     let target_pose = Vector3f::new(0.5, 1.5, PI / 2.0);
     
-    // Timing constants
-    // let control_period = 0.02;     // 50 Hz controller
-    // let simulation_period = 0.001; // 1000 Hz physics engine
-    let control_period = 0.001;     // 1 KHz controller
-    let simulation_period = 0.00001; // 100 KHz physics engine
-    let steps_per_control_cycle = (control_period / simulation_period) as usize;
-
-    let mut total_sim_time = 0.0;
+    let mut control_u = Vector3f::zeros();
+    let mut wheel_torques = Vector4f::zeros();
     
     // Print CSV header for the Python visualizer
     println!("time,x,y,theta,vx,vy,vtheta,ax,ay,atheta,wv1,wv2,wv3,wv4,wt1,wt2,wt3,wt4");
 
     while total_sim_time < 5.0 {
-
-        // --- ON-ROBOT PROCESSING ---
-        // 1. Generate new trajectory from current state
-        let traj = compute_optimal_bangbang_traj_3d(current_state, target_pose);
-        
-        // 2. Determine desired global acceleration at this instant
-        let desired_global_accel = compute_bangbang_traj_3d_accel_at_t(traj, 0.0);
-        
-        // 3. Convert to robot frame and calculate wheel torques
-        let robot_accel_cmd = transform_frame_global2robot_accel(current_state.pose, desired_global_accel);
-        
-        let wheel_torques = model.accel_to_wheel_torques(robot_accel_cmd);
-
         // --- PHYSICS SIMULATION ---
         for _ in 0..steps_per_control_cycle {
             // Apply torques to find actual acceleration
-            let robot_accel = model.wheel_torques_to_accel(wheel_torques);
-            
-            let global_accel = transform_frame_robot2global_accel(current_state.pose, robot_accel);
+            let sim_accel = model.transform_wheel2accel(sim_state.z) * wheel_torques;
 
-            // Integrate
-            current_state.pose += current_state.twist * simulation_period + 0.5 * global_accel * simulation_period * simulation_period;  // dx = v*t + 0.5*a*t^2
-            current_state.twist += global_accel * simulation_period;  // dv = a*t
+            // Update sim
+            sim_state = sim_a * sim_state + sim_b * sim_accel;
 
             // Calculate wheel velocities for telemetry
-            let robot_twist = transform_frame_global2robot_twist(current_state.pose, current_state.twist);
-            let wheel_velocities = model.twist_to_wheel_velocities(robot_twist);
+            let wheel_velocities = model.transform_twist2wheel(sim_state.z) * Vector3f::new(sim_state[3], sim_state[4], sim_state[5]);
 
             // Log data at simulation frequency for smooth video
             println!(
                 "{:.3},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4}",
                 total_sim_time,
-                current_state.pose.x, current_state.pose.y, current_state.pose.z,
-                current_state.twist.x, current_state.twist.y, current_state.twist.z,
-                global_accel.x, global_accel.y, global_accel.z,
+                sim_state[0], sim_state[1], sim_state[2],
+                sim_state[3], sim_state[4], sim_state[5],
+                sim_accel.x, sim_accel.y, sim_accel.z,
                 wheel_velocities.x, wheel_velocities.y, wheel_velocities.z, wheel_velocities.w,
                 wheel_torques.x, wheel_torques.y, wheel_torques.z, wheel_torques.w
             );
 
-            total_sim_time += simulation_period;
+            total_sim_time += sim_dt;
 
             // Check if arrived
-            if (current_state.pose - target_pose).norm() < ALLOWABLE_ERROR_POS 
-               && current_state.twist.norm() < ALLOWABLE_ERROR_VEL {
+            let sim_pose = Vector3f::new(sim_state[0], sim_state[1], sim_state[2]);
+            let sim_twist = Vector3f::new(sim_state[3], sim_state[4], sim_state[5]);
+            if (sim_pose - target_pose).norm() < ALLOWABLE_ERROR_POS 
+               && sim_twist.norm() < ALLOWABLE_ERROR_VEL {
                 return;
             }
         }
+
+        // Simulate sensor readings
+        model.update_h_transform(sim_state.z, false, false, false);
+        let meas = model.h * sim_state;
+
+        // --- ON-ROBOT PROCESSING ---
+        model.kf_predict(control_u);
+        model.kf_update(meas, false, false, false);
+
+        // 1. Generate new trajectory from current state
+        let traj = compute_optimal_bangbang_traj_3d(model.x, target_pose);
+        
+        // 2. Determine desired global acceleration at this instant
+        control_u = compute_bangbang_traj_3d_accel_at_t(traj, 0.0);
+        
+        // 3. Convert to output wheel torques
+        wheel_torques = model.transform_accel2wheel(model.x[2]) * control_u;
+
+        // println!(
+        //     "{:.3},{:.4},{:.4},{:.4},{:.4},{:.4},{:.4}",
+        //     total_sim_time,
+        //     model.x[0], model.x[1], model.x[2],
+        //     model.x[3], model.x[4], model.x[5],
+        // );
+
+        // if total_sim_time >= 0.005 {
+        //     return
+        // }
     }
 }
