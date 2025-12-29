@@ -16,11 +16,11 @@ def create_plots():
     axes[0, 0].set_title('X Position')
     axes[0, 0].grid(True)
 
-    axes[1, 0].plot(data['time'], data['vx'], color='C1')
+    axes[1, 0].plot(data['time'], data['xd'], color='C1')
     axes[1, 0].set_title('X Velocity')
     axes[1, 0].grid(True)
 
-    axes[2, 0].plot(data['time'], data['ax'], color='C2')
+    axes[2, 0].plot(data['time'], data['xdd'], color='C2')
     axes[2, 0].set_title('X Acceleration')
     axes[2, 0].grid(True)
 
@@ -29,11 +29,11 @@ def create_plots():
     axes[0, 1].set_title('Y Position')
     axes[0, 1].grid(True)
 
-    axes[1, 1].plot(data['time'], data['vy'], color='C1')
+    axes[1, 1].plot(data['time'], data['yd'], color='C1')
     axes[1, 1].set_title('Y Velocity')
     axes[1, 1].grid(True)
 
-    axes[2, 1].plot(data['time'], data['ay'], color='C2')
+    axes[2, 1].plot(data['time'], data['ydd'], color='C2')
     axes[2, 1].set_title('Y Acceleration')
     axes[2, 1].grid(True)
 
@@ -42,11 +42,11 @@ def create_plots():
     axes[0, 2].set_title('Theta (rad)')
     axes[0, 2].grid(True)
 
-    axes[1, 2].plot(data['time'], data['vtheta'], color='C1')
+    axes[1, 2].plot(data['time'], data['thetad'], color='C1')
     axes[1, 2].set_title('Theta Velocity (rad/s)')
     axes[1, 2].grid(True)
 
-    axes[2, 2].plot(data['time'], data['atheta'], color='C2')
+    axes[2, 2].plot(data['time'], data['thetadd'], color='C2')
     axes[2, 2].set_title('Theta Acceleration (rad/s^2)')
     axes[2, 2].grid(True)
 
@@ -91,10 +91,10 @@ def create_animation():
         
         # Update Vectors
         vel_arrow.set_offsets([row['x'], row['y']])
-        vel_arrow.set_UVC(row['vx'], row['vy'])
+        vel_arrow.set_UVC(row['xd'], row['yd'])
         
         accel_arrow.set_offsets([row['x'], row['y']])
-        accel_arrow.set_UVC(row['ax'], row['ay'])
+        accel_arrow.set_UVC(row['xdd'], row['ydd'])
         
         # Update Telemetry HUD
         txt = (f"Time: {row['time']:.2f}s\n"

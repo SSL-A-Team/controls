@@ -1,0 +1,49 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Launch compute_state_measurement",
+            "program": "${workspaceFolder}/target/debug/compute_state_measurement",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "stdio": ["${workspaceFolder}/test_input.txt", null, null]
+        },
+        {
+            "name": "Run telem_bag2np.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "analysis/scripts/telem_bag2np.py",
+            "console": "integratedTerminal",
+            "args": "--bag data/tuning_iter_264 --robot 2 --output data/telemetry_264.npz"
+        },
+        {
+            "name": "Run kalman_visualize.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "analysis/scripts/kalman_visualize.py",
+            "console": "integratedTerminal",
+            "args": "--telemetry data/tuning_iter_269.npz --param-json analysis/data/robot_params.json"
+        },
+        {
+            "name": "Run telem_visualize.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "analysis/scripts/telem_visualize.py",
+            "console": "integratedTerminal",
+            "args": "--telemetry data/tuning_iter_264.npz"
+        },
+        {
+            "name": "Run wheel_visualize.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "analysis/scripts/wheel_visualize.py",
+            "console": "integratedTerminal",
+            "args": "--telemetry data/tuning_iter_264.npz"
+        }
+    ]
+}

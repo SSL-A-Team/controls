@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+"""
+Interactive parameter tuning loop.
+
+Workflow per iteration:
+  1. Prompt to edit the param JSON file
+  2. Upload all parameters to the robot via ros2 service calls
+  3. Start ROS bag recording
+  4. Run motion_input_node for one fn_period (5 s) then auto-exit
+  5. Stop ROS bag recording
+  6. Convert bag to npz via telem_bag2np
+  7. Visualize with kalman_visualize (blocks until plot window closed)
+  8. Prompt to continue or quit
+"""
+
+import argparse
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import rclpy
+from rclpy.node import Node
+from ateam_msgs.srv import SetFirmwareParameter
+
+
+SCRIPTS_DIR = Path(__file__).resolve().parent
+CONTROLS_DIR = next(p for p in SCRIPTS_DIR.parents if p.name == "controls")
+WS_ROOT = next(p for p in CONTROLS_DIR.parents if (p / "install").is_dir())
+
+# Parse PARAM_ID_MAP directly from robot_parameters.h ParameterName enum
+ROBOT_PARAMS_H = WS_ROOT / "src" / "software" / "radio" / "ateam_radio_msgs" / \
+    "software-communication" / "ateam-common-packets" / "include" / "robot_parameters.h"
+
+def _parse_param_id_map(header_path: Path) -> dict:
+    """Extract {NAME: ID} from the ParameterName enum in robot_parameters.h."""
+    import re
+    text = header_path.read_text()
+    # Extract the ParameterName enum body
+    match = re.search(r'typedef\s+enum\s+ParameterName\s*:\s*uint8_t\s*\{([^}]+)\}', text)
+    if not match:
+        raise RuntimeError(f"Could not find ParameterName enum in {header_path}")
+    entries = re.findall(r'(\w+)\s*=\s*(\d+)', match.group(1))
+    return {name: int(val) for name, val in entries}
+
+PARAM_ID_MAP = _parse_param_id_map(ROBOT_PARAMS_H)
+
+
+def set_firmware_param(node: Node, client, robot_id: int, param_id: int, data: list):
+    """Send a single parameter to the robot via the SetFirmwareParameter service."""
+    req = SetFirmwareParameter.Request()
+    req.robot_id = robot_id
+    req.parameter_id = param_id
+    req.data = [float(v) for v in data]
+
+    for attempt in range(3):
+        future = client.call_async(req)
+        rclpy.spin_until_future_complete(node, future, timeout_sec=5.0)
+        if future.result() is None:
+            print(f"  WARNING: param_id={param_id} — service call timed out")
+            return False
+        resp = future.result()
+        if resp.success:
+            print(f"  param_id={param_id}  data={data}  OK")
+            return True
+        print(f"  WARNING: param_id={param_id} — {resp.reason} (attempt {attempt + 1}/3)")
+
+    print(f"  ERROR: param_id={param_id} — failed after 3 attempts")
+    return False
+
+
+def upload_params(robot_id: int, param_json_path: str):
+    """Read the JSON param file and upload every parameter to the robot."""
+    with open(param_json_path) as f:
+        params = json.load(f)
+
+    node = rclpy.create_node("param_uploader")
+    client = node.create_client(SetFirmwareParameter, "/set_firmware_param")
+
+    print(f"Waiting for /set_firmware_param service...")
+    if not client.wait_for_service(timeout_sec=5.0):
+        print("ERROR: /set_firmware_param service not available")
+        node.destroy_node()
+        return False
+
+    print(f"Uploading parameters to robot {robot_id} from {param_json_path}")
+    all_ok = True
+    for name, param_id in PARAM_ID_MAP.items():
+        if name in params:
+            value = params[name]
+            if isinstance(value, list):
+                data = [float(v) for v in value]
+            else:
+                data = [float(value)]
+            if not set_firmware_param(node, client, robot_id, param_id, data):
+                all_ok = False
+
+    node.destroy_node()
+    if all_ok:
+        print("Parameter upload complete.\n")
+    else:
+        print("ERROR: Parameter upload had failures.\n")
+    return all_ok
+
+
+def start_bag_recording(bag_path: str, topics: str = "") -> subprocess.Popen:
+    """Start ros2 bag record in the background. Returns the Popen handle."""
+    cmd = ["ros2", "bag", "record", "-o", bag_path, "-s", "mcap"]
+    if topics:
+        cmd += topics.split()
+    else:
+        cmd.append("--all")
+    print(f"Starting bag recording → {bag_path}")
+    proc = subprocess.Popen(cmd, preexec_fn=os.setsid)
+    time.sleep(1)  # give it a moment to initialize
+    return proc
+
+
+def stop_bag_recording(proc: subprocess.Popen):
+    """Gracefully stop the bag recorder with SIGINT."""
+    print("Stopping bag recording...")
+    os.killpg(os.getpgid(proc.pid), signal.SIGINT)
+    proc.wait(timeout=10)
+    print("Bag recording stopped.\n")
+
+
+def run_motion_input_node(robot_id: int, amp: float = 0.2, dimension: str = "x", fn_type: str = "oscillate", freq: float = 1.0, width: float = 0.5, duration: float = 5.0, param_json: str = None):
+    """Run the motion_input_node for the given duration, then it auto-exits."""
+    cmd = [
+        "ros2", "run", "ateam_motion_input", "motion_input_node",
+        "--ros-args",
+        "-p", f"robot_id:={robot_id}",
+        "-p", f"amp:={amp}",
+        "-p", f"dimension:={dimension}",
+        "-p", f"fn_type:={fn_type}",
+        "-p", f"freq:={freq}",
+        "-p", f"width:={width}",
+        "-p", f"duration:={duration}",
+    ]
+    if param_json:
+        cmd.extend(["-p", f"param_json:={param_json}"])
+    print(f"Running motion_input_node for {duration}s on robot {robot_id} (fn={fn_type}, dim={dimension}, amp={amp})...")
+    subprocess.run(cmd, timeout=duration + 10)
+    print("motion_input_node finished.\n")
+
+
+def convert_bag_to_npz(bag_path: str, robot_id: int, output_path: str):
+    """Run telem_bag2np.py to convert bag to npz."""
+    cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "telem_bag2np.py"),
+        "--bag", bag_path,
+        "--robot", str(robot_id),
+        "--output", output_path,
+    ]
+    print(f"Converting bag to npz → {output_path}")
+    subprocess.run(cmd, check=True)
+    print()
+
+
+def visualize(npz_path: str, param_json_path: str = None) -> list:
+    """Launch kalman_visualize.py and wheel_visualize.py in the background.
+    Returns the list of Popen handles so they can be killed later."""
+    kalman_cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "kalman_visualize.py"),
+        "--telemetry", npz_path,
+    ]
+    if param_json_path:
+        kalman_cmd += ["--param-json", param_json_path]
+
+    wheel_cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "wheel_visualize.py"),
+        "--telemetry", npz_path,
+    ]
+
+    print("Launching visualization...")
+    procs = [
+        subprocess.Popen(kalman_cmd),
+        subprocess.Popen(wheel_cmd),
+    ]
+    return procs
+
+
+def kill_visualizations(procs: list):
+    """Terminate any running visualization processes."""
+    for proc in procs:
+        if proc.poll() is None:
+            proc.terminate()
+    for proc in procs:
+        proc.wait(timeout=5)
+    print("Previous visualizations closed.")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Interactive parameter tuning loop",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--param-json", type=str, default=str(CONTROLS_DIR / "analysis" / "data" / "robot_params.json"),
+        help="Path to the JSON file with RobotModel parameters",
+    )
+    parser.add_argument(
+        "--robot-id", type=int, default=2,
+        help="Robot ID (default: 2)",
+    )
+    parser.add_argument(
+        "--amp", type=float, default=0.2,
+        help="Amplitude of oscillation (default: 0.2)",
+    )
+    parser.add_argument(
+        "--dimension", type=str, default="x", choices=["x", "y", "theta"],
+        help="Dimension to oscillate: x, y, or theta (default: x)",
+    )
+    parser.add_argument(
+        "--fn-type", type=str, default="oscillate", choices=["pulse", "oscillate", "step", "bangbang"],
+        help="Control function type (default: oscillate)",
+    )
+    parser.add_argument(
+        "--width", type=float, default=0.5,
+        help="Pulse width in seconds, used with --fn-type pulse (default: 0.5)",
+    )
+    parser.add_argument(
+        "--freq", type=float, default=1.0,
+        help="Frequency in Hz (default: 1.0)",
+    )
+    parser.add_argument(
+        "--duration", type=float, default=5.0,
+        help="Duration in seconds to run motion_input_node (default: 5.0)",
+    )
+    parser.add_argument(
+        "--output-dir", type=str, default=str(CONTROLS_DIR / "data"),
+        help="Directory to store bags and npz files",
+    )
+    args = parser.parse_args()
+
+    rclpy.init()
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    # Determine starting iteration from existing files in output dir
+    existing = [
+        f.name for f in Path(args.output_dir).iterdir()
+        if f.name.startswith("tuning_iter_")
+    ]
+    existing_iters = []
+    for name in existing:
+        # Extract number from tuning_iter_N or tuning_iter_N.npz
+        base = name.replace(".npz", "")
+        parts = base.split("_")
+        try:
+            existing_iters.append(int(parts[-1]))
+        except ValueError:
+            pass
+    iteration = max(existing_iters, default=0)
+    viz_procs = []
+
+    try:
+        while True:
+            iteration += 1
+            print("=" * 60)
+            print(f"  ITERATION {iteration}")
+            print("=" * 60)
+
+            input(f"Edit {args.param_json} if desired, then press Enter to continue...")
+
+            # Close previous visualization windows
+            if viz_procs:
+                kill_visualizations(viz_procs)
+                viz_procs = []
+
+            # 1. Upload params to robot
+            if not upload_params(args.robot_id, args.param_json):
+                print("Skipping iteration due to parameter upload failure.")
+                continue
+
+            # 2. Start bag recording
+            bag_path = os.path.join(args.output_dir, f"tuning_iter_{iteration}")
+            print("Starting bag recording...")
+            bag_proc = start_bag_recording(bag_path)
+            # print("Waiting 2 seconds...")
+            # time.sleep(2)  # ensure bag is recording before starting the test
+
+            try:
+                # 3. Run motion_input_node
+                run_motion_input_node(args.robot_id, amp=args.amp, dimension=args.dimension, fn_type=args.fn_type, freq=args.freq, width=args.width, duration=args.duration, param_json=args.param_json)
+            finally:
+                # 4. Stop bag recording
+                stop_bag_recording(bag_proc)
+
+            # 5. Convert bag to npz
+            npz_path = os.path.join(args.output_dir, f"tuning_iter_{iteration}.npz")
+            convert_bag_to_npz(bag_path, args.robot_id, npz_path)
+
+            # 6. Visualize
+            viz_procs = visualize(npz_path, param_json_path=args.param_json)
+
+            # # 7. Continue?
+            # answer = input("Run another iteration? [Y/n] ").strip().lower()
+            # if answer in ("n", "no"):
+            #     kill_visualizations(viz_procs)
+            #     print("Done.")
+            #     break
+    finally:
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
