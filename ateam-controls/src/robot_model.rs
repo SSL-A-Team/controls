@@ -1,6 +1,8 @@
 use libm::{sinf, cosf};
 use crate::{Matrix3f, Matrix3x4f, Matrix4x3f, Vector3f, Vector4f};
 use crate::robot_physical_params::*;
+use crate::{z_rotation_mat, pinv_3x4};
+
 
 /// Pose: Vector3
 ///     x - x linear position (m)
@@ -24,26 +26,6 @@ use crate::robot_physical_params::*;
 ///     y - back left torque (N*m)
 ///     z - back right torque (N*m)
 ///     w - front right torque (N*m)
-
-/// Rotation matrix around z axis by theta radians
-fn z_rotation_mat(theta: f32) -> Matrix3f {
-    let c = cosf(theta);
-    let s = sinf(theta);
-    Matrix3f::new(
-        c  , -s  , 0.0,
-        s  ,  c  , 0.0,
-        0.0,  0.0, 1.0
-    )
-}
-
-/// Pseudo matrix inverse
-fn pinv_3x4(a: Matrix3x4f) -> Matrix4x3f {
-    let a_t = a.clone().transpose();
-    let a_at = a * a_t.clone();
-    let a_at_inv = a_at.try_inverse().unwrap();
-    let a_inv = a_t * a_at_inv;
-    a_inv
-}
 
 pub fn transform_frame_global2robot_pose(robot_pose: Vector3f, pose: Vector3f) -> Vector3f {
     z_rotation_mat(-robot_pose.z) * (pose - robot_pose)
