@@ -49,7 +49,7 @@ impl BangBangTraj3D {
 pub fn compute_optimal_bangbang_traj_3d(init_state: Vector6f, target_pose: Vector3f) -> BangBangTraj3D {
     let mut alpha = PI / 4.0;
     let mut increment = PI / 8.0;
-    let precision = 0.0000001;
+    let precision = 0.1;
     let mut x_traj;
     let mut y_traj;
     loop {
