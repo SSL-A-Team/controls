@@ -1,12 +1,12 @@
+import argparse
 import numpy as np
-
+from pathlib import Path
 from rosbag2_py import SequentialReader, StorageOptions, ConverterOptions
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 
 
-BAG_PATH = "/home/nwitten/workspace/ateam_ws/rosbag/rosbag_telem"
-TOPIC = "/robot_feedback/extended/robot2"
+CONTROLS_REPO_PATH = next(p for p in Path(__file__).resolve().parents if p.name == "controls")
 MSG_TYPE = "ateam_radio_msgs/msg/ExtendedTelemetry"
 
 
@@ -95,6 +95,14 @@ def load_extended_telemetry_bag(bag_path, topic, msg_type):
 
 
 if __name__ == "__main__":
-    telem = load_extended_telemetry_bag(BAG_PATH, TOPIC, MSG_TYPE)
+    parser = argparse.ArgumentParser(description="Convert ROS2 bag to numpy archive")
+    parser.add_argument("--bag", type=str, required=True, help="Path to the ROS2 bag directory")
+    parser.add_argument("--robot", type=int, default=2, help="Robot number (default: 2)")
+    parser.add_argument("--output", type=str, default="telemetry.npz", help="Output path for the NPZ file (default: telemetry.npz)")
+    args = parser.parse_args()
+    
+    topic = f"/robot_feedback/extended/robot{args.robot}"
+    telem = load_extended_telemetry_bag(args.bag, topic, MSG_TYPE)
     print("Frames loaded:", telem["t"].shape[0])
-    np.savez("telemetry.npz", **telem)
+    np.savez(args.output, **telem)
+    print(f"Saved to {args.output}")

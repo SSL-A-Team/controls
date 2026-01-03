@@ -1,4 +1,5 @@
 from pathlib import Path
+import argparse
 import subprocess
 from io import StringIO
 import numpy as np
@@ -9,7 +10,6 @@ from matplotlib.patches import Circle
 
 CONTROLS_REPO_PATH = next(p for p in Path(__file__).resolve().parents if p.name == "controls")
 COMPUTE_TRAJECTORY_BIN_PATH = next(CONTROLS_REPO_PATH.rglob("target/release/compute_trajectory"))
-TELEM_NPZ_PATH = next(CONTROLS_REPO_PATH.rglob("**/telemetry.npz"))
 
 def compile_compute_trajectory():
     build_cmd = ["cargo", "build", "--release", "--bin", "compute_trajectory"]
@@ -51,6 +51,9 @@ class TelemVisualizer:
         self.data = np.load(npz_path)
         self.idx = 0
         self.max_idx = len(self.data['t']) - 1
+        
+        if self.max_idx <= 0:
+            raise ValueError("No telemetry data found in the provided NPZ file.")
         
         self.fig, self.ax = plt.subplots(figsize=(10, 8))
         self.fig.canvas.mpl_connect('key_press_event', self.on_key)
@@ -168,6 +171,10 @@ class TelemVisualizer:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Visualize telemetry data")
+    parser.add_argument("--telemetry", type=str, required=True, help="Path to the telemetry NPZ file")
+    args = parser.parse_args()
+    
     compile_compute_trajectory()
-    viz = TelemVisualizer(TELEM_NPZ_PATH)
+    viz = TelemVisualizer(args.telemetry)
     viz.show()
