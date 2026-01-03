@@ -1,6 +1,7 @@
 [workspace]
 members = [
-  "ateam_controls",
-  "ateam_controls_c",
+  "ateam-controls",
+  "ateam-controls-c",
+  "analysis",
 ]
 resolver = "3"
