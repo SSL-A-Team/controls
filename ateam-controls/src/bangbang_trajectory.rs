@@ -93,6 +93,9 @@ pub fn compute_bangbang_traj_3d_accel_at_t(traj: BangBangTraj3D, t: f32) -> Vect
 }
 
 pub fn compute_bangbang_traj_1d_accel_at_t(traj: BangBangTraj1D, t: f32) -> f32 {
+    if t >= traj.t4 {
+        return 0.0;
+    }
     if t >= traj.t3 {
         return traj.sdd3;
     }

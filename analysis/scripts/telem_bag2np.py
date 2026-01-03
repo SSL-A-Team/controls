@@ -5,7 +5,7 @@ from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 
 
-BAG_PATH = "/home/nickwitten/workspace/ateam_ws/rosbag_tmp"
+BAG_PATH = "/home/nwitten/workspace/ateam_ws/rosbag/rosbag_telem"
 TOPIC = "/robot_feedback/extended/robot2"
 MSG_TYPE = "ateam_radio_msgs/msg/ExtendedTelemetry"
 
