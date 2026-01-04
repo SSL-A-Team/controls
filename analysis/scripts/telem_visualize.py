@@ -9,7 +9,7 @@ from matplotlib.patches import Circle
 
 
 CONTROLS_REPO_PATH = next(p for p in Path(__file__).resolve().parents if p.name == "controls")
-COMPUTE_TRAJECTORY_BIN_PATH = next(CONTROLS_REPO_PATH.rglob("target/release/compute_trajectory"))
+COMPUTE_TRAJECTORY_BIN_PATH = CONTROLS_REPO_PATH / "target" / "release" / "compute_trajectory"
 
 def compile_compute_trajectory():
     build_cmd = ["cargo", "build", "--release", "--bin", "compute_trajectory"]
