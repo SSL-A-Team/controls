@@ -7,9 +7,9 @@ The shared code is written primarily in Rust with C interface bindings.
 ## Contents
 * analysis
   * Docs and scripts used to design and understand our motion controls
-* ateam_controls
+* ateam-controls
   * The primary Rust crate for shared code
-* ateam_controls_c
+* ateam-controls-c
   * Crate for building C-compatible library and headers
 * cpp_tests
   * Tests for the C-compatible bindings
