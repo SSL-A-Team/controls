@@ -144,7 +144,7 @@ pub struct RobotModel {
     pub m: Matrix3x4f,
     /// Inverse of m
     pub m_inv: Matrix4x3f,
-    /// Robot inirtial matrix, robot frame x_linear, y_linear, zaxis_moment
+    /// Robot inertial matrix, robot frame x_linear, y_linear, zaxis_moment
     pub i: Matrix3f,
     /// Inverse of i
     pub i_inv: Matrix3f,
@@ -162,7 +162,7 @@ impl RobotModel {
     /// l: distance from the robot center to each wheel
     /// r: radius of robot wheels
     /// mass: robot body mass
-    /// iz: robot body moment of inirtia around z axis
+    /// iz: robot body moment of inertia around z axis
     /// kf_dt: Kalman Filter state update period
     pub fn new(kf_dt: f32, kf_params: KalmanFilterParams, physical_params: RobotPhysicalParams) -> Result<RobotModel, ControlsError> {
         let mut model = RobotModel::default();

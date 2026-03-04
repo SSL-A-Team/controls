@@ -54,9 +54,6 @@ def load_extended_telemetry_bag(bag_path, topic, msg_type):
         if topic_name != topic:
             continue
 
-        if i == 2044:
-            pass
-
         msg = deserialize_message(data, msg_cls)
 
         telem["ros_t"] = telem.get("ros_t", []) + [ros_t * 1e-9]  # nanoseconds -> seconds
@@ -66,7 +63,7 @@ def load_extended_telemetry_bag(bag_path, topic, msg_type):
         i += 1
 
     # Special postprocess of timestamp_us fields
-    if "timestamp_us_hi" and "timestamp_us_lo" in telem:
+    if "timestamp_us_hi" in telem and "timestamp_us_lo" in telem:
         for hi, lo in zip(telem["timestamp_us_hi"], telem["timestamp_us_lo"]):
             timestamp_us = (hi << 32) | lo
             telem["timestamp_us"] = telem.get("timestamp_us", []) + [timestamp_us]

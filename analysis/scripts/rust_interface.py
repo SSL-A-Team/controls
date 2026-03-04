@@ -22,6 +22,42 @@ CONTROLS_REPO_PATH = next(p for p in Path(__file__).resolve().parents if p.name 
 _LIB_PATH = CONTROLS_REPO_PATH / "target" / "release" / "libateam_controls_c.so"
 
 # ---------------------------------------------------------------------------
+# Error codes (must match ateam_controls.h)
+# ---------------------------------------------------------------------------
+
+ATEAM_CONTROLS_OK             =  0
+ATEAM_CONTROLS_INVALID_INPUT  = -1
+ATEAM_CONTROLS_SINGULAR       = -2
+ATEAM_CONTROLS_NO_SOLUTION    = -3
+ATEAM_CONTROLS_INVALID_TIME   = -4
+ATEAM_CONTROLS_EXCEEDS_LIMIT  = -5
+
+_ERROR_NAMES = {
+    ATEAM_CONTROLS_INVALID_INPUT: "INVALID_INPUT",
+    ATEAM_CONTROLS_SINGULAR:      "SINGULAR_MATRIX",
+    ATEAM_CONTROLS_NO_SOLUTION:   "NO_SOLUTION",
+    ATEAM_CONTROLS_INVALID_TIME:  "INVALID_TIME",
+    ATEAM_CONTROLS_EXCEEDS_LIMIT: "EXCEEDS_LIMIT",
+}
+
+
+class ControlsError(RuntimeError):
+    """Raised when the Rust controls library returns a non-zero error code."""
+    def __init__(self, rc: int, context: str = ""):
+        name = _ERROR_NAMES.get(rc, f"UNKNOWN({rc})")
+        msg = f"ateam_controls error {rc} ({name})"
+        if context:
+            msg += f" in {context}"
+        super().__init__(msg)
+        self.rc = rc
+
+
+def _check_rc(rc: int, context: str = ""):
+    """Raise ControlsError if rc != 0."""
+    if rc != ATEAM_CONTROLS_OK:
+        raise ControlsError(rc, context)
+
+# ---------------------------------------------------------------------------
 # ctypes struct definitions (must match ateam_controls.h)
 # ---------------------------------------------------------------------------
 
@@ -164,24 +200,31 @@ def _setup_signatures(lib):
     lib.ateam_controls_traj_params_default.argtypes = []
     lib.ateam_controls_traj_params_default.restype = TrajectoryParams
 
-    lib.ateam_controls_traj_from_target_pose.argtypes = [Vector6C, Vector3C, TrajectoryParams]
-    lib.ateam_controls_traj_from_target_pose.restype = BangBangTraj3D
+    lib.ateam_controls_traj_from_target_pose.argtypes = [
+        Vector6C, Vector3C, TrajectoryParams, ctypes.POINTER(BangBangTraj3D)]
+    lib.ateam_controls_traj_from_target_pose.restype = ctypes.c_int32
 
     lib.ateam_controls_traj_end_time.argtypes = [BangBangTraj3D]
     lib.ateam_controls_traj_end_time.restype = ctypes.c_float
 
-    lib.ateam_controls_traj_state_at.argtypes = [BangBangTraj3D, Vector6C, ctypes.c_float, ctypes.c_float]
-    lib.ateam_controls_traj_state_at.restype = Vector6C
+    lib.ateam_controls_traj_state_at.argtypes = [
+        BangBangTraj3D, Vector6C, ctypes.c_float, ctypes.c_float,
+        ctypes.POINTER(Vector6C)]
+    lib.ateam_controls_traj_state_at.restype = ctypes.c_int32
 
-    lib.ateam_controls_traj_accel_at.argtypes = [BangBangTraj3D, ctypes.c_float]
-    lib.ateam_controls_traj_accel_at.restype = Vector3C
+    lib.ateam_controls_traj_accel_at.argtypes = [
+        BangBangTraj3D, ctypes.c_float, ctypes.POINTER(Vector3C)]
+    lib.ateam_controls_traj_accel_at.restype = ctypes.c_int32
 
     # RobotModel
-    lib.ateam_controls_robot_model_new.argtypes = [ctypes.c_float, KalmanFilterParams, RobotPhysicalParams]
-    lib.ateam_controls_robot_model_new.restype = ctypes.c_void_p
+    lib.ateam_controls_robot_model_new.argtypes = [
+        ctypes.c_float, KalmanFilterParams, RobotPhysicalParams,
+        ctypes.POINTER(ctypes.c_void_p)]
+    lib.ateam_controls_robot_model_new.restype = ctypes.c_int32
 
-    lib.ateam_controls_robot_model_new_default.argtypes = [ctypes.c_float]
-    lib.ateam_controls_robot_model_new_default.restype = ctypes.c_void_p
+    lib.ateam_controls_robot_model_new_default.argtypes = [
+        ctypes.c_float, ctypes.POINTER(ctypes.c_void_p)]
+    lib.ateam_controls_robot_model_new_default.restype = ctypes.c_int32
 
     lib.ateam_controls_robot_model_free.argtypes = [ctypes.c_void_p]
     lib.ateam_controls_robot_model_free.restype = None
@@ -216,7 +259,11 @@ def _load_robot_model_from_json(lib, path: str):
     for json_key, field in _PHYS_JSON_MAP.items():
         if json_key in data:
             setattr(phys, field, float(data[json_key]))
-    return lib.ateam_controls_robot_model_new(ctypes.c_float(0.001), kf, phys)
+    model = ctypes.c_void_p()
+    rc = lib.ateam_controls_robot_model_new(
+        ctypes.c_float(0.001), kf, phys, ctypes.byref(model))
+    _check_rc(rc, "robot_model_new")
+    return model
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +316,10 @@ def compute_trajectory(init_state: list, target_pose: list, param_json: str = No
         params = _load_traj_params_from_json(params, param_json)
 
     # Compute trajectory
-    traj = lib.ateam_controls_traj_from_target_pose(state_c, target_c, params)
+    traj = BangBangTraj3D()
+    rc = lib.ateam_controls_traj_from_target_pose(
+        state_c, target_c, params, ctypes.byref(traj))
+    _check_rc(rc, "traj_from_target_pose")
     end_time = lib.ateam_controls_traj_end_time(traj)
 
     # Clamp sampling window
@@ -285,9 +335,16 @@ def compute_trajectory(init_state: list, target_pose: list, param_json: str = No
 
     n_steps = len(times)
     rows = np.empty((n_steps, 10), dtype=np.float32)
+    st = Vector6C()
+    ac = Vector3C()
     for i, t in enumerate(times):
-        st = lib.ateam_controls_traj_state_at(traj, state_c, ctypes.c_float(0.0), ctypes.c_float(t))
-        ac = lib.ateam_controls_traj_accel_at(traj, ctypes.c_float(t))
+        rc = lib.ateam_controls_traj_state_at(
+            traj, state_c, ctypes.c_float(0.0), ctypes.c_float(t),
+            ctypes.byref(st))
+        _check_rc(rc, "traj_state_at")
+        rc = lib.ateam_controls_traj_accel_at(
+            traj, ctypes.c_float(t), ctypes.byref(ac))
+        _check_rc(rc, "traj_accel_at")
         rows[i] = [t, st.data[0], st.data[1], st.data[2],
                       st.data[3], st.data[4], st.data[5],
                       ac.x, ac.y, ac.z]
@@ -324,7 +381,10 @@ def compute_state_measurement(state: list, sensor_readings: list, param_json: st
     if param_json is not None:
         model = _load_robot_model_from_json(lib, param_json)
     else:
-        model = lib.ateam_controls_robot_model_new_default(ctypes.c_float(0.001))
+        model = ctypes.c_void_p()
+        rc = lib.ateam_controls_robot_model_new_default(
+            ctypes.c_float(0.001), ctypes.byref(model))
+        _check_rc(rc, "robot_model_new_default")
 
     try:
         # Get wheel2twist transform (3x4 matrix, column-major)

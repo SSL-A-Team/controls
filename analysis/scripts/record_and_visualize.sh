@@ -13,7 +13,7 @@ done
 
 ROSBAG_PATH="$DATA_DIR/rosbag_telem_$INDEX"
 TELEM_PATH="$DATA_DIR/telemetry_$INDEX.npz"
-ros2 bag record --all -o $ROSBAG_PATH
-python3 $CONTROLS_REPO_PATH/analysis/scripts/telem_bag2np.py --bag $ROSBAG_PATH --robot $ROBOT_ID --output $TELEM_PATH
-python3 $CONTROLS_REPO_PATH/analysis/scripts/kalman_visualize.py --telemetry $TELEM_PATH
-python3 $CONTROLS_REPO_PATH/analysis/scripts/telem_visualize.py --telemetry $TELEM_PATH
+ros2 bag record --all -o "$ROSBAG_PATH"
+python3 "$CONTROLS_REPO_PATH/analysis/scripts/telem_bag2np.py" --bag "$ROSBAG_PATH" --robot "$ROBOT_ID" --output "$TELEM_PATH"
+python3 "$CONTROLS_REPO_PATH/analysis/scripts/kalman_visualize.py" --telemetry "$TELEM_PATH"
+python3 "$CONTROLS_REPO_PATH/analysis/scripts/telem_visualize.py" --telemetry "$TELEM_PATH"
