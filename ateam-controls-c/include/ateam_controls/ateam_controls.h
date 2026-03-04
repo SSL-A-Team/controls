@@ -9,6 +9,17 @@ extern "C" {
 #endif
 
 // ============================================================================
+// Error codes
+// ============================================================================
+
+#define ATEAM_CONTROLS_OK              0
+#define ATEAM_CONTROLS_INVALID_INPUT  -1
+#define ATEAM_CONTROLS_SINGULAR       -2
+#define ATEAM_CONTROLS_NO_SOLUTION    -3
+#define ATEAM_CONTROLS_INVALID_TIME   -4
+#define ATEAM_CONTROLS_EXCEEDS_LIMIT  -5
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -111,22 +122,23 @@ uint64_t ateam_controls_add(uint64_t left, uint64_t right);
 // RobotModel
 // ============================================================================
 
-RobotModel_t* ateam_controls_robot_model_new(
+int32_t ateam_controls_robot_model_new(
     float kf_dt,
     KalmanFilterParams_t kf_params,
-    RobotPhysicalParams_t phys_params);
-RobotModel_t* ateam_controls_robot_model_new_default(float kf_dt);
+    RobotPhysicalParams_t phys_params,
+    RobotModel_t** out);
+int32_t ateam_controls_robot_model_new_default(float kf_dt, RobotModel_t** out);
 void ateam_controls_robot_model_free(RobotModel_t* model);
 
 void ateam_controls_robot_model_update_kf_params(
     RobotModel_t* model,
     KalmanFilterParams_t kf_params);
-void ateam_controls_robot_model_update_physical_params(
+int32_t ateam_controls_robot_model_update_physical_params(
     RobotModel_t* model,
     RobotPhysicalParams_t phys_params);
 
 void ateam_controls_robot_model_kf_predict(RobotModel_t* model, Vector3C_t accel);
-void ateam_controls_robot_model_kf_update(
+int32_t ateam_controls_robot_model_kf_update(
     RobotModel_t* model,
     Vector8C_t measurement,
     bool mask_vision,
@@ -154,25 +166,28 @@ Vector4C_t ateam_controls_robot_model_torques_to_currents(
 
 TrajectoryParams_t ateam_controls_traj_params_default(void);
 
-BangBangTraj3D_t ateam_controls_traj_from_target_pose(
+int32_t ateam_controls_traj_from_target_pose(
     Vector6C_t init_state,
     Vector3C_t target_pose,
-    TrajectoryParams_t params);
-BangBangTraj3D_t ateam_controls_traj_from_target_twist(
+    TrajectoryParams_t params,
+    BangBangTraj3D_t* out);
+int32_t ateam_controls_traj_from_target_twist(
     Vector3C_t init_twist,
     Vector3C_t target_twist,
-    TrajectoryParams_t params);
+    TrajectoryParams_t params,
+    BangBangTraj3D_t* out);
 
 void ateam_controls_traj_1d_time_shift(BangBangTraj1D_t* traj, float dt);
 void ateam_controls_traj_3d_time_shift(BangBangTraj3D_t* traj, float dt);
 float ateam_controls_traj_end_time(BangBangTraj3D_t traj);
 
-Vector6C_t ateam_controls_traj_state_at(
+int32_t ateam_controls_traj_state_at(
     BangBangTraj3D_t traj,
     Vector6C_t current_state,
     float current_time,
-    float t);
-Vector3C_t ateam_controls_traj_accel_at(BangBangTraj3D_t traj, float t);
+    float t,
+    Vector6C_t* out);
+int32_t ateam_controls_traj_accel_at(BangBangTraj3D_t traj, float t, Vector3C_t* out);
 
 #ifdef __cplusplus
 }

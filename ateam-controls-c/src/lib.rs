@@ -17,17 +17,33 @@ pub extern "C" fn ateam_controls_add(left: u64, right: u64) -> u64 {
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_robot_model_new(
+pub unsafe extern "C" fn ateam_controls_robot_model_new(
     kf_dt: f32,
     kf_params: KalmanFilterParams,
     phys_params: RobotPhysicalParams,
-) -> *mut RobotModel {
-    Box::into_raw(Box::new(RobotModel::new(kf_dt, kf_params, phys_params)))
+    out: *mut *mut RobotModel,
+) -> i32 {
+    match RobotModel::new(kf_dt, kf_params, phys_params) {
+        Ok(model) => {
+            unsafe { *out = Box::into_raw(Box::new(model)); }
+            0
+        }
+        Err(e) => e as i32,
+    }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_robot_model_new_default(kf_dt: f32) -> *mut RobotModel {
-    Box::into_raw(Box::new(RobotModel::new_from_default_params(kf_dt)))
+pub unsafe extern "C" fn ateam_controls_robot_model_new_default(
+    kf_dt: f32,
+    out: *mut *mut RobotModel,
+) -> i32 {
+    match RobotModel::new_from_default_params(kf_dt) {
+        Ok(model) => {
+            unsafe { *out = Box::into_raw(Box::new(model)); }
+            0
+        }
+        Err(e) => e as i32,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -49,8 +65,11 @@ pub unsafe extern "C" fn ateam_controls_robot_model_update_kf_params(
 pub unsafe extern "C" fn ateam_controls_robot_model_update_physical_params(
     model: *mut RobotModel,
     phys_params: RobotPhysicalParams,
-) {
-    unsafe { (*model).update_physical_params(phys_params); }
+) -> i32 {
+    match unsafe { (*model).update_physical_params(phys_params) } {
+        Ok(()) => 0,
+        Err(e) => e as i32,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -68,8 +87,11 @@ pub unsafe extern "C" fn ateam_controls_robot_model_kf_update(
     mask_vision: bool,
     mask_encoder: bool,
     mask_gyro: bool,
-) {
-    unsafe { (*model).kf_update(measurement.into(), mask_vision, mask_encoder, mask_gyro); }
+) -> i32 {
+    match unsafe { (*model).kf_update(measurement.into(), mask_vision, mask_encoder, mask_gyro) } {
+        Ok(()) => 0,
+        Err(e) => e as i32,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -137,21 +159,35 @@ pub extern "C" fn ateam_controls_traj_params_default() -> TrajectoryParams {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_traj_from_target_pose(
+pub unsafe extern "C" fn ateam_controls_traj_from_target_pose(
     init_state: Vector6C,
     target_pose: Vector3C,
     params: TrajectoryParams,
-) -> BangBangTraj3D {
-    BangBangTraj3D::from_target_pose(init_state.into(), target_pose.into(), params)
+    out: *mut BangBangTraj3D,
+) -> i32 {
+    match BangBangTraj3D::from_target_pose(init_state.into(), target_pose.into(), params) {
+        Ok(traj) => {
+            unsafe { *out = traj; }
+            0
+        }
+        Err(e) => e as i32,
+    }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_traj_from_target_twist(
+pub unsafe extern "C" fn ateam_controls_traj_from_target_twist(
     init_twist: Vector3C,
     target_twist: Vector3C,
     params: TrajectoryParams,
-) -> BangBangTraj3D {
-    BangBangTraj3D::from_target_twist(init_twist.into(), target_twist.into(), params)
+    out: *mut BangBangTraj3D,
+) -> i32 {
+    match BangBangTraj3D::from_target_twist(init_twist.into(), target_twist.into(), params) {
+        Ok(traj) => {
+            unsafe { *out = traj; }
+            0
+        }
+        Err(e) => e as i32,
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -170,16 +206,33 @@ pub extern "C" fn ateam_controls_traj_end_time(traj: BangBangTraj3D) -> f32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_traj_state_at(
+pub unsafe extern "C" fn ateam_controls_traj_state_at(
     traj: BangBangTraj3D,
     current_state: Vector6C,
     current_time: f32,
     t: f32,
-) -> Vector6C {
-    traj.state_at(current_state.into(), current_time, t).into()
+    out: *mut Vector6C,
+) -> i32 {
+    match traj.state_at(current_state.into(), current_time, t) {
+        Ok(state) => {
+            unsafe { *out = state.into(); }
+            0
+        }
+        Err(e) => e as i32,
+    }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_traj_accel_at(traj: BangBangTraj3D, t: f32) -> Vector3C {
-    traj.accel_at(t).into()
+pub unsafe extern "C" fn ateam_controls_traj_accel_at(
+    traj: BangBangTraj3D,
+    t: f32,
+    out: *mut Vector3C,
+) -> i32 {
+    match traj.accel_at(t) {
+        Ok(accel) => {
+            unsafe { *out = accel.into(); }
+            0
+        }
+        Err(e) => e as i32,
+    }
 }

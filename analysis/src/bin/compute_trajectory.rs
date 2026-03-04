@@ -69,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let target_pose = parse_vector3f(&target_pose_input)?;
 
     // Compute optimal trajectory
-    let traj = BangBangTraj3D::from_target_pose(init_state, target_pose, traj_params);
+    let traj = BangBangTraj3D::from_target_pose(init_state, target_pose, traj_params)?;
     let end_time = traj.end_time();
     let time_resolution = 0.001;
 
@@ -80,10 +80,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut t = 0.0;
     while t <= end_time {
         // Get state at time t
-        let state = traj.state_at(init_state, 0.0, t);
+        let state = traj.state_at(init_state, 0.0, t)?;
         
         // Get acceleration at time t
-        let accel = traj.accel_at(t);
+        let accel = traj.accel_at(t)?;
 
         // Output in CSV format: t, x, y, theta, xd, yd, thetad xdd, ydd, thetadd
         println!(

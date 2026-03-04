@@ -1,7 +1,7 @@
 use core::f32::consts::PI;
 use libm::{cosf, sinf, sqrtf};
 use crate::trajectory_params::*;
-use crate::{Vector3f, Vector6f, wrap_angle};
+use crate::{ControlsError, Vector3f, Vector6f, wrap_angle};
 
 
 /// Parameters controlling trajectory velocity/acceleration limits and error tolerances.
@@ -74,7 +74,7 @@ pub struct BangBangTraj3D {
 
 impl BangBangTraj3D {
     /// Compute optimal bang-bang trajectory to reach a target pose from an initial state.
-    pub fn from_target_pose(init_state: Vector6f, target_pose: Vector3f, params: TrajectoryParams) -> Self {
+    pub fn from_target_pose(init_state: Vector6f, target_pose: Vector3f, params: TrajectoryParams) -> Result<Self, ControlsError> {
         let pos_err_linear = sqrtf((init_state[0] - target_pose[0]) * (init_state[0] - target_pose[0]) +
                                       (init_state[1] - target_pose[1]) * (init_state[1] - target_pose[1]));
         // Use shortest angular difference for the error check
@@ -85,7 +85,7 @@ impl BangBangTraj3D {
            pos_err_angular.abs() < params.allowable_error_pos_angular &&
            vel_err_linear < params.allowable_error_vel_linear &&
            vel_err_angular.abs() < params.allowable_error_vel_angular {
-            return BangBangTraj3D::default();
+            return Ok(BangBangTraj3D::default());
         }
         let mut alpha = PI / 4.0;
         let mut increment = PI / 8.0;
@@ -95,8 +95,8 @@ impl BangBangTraj3D {
         loop {
             let cos_alpha = cosf(alpha);
             let sin_alpha = sinf(alpha);
-            x_traj = solve_1d_pose(init_state[0], init_state[3], target_pose[0], cos_alpha * params.max_vel_linear, cos_alpha * params.max_accel_linear);
-            y_traj = solve_1d_pose(init_state[1], init_state[4], target_pose[1], sin_alpha * params.max_vel_linear, sin_alpha * params.max_accel_linear);
+            x_traj = solve_1d_pose(init_state[0], init_state[3], target_pose[0], cos_alpha * params.max_vel_linear, cos_alpha * params.max_accel_linear)?;
+            y_traj = solve_1d_pose(init_state[1], init_state[4], target_pose[1], sin_alpha * params.max_vel_linear, sin_alpha * params.max_accel_linear)?;
             if x_traj.t4 > y_traj.t4 {
                 alpha -= increment;
             } else {
@@ -110,24 +110,24 @@ impl BangBangTraj3D {
         // Compute theta target via shortest angular path so the trajectory
         // wraps through +/- pi instead of going the long way around.
         let theta_target = init_state[2] + wrap_angle(target_pose[2] - init_state[2]);
-        BangBangTraj3D {
+        Ok(BangBangTraj3D {
             x: x_traj,
             y: y_traj,
-            z: solve_1d_pose(init_state[2], init_state[5], theta_target, params.max_vel_angular, params.max_accel_angular),
-        }
+            z: solve_1d_pose(init_state[2], init_state[5], theta_target, params.max_vel_angular, params.max_accel_angular)?,
+        })
     }
 
     /// Compute optimal bang-bang trajectory to reach a target twist from an initial twist.
-    pub fn from_target_twist(init_twist: Vector3f, target_twist: Vector3f, params: TrajectoryParams) -> Self {
+    pub fn from_target_twist(init_twist: Vector3f, target_twist: Vector3f, params: TrajectoryParams) -> Result<Self, ControlsError> {
         if target_twist.z.abs() > params.max_vel_angular ||
             sqrtf(target_twist.x * target_twist.x + target_twist.y * target_twist.y) > params.max_vel_linear {
-            panic!("from_target_twist: Target twist exceeds maximum velocity limits");
+            return Err(ControlsError::ExceedsLimits);
         }
         let diff = target_twist - init_twist;
         let diff_xy_mag = sqrtf(diff.x * diff.x + diff.y * diff.y);
         if diff_xy_mag < params.allowable_error_vel_linear &&
            diff.z.abs() < params.allowable_error_vel_angular {
-            return BangBangTraj3D::default();
+            return Ok(BangBangTraj3D::default());
         }
         // Solve for optimal ratio of x and y accelerations using magnitude to avoid division by zero
         let (xdd, x_time, ydd, y_time) = if diff_xy_mag < 1e-9 {
@@ -145,11 +145,11 @@ impl BangBangTraj3D {
             let zdd = params.max_accel_angular * diff.z.signum();
             (zdd, diff.z / zdd)
         };
-        BangBangTraj3D {
+        Ok(BangBangTraj3D {
             x: BangBangTraj1D { sdd1: xdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: x_time, t3: x_time, t4: x_time },
             y: BangBangTraj1D { sdd1: ydd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: y_time, t3: y_time, t4: y_time },
             z: BangBangTraj1D { sdd1: zdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: z_time, t3: z_time, t4: z_time },
-        }
+        })
     }
 
     pub fn time_shift(&mut self, dt: f32) {
@@ -163,59 +163,59 @@ impl BangBangTraj3D {
     }
 
     /// Get the full state (position + velocity) at time `t` given `current_state` and `current_time`.
-    pub fn state_at(&self, current_state: Vector6f, current_time: f32, t: f32) -> Vector6f {
-        let (x_f, xd_f) = eval_1d_state_at(self.x, current_state[0], current_state[3], current_time, t);
-        let (y_f, yd_f) = eval_1d_state_at(self.y, current_state[1], current_state[4], current_time, t);
-        let (z_f, zd_f) = eval_1d_state_at(self.z, current_state[2], current_state[5], current_time, t);
-        Vector6f::new(x_f, y_f, wrap_angle(z_f), xd_f, yd_f, zd_f)
+    pub fn state_at(&self, current_state: Vector6f, current_time: f32, t: f32) -> Result<Vector6f, ControlsError> {
+        let (x_f, xd_f) = eval_1d_state_at(self.x, current_state[0], current_state[3], current_time, t)?;
+        let (y_f, yd_f) = eval_1d_state_at(self.y, current_state[1], current_state[4], current_time, t)?;
+        let (z_f, zd_f) = eval_1d_state_at(self.z, current_state[2], current_state[5], current_time, t)?;
+        Ok(Vector6f::new(x_f, y_f, wrap_angle(z_f), xd_f, yd_f, zd_f))
     }
 
     /// Get the acceleration command at time `t`.
-    pub fn accel_at(&self, t: f32) -> Vector3f {
-        Vector3f::new(
-            eval_1d_accel_at(self.x, t),
-            eval_1d_accel_at(self.y, t),
-            eval_1d_accel_at(self.z, t),
-        )
+    pub fn accel_at(&self, t: f32) -> Result<Vector3f, ControlsError> {
+        Ok(Vector3f::new(
+            eval_1d_accel_at(self.x, t)?,
+            eval_1d_accel_at(self.y, t)?,
+            eval_1d_accel_at(self.z, t)?,
+        ))
     }
 }
 
 // --- 1D helper functions ---
 
-fn eval_1d_accel_at(traj: BangBangTraj1D, t: f32) -> f32 {
+fn eval_1d_accel_at(traj: BangBangTraj1D, t: f32) -> Result<f32, ControlsError> {
     if t >= traj.t4 {
-        return 0.0;
+        return Ok(0.0);
     }
     if t >= traj.t3 {
-        return traj.sdd3;
+        return Ok(traj.sdd3);
     }
     if t >= traj.t2 {
-        return traj.sdd2;
+        return Ok(traj.sdd2);
     }
     if t >= traj.t1 {
-        return traj.sdd1;
+        return Ok(traj.sdd1);
     }
-    panic!("Tried to use a trajectory that hasn't started yet!")
+    Err(ControlsError::InvalidTime)
 }
 
 /// Takes the initial velocity sd0, the desired positive change in position ds, and the bang-bang acceleration sdd.
 /// Returns the positive acceleration time T1, the negative acceleration time T2, and the peak velocity reached Vpeak.
-fn triangular_profile(sd0: f32, ds: f32, sdd: f32) -> (f32, f32, f32) {
+fn triangular_profile(sd0: f32, ds: f32, sdd: f32) -> Result<(f32, f32, f32), ControlsError> {
     if sd0 < 0.0 || ds < 0.0 || sdd < 0.0 {
-        panic!("triangular_profile: All values should be positive")
+        return Err(ControlsError::InvalidInput);
     }
 
     let t2 = sqrtf((sdd * ds + 0.5 * sd0 * sd0) / (sdd * sdd));
     let t1 = t2 - sd0 / sdd;
     let vpeak = sdd * t2;
-    (t1, t2, vpeak)
+    Ok((t1, t2, vpeak))
 }
 
 /// Takes the initial velocity sd0, the desired positive change in position ds, the bang-bang acceleration sdd, and the max velocity constraint sd_max.
 /// Returns the acceleration or deceleration time T1, the coasting time T2, the negative acceleration time T3, and the acceleration used for T1 (sdd1).
-fn trapezoidal_profile(sd0: f32, ds: f32, sdd: f32, sd_max: f32) -> (f32, f32, f32, f32) {
+fn trapezoidal_profile(sd0: f32, ds: f32, sdd: f32, sd_max: f32) -> Result<(f32, f32, f32, f32), ControlsError> {
     if sd0 < 0.0 || ds <= 0.0 || sdd <= 0.0 || sd_max <= 0.0 {  // allow sd0 to be zero
-        panic!("trapezoidal_profile: All values should be positive")
+        return Err(ControlsError::InvalidInput);
     }
 
     // The first period of time can either be acceleration to max velocity or deceleration to max velocity
@@ -236,9 +236,9 @@ fn trapezoidal_profile(sd0: f32, ds: f32, sdd: f32, sd_max: f32) -> (f32, f32, f
     let d2 = ds - d1 - d3;  // distance traveled during the coast
     let t2 = d2 / sd_max;  // coasting time
     if t1 < 0.0 || t2 < 0.0 || t3 < 0.0 {
-        panic!("trapezoidal_profile: No solution found")
+        return Err(ControlsError::NoSolution);
     }
-    return (t1, t2, t3, sdd1)
+    Ok((t1, t2, t3, sdd1))
 }
 
 /// Returns the time it took to brake and the resulting position.
@@ -249,9 +249,9 @@ fn compute_brake(s0: f32, sd0: f32, sdd: f32) -> (f32, f32) {
 }
 
 /// Solve one-dimensional bang-bang trajectory to reach target position `s_trg`.
-fn solve_1d_pose(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> BangBangTraj1D {
+fn solve_1d_pose(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> Result<BangBangTraj1D, ControlsError> {
     if sdd_max <= 0.0 || sd_max <= 0.0 {
-        panic!("solve_1d_pose: Can't compute trajectory when max velocity or acceleration is 0.0")
+        return Err(ControlsError::InvalidInput);
     }
 
     let mut traj = BangBangTraj1D::default();
@@ -278,7 +278,7 @@ fn solve_1d_pose(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> Ba
     // Solve triangular profile and check if unconstrained velocity is greater than sd_max
     let ds = s_trg - s;
     let direction = ds.signum();
-    let (t1, t2, vpeak) = triangular_profile(sd.abs(), ds.abs(), sdd_max);
+    let (t1, t2, vpeak) = triangular_profile(sd.abs(), ds.abs(), sdd_max)?;
     if vpeak < sd_max {
 
         // accelerate towards target
@@ -298,7 +298,7 @@ fn solve_1d_pose(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> Ba
 
     } else {
         // Solve trapezoidal profile
-        let (t1, t2, t3, sdd1) = trapezoidal_profile(sd.abs(), ds.abs(), sdd_max, sd_max);
+        let (t1, t2, t3, sdd1) = trapezoidal_profile(sd.abs(), ds.abs(), sdd_max, sd_max)?;
 
         // accelerate or decelerate to max velocity
         traj.sdd1 = direction * sdd1;  // NOTE: this could have already been set if brake to zero was added in the beginning of the trajectory, but the acceleration should be in the same direction here if that is the case
@@ -316,20 +316,20 @@ fn solve_1d_pose(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> Ba
         traj.t4 += t3;
     }
     
-    traj
+    Ok(traj)
 }
 
 /// Evaluate one-dimensional trajectory state (position, velocity) at time `t`.
-fn eval_1d_state_at(traj: BangBangTraj1D, s: f32, sd: f32, current_time: f32, t: f32) -> (f32, f32) {
+fn eval_1d_state_at(traj: BangBangTraj1D, s: f32, sd: f32, current_time: f32, t: f32) -> Result<(f32, f32), ControlsError> {
     let mut s = s;
     let mut sd = sd;
     let mut current_time = current_time;
 
     if t < current_time {
-        panic!("Unable to compute state of trajectory in the past");
+        return Err(ControlsError::InvalidTime);
     }
     if traj.t1 > current_time {
-        panic!("Unable to compute state of trajectory that hasn't started");
+        return Err(ControlsError::InvalidTime);
     }
 
     for (part_end_time, part_acceleration) in [(traj.t2, traj.sdd1), (traj.t3, traj.sdd2), (traj.t4, traj.sdd3)] {
@@ -343,11 +343,11 @@ fn eval_1d_state_at(traj: BangBangTraj1D, s: f32, sd: f32, current_time: f32, t:
             s += sd * time_in_part + 0.5 * part_acceleration * time_in_part * time_in_part;  // v * t + 1/2 * a * t^2
             sd += part_acceleration * time_in_part;  // a * t
             if t < part_end_time {
-                return (s, sd)  // reached the desired time
+                return Ok((s, sd))  // reached the desired time
             } else {
                 current_time = part_end_time;
             }
         }
     }
-    return (s, sd)  // t was equal to or after the trajectory end time
+    Ok((s, sd))  // t was equal to or after the trajectory end time
 }

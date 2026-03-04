@@ -45,6 +45,37 @@ pub fn wrap_angle(angle: f32) -> f32 {
     atan2f(sinf(angle), cosf(angle))
 }
 
+/// Error type for ateam-controls operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum ControlsError {
+    /// Input values had invalid signs or magnitudes
+    InvalidInput = -1,
+    /// A required matrix inversion failed (singular matrix)
+    SingularMatrix = -2,
+    /// Trajectory solver found no valid solution
+    NoSolution = -3,
+    /// Requested evaluation at an invalid time
+    InvalidTime = -4,
+    /// Target exceeds configured limits
+    ExceedsLimits = -5,
+}
+
+impl core::fmt::Display for ControlsError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ControlsError::InvalidInput => write!(f, "Invalid input parameters"),
+            ControlsError::SingularMatrix => write!(f, "Singular matrix inversion failed"),
+            ControlsError::NoSolution => write!(f, "No solution found"),
+            ControlsError::InvalidTime => write!(f, "Invalid time for trajectory evaluation"),
+            ControlsError::ExceedsLimits => write!(f, "Value exceeds configured limits"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ControlsError {}
+
 
 #[cfg(test)]
 mod tests {

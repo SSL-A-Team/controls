@@ -7,7 +7,8 @@
 // ============================================================================
 
 TEST(RobotModel, NewDefaultAndFree) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   ASSERT_NE(model, nullptr);
   ateam_controls_robot_model_free(model);
 }
@@ -37,7 +38,8 @@ TEST(RobotModel, NewWithParamsAndFree) {
   phys.motor_torque_constant = 0.02f;
   phys.motor_efficiency_factor = 0.85f;
 
-  RobotModel_t* model = ateam_controls_robot_model_new(0.01f, kf, phys);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new(0.01f, kf, phys, &model), ATEAM_CONTROLS_OK);
   ASSERT_NE(model, nullptr);
   ateam_controls_robot_model_free(model);
 }
@@ -52,7 +54,8 @@ TEST(RobotModel, FreeNull) {
 // ============================================================================
 
 TEST(RobotModel, GetStateInitiallyZero) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   Vector6C_t state = ateam_controls_robot_model_get_state(model);
   for (int i = 0; i < 6; i++) {
     EXPECT_NEAR(state.data[i], 0.0f, 1e-9f);
@@ -61,7 +64,8 @@ TEST(RobotModel, GetStateInitiallyZero) {
 }
 
 TEST(RobotModel, SetAndGetState) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   Vector6C_t state = {};
   state.data[0] = 1.0f;
   state.data[1] = 2.0f;
@@ -82,7 +86,8 @@ TEST(RobotModel, SetAndGetState) {
 // ============================================================================
 
 TEST(RobotModel, Wheel2TwistAndBack) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   float theta = 0.0f;
   Matrix3x4C_t w2t = ateam_controls_robot_model_transform_wheel2twist(model, theta);
   Matrix4x3C_t t2w = ateam_controls_robot_model_transform_twist2wheel(model, theta);
@@ -117,7 +122,8 @@ TEST(RobotModel, Wheel2TwistAndBack) {
 // ============================================================================
 
 TEST(RobotModel, Wheel2AccelAndBack) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   float theta = 0.0f;
   Matrix3x4C_t w2a = ateam_controls_robot_model_transform_wheel2accel(model, theta);
   Matrix4x3C_t a2w = ateam_controls_robot_model_transform_accel2wheel(model, theta);
@@ -150,7 +156,8 @@ TEST(RobotModel, Wheel2AccelAndBack) {
 // ============================================================================
 
 TEST(RobotModel, TransformConsistencyAtAngle) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   float theta = static_cast<float>(M_PI / 4.0);
 
   Matrix3x4C_t w2t = ateam_controls_robot_model_transform_wheel2twist(model, theta);
@@ -182,7 +189,8 @@ TEST(RobotModel, TransformConsistencyAtAngle) {
 // ============================================================================
 
 TEST(RobotModel, TorquesToCurrents) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   Vector4C_t torques = {1.0f, 1.0f, 1.0f, 1.0f};
   Vector4C_t currents = ateam_controls_robot_model_torques_to_currents(model, torques);
 
@@ -205,7 +213,8 @@ TEST(RobotModel, TorquesToCurrents) {
 }
 
 TEST(RobotModel, TorquesToCurrentsLinearity) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   Vector4C_t t1 = {1.0f, 0.0f, 0.0f, 0.0f};
   Vector4C_t t2 = {2.0f, 0.0f, 0.0f, 0.0f};
   Vector4C_t c1 = ateam_controls_robot_model_torques_to_currents(model, t1);
@@ -221,7 +230,8 @@ TEST(RobotModel, TorquesToCurrentsLinearity) {
 // ============================================================================
 
 TEST(RobotModel, KfPredictUpdatesState) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   // Set known state
   Vector6C_t state = {};
   state.data[0] = 1.0f;  // x pos
@@ -242,7 +252,8 @@ TEST(RobotModel, KfPredictUpdatesState) {
 }
 
 TEST(RobotModel, KfPredictWithAccel) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   Vector6C_t state = {};
   ateam_controls_robot_model_set_state(model, state);
 
@@ -261,7 +272,8 @@ TEST(RobotModel, KfPredictWithAccel) {
 // ============================================================================
 
 TEST(RobotModel, KfUpdateMovesTowardMeasurement) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   // State at origin
   Vector6C_t state = {};
   ateam_controls_robot_model_set_state(model, state);
@@ -274,7 +286,7 @@ TEST(RobotModel, KfUpdateMovesTowardMeasurement) {
   Vector8C_t measurement = {};
   measurement.data[0] = 1.0f;  // vision x
   // Unmask vision, mask encoder and gyro
-  ateam_controls_robot_model_kf_update(model, measurement, false, true, true);
+  ASSERT_EQ(ateam_controls_robot_model_kf_update(model, measurement, false, true, true), ATEAM_CONTROLS_OK);
 
   Vector6C_t updated = ateam_controls_robot_model_get_state(model);
   // x should have moved toward 1.0
@@ -288,7 +300,8 @@ TEST(RobotModel, KfUpdateMovesTowardMeasurement) {
 // ============================================================================
 
 TEST(RobotModel, UpdateKfParams) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   KalmanFilterParams_t kf = {};
   kf.process_noise_std_pos_linear = 0.02f;
   kf.process_noise_std_pos_angular = 0.02f;
@@ -310,7 +323,8 @@ TEST(RobotModel, UpdateKfParams) {
 }
 
 TEST(RobotModel, UpdatePhysicalParams) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   RobotPhysicalParams_t phys = {};
   phys.alpha = 0.7854f;
   phys.beta = 0.7854f;
@@ -320,7 +334,7 @@ TEST(RobotModel, UpdatePhysicalParams) {
   phys.iz = 0.015f;
   phys.motor_torque_constant = 0.025f;
   phys.motor_efficiency_factor = 0.9f;
-  ateam_controls_robot_model_update_physical_params(model, phys);
+  ASSERT_EQ(ateam_controls_robot_model_update_physical_params(model, phys), ATEAM_CONTROLS_OK);
   // Transforms should still work after updating physical params
   Matrix3x4C_t w2t = ateam_controls_robot_model_transform_wheel2twist(model, 0.0f);
   (void)w2t;
@@ -332,7 +346,8 @@ TEST(RobotModel, UpdatePhysicalParams) {
 // ============================================================================
 
 TEST(RobotModel, MultiplePredictUpdateCycles) {
-  RobotModel_t* model = ateam_controls_robot_model_new_default(0.01f);
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new_default(0.01f, &model), ATEAM_CONTROLS_OK);
   Vector3C_t accel = {0.0f, 0.0f, 0.0f};
   Vector8C_t meas = {};
   meas.data[0] = 1.0f;
@@ -340,7 +355,7 @@ TEST(RobotModel, MultiplePredictUpdateCycles) {
 
   for (int i = 0; i < 100; i++) {
     ateam_controls_robot_model_kf_predict(model, accel);
-    ateam_controls_robot_model_kf_update(model, meas, false, true, true);
+    ASSERT_EQ(ateam_controls_robot_model_kf_update(model, meas, false, true, true), ATEAM_CONTROLS_OK);
   }
 
   Vector6C_t state = ateam_controls_robot_model_get_state(model);

@@ -26,9 +26,9 @@ fn load_robot_model(cli: &Cli) -> Result<RobotModel, Box<dyn std::error::Error>>
         Some(path) => {
             let contents = fs::read_to_string(path)?;
             let params: RobotModelParams = serde_json::from_str(&contents)?;
-            Ok(RobotModel::new(0.001, params.kf_params, params.physical_params))
+            Ok(RobotModel::new(0.001, params.kf_params, params.physical_params)?)
         }
-        None => Ok(RobotModel::new_from_default_params(0.001)),
+        None => Ok(RobotModel::new_from_default_params(0.001)?),
     }
 }
 

@@ -2,7 +2,7 @@ use ateam_controls::{Matrix6f, Matrix6x3f, Vector3f, Vector4f, Vector6f, wrap_an
 use ateam_controls::robot_model::RobotModel;
 use ateam_controls::bangbang_trajectory::{BangBangTraj3D, TrajectoryParams};
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Timing constants
     // let control_dt = 0.02;     // 50 Hz controller
     // let sim_dt = 0.001; // 1000 Hz physics engine
@@ -11,7 +11,7 @@ fn main() {
     let steps_per_control_cycle = (control_dt / sim_dt) as usize;
     let mut total_sim_time = 0.0;
 
-    let mut model = RobotModel::new_from_default_params(control_dt);
+    let mut model = RobotModel::new_from_default_params(control_dt)?;
 
     let mut sim_state = Vector6f::new(
         0.0, 0.0, 3.0,
@@ -77,14 +77,14 @@ fn main() {
         // ---------------- ON-ROBOT PROCESSING ------------------
         // Update state estimate
         model.kf_predict(global_accel_cmd);
-        model.kf_update(meas, false, false, false);
+        model.kf_update(meas, false, false, false)?;
         let state_estimate = model.x;
 
         // Generate new trajectory from current state
-        let traj = BangBangTraj3D::from_target_pose(state_estimate, target_pose, TrajectoryParams::default());
+        let traj = BangBangTraj3D::from_target_pose(state_estimate, target_pose, TrajectoryParams::default())?;
         
         // Determine desired global acceleration at this instant
-        global_accel_cmd = traj.accel_at(0.0);
+        global_accel_cmd = traj.accel_at(0.0)?;
         
         // Check if controller determined robot is close enough to target
         if global_accel_cmd.x == 0.0 && global_accel_cmd.y == 0.0 && global_accel_cmd.z == 0.0 {
@@ -95,4 +95,6 @@ fn main() {
         // 3. Convert to output wheel torques
         wheel_torques = model.transform_accel2wheel(state_estimate.z) * global_accel_cmd;
     }
+
+    Ok(())
 }

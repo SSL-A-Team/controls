@@ -1,7 +1,7 @@
 use libm::{sinf, cosf};
 use nalgebra::matrix;
 use core::f32::consts::PI;
-use crate::{Matrix3f, Matrix3x4f, Matrix4x3f, Matrix6f, Matrix6x3f, Matrix8f, Matrix8x6f, Vector3f, Vector4f, Vector6f, Vector8f};
+use crate::{ControlsError, Matrix3f, Matrix3x4f, Matrix4x3f, Matrix6f, Matrix6x3f, Matrix8f, Matrix8x6f, Vector3f, Vector4f, Vector6f, Vector8f};
 use crate::{z_rotation_mat, wrap_angle};
 use crate::physical_params;
 use crate::kalman_params;
@@ -164,7 +164,7 @@ impl RobotModel {
     /// mass: robot body mass
     /// iz: robot body moment of inirtia around z axis
     /// kf_dt: Kalman Filter state update period
-    pub fn new(kf_dt: f32, kf_params: KalmanFilterParams, physical_params: RobotPhysicalParams) -> RobotModel {
+    pub fn new(kf_dt: f32, kf_params: KalmanFilterParams, physical_params: RobotPhysicalParams) -> Result<RobotModel, ControlsError> {
         let mut model = RobotModel::default();
         // Initialize unknown estimated state to zero
         model.x = Vector6f::zeros();
@@ -186,11 +186,11 @@ impl RobotModel {
             0., 0., kf_dt,
         );
         model.update_kf_params(kf_params);
-        model.update_physical_params(physical_params);
-        model
+        model.update_physical_params(physical_params)?;
+        Ok(model)
     }
 
-    pub fn new_from_default_params(kf_dt: f32) -> RobotModel {
+    pub fn new_from_default_params(kf_dt: f32) -> Result<RobotModel, ControlsError> {
         RobotModel::new(kf_dt, KalmanFilterParams::default(), RobotPhysicalParams::default())
     }
 
@@ -226,7 +226,7 @@ impl RobotModel {
         ];
     }
 
-    pub fn update_physical_params(&mut self, physical_params: RobotPhysicalParams) {
+    pub fn update_physical_params(&mut self, physical_params: RobotPhysicalParams) -> Result<(), ControlsError> {
         self.physical_params = physical_params;
         // Initialize robot physical matrices and params
         self.r = physical_params.r;
@@ -235,13 +235,14 @@ impl RobotModel {
              sinf(physical_params.alpha), -sinf(physical_params.beta), -sinf(physical_params.beta), sinf(physical_params.alpha),
              physical_params.l          ,  physical_params.l         ,  physical_params.l         , physical_params.l
         );
-        self.m_inv = self.m.pseudo_inverse(1e-6).unwrap();
+        self.m_inv = self.m.pseudo_inverse(1e-6).map_err(|_| ControlsError::SingularMatrix)?;
         self.i = Matrix3f::new(
             physical_params.mass, 0., 0.,
             0., physical_params.mass, 0.,
             0., 0., physical_params.iz,
         );
-        self.i_inv = self.i.try_inverse().unwrap();
+        self.i_inv = self.i.try_inverse().ok_or(ControlsError::SingularMatrix)?;
+        Ok(())
     }
 
     pub fn kf_predict(&mut self, u: Vector3f) {
@@ -250,16 +251,17 @@ impl RobotModel {
         self.p = self.a * self.p * self.a.transpose() + self.kf_q;
     }
 
-    pub fn kf_update(&mut self, z: Vector8f, mask_vision: bool, mask_encoder: bool, mask_gyro: bool) {
+    pub fn kf_update(&mut self, z: Vector8f, mask_vision: bool, mask_encoder: bool, mask_gyro: bool) -> Result<(), ControlsError> {
         self.update_h_transform(self.x[2], mask_vision, mask_encoder, mask_gyro);
         let h_x = self.h * self.x;
         let mut y = z - h_x;
         // Wrap the angular residual for vision heading to [-pi, pi]
         y[2] = wrap_angle(y[2]);
-        let k = self.p * self.h.transpose() * (self.h * self.p * self.h.transpose() + self.kf_r).try_inverse().unwrap();
+        let k = self.p * self.h.transpose() * (self.h * self.p * self.h.transpose() + self.kf_r).try_inverse().ok_or(ControlsError::SingularMatrix)?;
         self.x = self.x + k * y;
         self.x[2] = wrap_angle(self.x[2]);
         self.p = (Matrix6f::identity() - k * self.h) * self.p;
+        Ok(())
     }
 
     pub fn update_h_transform(&mut self, theta: f32, mask_vision: bool, mask_encoder: bool, mask_gyro: bool) {
