@@ -194,11 +194,10 @@ def _setup_signatures(lib):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _load_traj_params_from_json(path: str) -> TrajectoryParams:
+def _load_traj_params_from_json(params: TrajectoryParams, path: str) -> TrajectoryParams:
     """Load TrajectoryParams from a JSON file using the TRAJ_* serde keys."""
     with open(path) as f:
         data = json.load(f)
-    params = TrajectoryParams()
     for json_key, field in _TRAJ_JSON_MAP.items():
         if json_key in data:
             setattr(params, field, float(data[json_key]))
@@ -265,10 +264,9 @@ def compute_trajectory(init_state: list, target_pose: list, param_json: str = No
     state_c = Vector6C(data=(ctypes.c_float * 6)(*[float(v) for v in init_state]))
     target_c = Vector3C(x=float(target_pose[0]), y=float(target_pose[1]), z=float(target_pose[2]))
 
+    params = lib.ateam_controls_traj_params_default()
     if param_json is not None:
-        params = _load_traj_params_from_json(param_json)
-    else:
-        params = lib.ateam_controls_traj_params_default()
+        params = _load_traj_params_from_json(params, param_json)
 
     # Compute trajectory
     traj = lib.ateam_controls_traj_from_target_pose(state_c, target_c, params)

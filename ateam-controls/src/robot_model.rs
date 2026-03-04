@@ -154,8 +154,6 @@ pub struct RobotModel {
     pub kf_q: Matrix6f,
     /// Kalman filter sensor noise covariance matrix
     pub kf_r: Matrix8f,
-    /// Kalman filter update period
-    pub kf_dt: f32,
 }
 
 impl RobotModel {

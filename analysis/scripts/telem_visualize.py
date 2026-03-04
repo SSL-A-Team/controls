@@ -86,10 +86,10 @@ class TelemVisualizer:
         wv_fr = self.data['front_right_motor__velocity_telemetry__wheel_vel_rads'][self.idx]
         
         # Extract wheel torques
-        wt_fl = np.mean(self.data['front_left_motor__current_telemetry__current_samples_ma'])
-        wt_bl = np.mean(self.data['back_left_motor__current_telemetry__current_samples_ma'])
-        wt_br = np.mean(self.data['back_right_motor__current_telemetry__current_samples_ma'])
-        wt_fr = np.mean(self.data['front_right_motor__current_telemetry__current_samples_ma'])
+        wt_fl = np.mean(self.data['front_left_motor__current_telemetry__current_samples_ma'][self.idx])
+        wt_bl = np.mean(self.data['back_left_motor__current_telemetry__current_samples_ma'][self.idx])
+        wt_br = np.mean(self.data['back_right_motor__current_telemetry__current_samples_ma'][self.idx])
+        wt_fr = np.mean(self.data['front_right_motor__current_telemetry__current_samples_ma'][self.idx])
 
         if self.data['body_pose_control_enabled'][self.idx]:
             # Compute trajectory

@@ -119,19 +119,17 @@ impl BangBangTraj3D {
 
     /// Compute optimal bang-bang trajectory to reach a target twist from an initial twist.
     pub fn from_target_twist(init_twist: Vector3f, target_twist: Vector3f, params: TrajectoryParams) -> Self {
-        if target_twist.z.abs() > params.max_accel_angular ||
-            sqrtf(target_twist.x * target_twist.x + target_twist.y * target_twist.y) > params.max_accel_linear {
+        if target_twist.z.abs() > params.max_vel_angular ||
+            sqrtf(target_twist.x * target_twist.x + target_twist.y * target_twist.y) > params.max_vel_linear {
             panic!("from_target_twist: Target twist exceeds maximum velocity limits");
         }
-        let diff_vel_linear = sqrtf((init_twist.x - target_twist.x) * (init_twist.x - target_twist.x) +
-                                      (init_twist.y - target_twist.y) * (init_twist.y - target_twist.y));
-        if diff_vel_linear < params.allowable_error_vel_linear &&
-           (init_twist.z - target_twist.z).abs() < params.allowable_error_vel_angular {
+        let diff = target_twist - init_twist;
+        let diff_xy_mag = sqrtf(diff.x * diff.x + diff.y * diff.y);
+        if diff_xy_mag < params.allowable_error_vel_linear &&
+           diff.z.abs() < params.allowable_error_vel_angular {
             return BangBangTraj3D::default();
         }
-        let diff = target_twist - init_twist;
         // Solve for optimal ratio of x and y accelerations using magnitude to avoid division by zero
-        let diff_xy_mag = sqrtf(diff.x * diff.x + diff.y * diff.y);
         let (xdd, x_time, ydd, y_time) = if diff_xy_mag < 1e-9 {
             (0.0, 0.0, 0.0, 0.0)
         } else {
