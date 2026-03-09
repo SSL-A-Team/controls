@@ -14,6 +14,15 @@
             "stdio": ["${workspaceFolder}/test_input.txt", null, null]
         },
         {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Launch compute_trajectory",
+            "program": "${workspaceFolder}/target/debug/compute_trajectory",
+            "args": ["--param-json", "analysis/data/robot_params.json"],
+            "cwd": "${workspaceFolder}",
+            "stdio": ["${workspaceFolder}/test_input_trajectory.txt", null, null]
+        },
+        {
             "name": "Run telem_bag2np.py",
             "type": "debugpy",
             "request": "launch",
@@ -35,7 +44,7 @@
             "request": "launch",
             "program": "analysis/scripts/telem_visualize.py",
             "console": "integratedTerminal",
-            "args": "--telemetry data/tuning_iter_264.npz"
+            "args": "--telemetry data/tuning_iter_21.npz"
         },
         {
             "name": "Run wheel_visualize.py",
