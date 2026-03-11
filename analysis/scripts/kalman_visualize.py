@@ -112,6 +112,18 @@ def plot_state_meas(telemetry, param_json=None):
                 else:
                     ax.plot(t, state_meas[meas_label], label=f'{meas_label}', alpha=alpha)
 
+    ##### Plot onboard computed trajectory state #####
+    i = 0
+    for j in range(3):
+        ax = axs[i, j]
+        ax.plot(t, telemetry["body_traj_pose"][:, j], label=f'trajectory', alpha=alpha)
+        ax.legend()
+    i = 1
+    for j in range(3):
+        ax = axs[i, j]
+        ax.plot(t, telemetry["body_traj_twist"][:, j], label=f'trajectory', alpha=alpha)
+        ax.legend()
+
     ##### Plot body controller command  #####
     i = 2
     for j in range(3):
