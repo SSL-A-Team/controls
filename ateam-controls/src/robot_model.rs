@@ -1,7 +1,7 @@
 use libm::{sinf, cosf};
 use nalgebra::matrix;
 use core::f32::consts::PI;
-use crate::{ControlsError, Matrix3f, Matrix3x4f, Matrix4x3f, Matrix6f, Matrix6x3f, Matrix8f, Matrix8x6f, Vector3f, Vector4f, Vector6f, Vector8f};
+use crate::{ControlsError, Matrix3f, Matrix3x4f, Matrix4x3f, Matrix6f, Matrix6x3f, Matrix8f, Matrix8x6f, Vector2f, Vector3f, Vector4f, Vector6f, Vector8f};
 use crate::{z_rotation_mat, wrap_angle};
 use crate::physical_params;
 use crate::kalman_params;
@@ -107,6 +107,14 @@ pub struct RobotPhysicalParams {
     pub motor_torque_constant: f32,
     #[cfg_attr(feature = "serde", serde(rename = "PHYS_MOTOR_EFFICIENCY_FACTOR"))]
     pub motor_efficiency_factor: f32,
+    #[cfg_attr(feature = "serde", serde(rename = "PHYS_COLOUMB_FRICTION_COEFFICIENT_LINEAR"))]
+    pub coulomb_friction_coefficient_linear: f32,
+    #[cfg_attr(feature = "serde", serde(rename = "PHYS_COLOUMB_FRICTION_COEFFICIENT_ANGULAR"))]
+    pub coulomb_friction_coefficient_angular: f32,
+    #[cfg_attr(feature = "serde", serde(rename = "PHYS_VISCOUS_FRICTION_COEFFICIENT_LINEAR"))]
+    pub viscous_friction_coefficient_linear: f32,
+    #[cfg_attr(feature = "serde", serde(rename = "PHYS_VISCOUS_FRICTION_COEFFICIENT_ANGULAR"))]
+    pub viscous_friction_coefficient_angular: f32,
 }
 
 impl Default for RobotPhysicalParams {
@@ -120,6 +128,10 @@ impl Default for RobotPhysicalParams {
             iz: physical_params::BODY_MOMENT_Z,
             motor_torque_constant: physical_params::MOTOR_TORQUE_CONSTANT,
             motor_efficiency_factor: physical_params::MOTOR_EFFICIENCY_FACTOR,
+            coulomb_friction_coefficient_linear: physical_params::COULOMB_FRICTION_COEFFICIENT_LINEAR,
+            coulomb_friction_coefficient_angular: physical_params::COULOMB_FRICTION_COEFFICIENT_ANGULAR,
+            viscous_friction_coefficient_linear: physical_params::VISCOUS_FRICTION_COEFFICIENT_LINEAR,
+            viscous_friction_coefficient_angular: physical_params::VISCOUS_FRICTION_COEFFICIENT_ANGULAR,
         }
     }
 }
@@ -320,5 +332,28 @@ impl RobotModel {
     /// Calculate wheel currents in amps from wheel torques in Nm
     pub fn torques_to_currents(&self, torques: Vector4f) -> Vector4f {
         torques / self.physical_params.motor_torque_constant / self.physical_params.motor_efficiency_factor
+    }
+
+    pub fn compute_friction_force(&self, body_twist_cmd: Vector3f) -> Vector3f {
+        let vel_linear: Vector2f = body_twist_cmd.fixed_rows::<2>(0).into();
+        let vel_angular: f32 = - body_twist_cmd[2];
+
+        let vel_linear_magnitude = vel_linear.magnitude();
+        let vel_linear_dir = if vel_linear_magnitude > 0. {
+            vel_linear / vel_linear_magnitude
+        } else {
+            Vector2f::zeros()
+        };
+
+        let vel_angular_dir = if vel_angular.abs() > 0. { 
+            vel_angular.signum()
+        } else {
+            0.
+        };
+
+        let linear_friction = self.physical_params.viscous_friction_coefficient_linear * (- vel_linear) + self.physical_params.coulomb_friction_coefficient_linear * (- vel_linear_dir);
+        let angular_friction = self.physical_params.viscous_friction_coefficient_angular * (- vel_angular) + self.physical_params.coulomb_friction_coefficient_angular * (- vel_angular_dir);
+
+        linear_friction.push(angular_friction)
     }
 }

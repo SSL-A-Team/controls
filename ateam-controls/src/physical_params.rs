@@ -9,4 +9,8 @@ pub const WHEEL_DISTANCE: f32 = 0.0814;  // m  // Distance from center of robot 
 pub const WHEEL_RADIUS: f32 = 0.030;  // m
 pub const MOTOR_TORQUE_CONSTANT: f32 = 0.0335;  // Nm/A
 // TODO: this should be less than 1.0, need to test robot model
-pub const MOTOR_EFFICIENCY_FACTOR: f32 = 5.0;  // unitless, empirically determined scaling factor to match observed robot performance
+pub const MOTOR_EFFICIENCY_FACTOR: f32 = 5.1;  // unitless, empirically determined scaling factor to match observed robot performance
+pub const COULOMB_FRICTION_COEFFICIENT_LINEAR: f32 = 0.0;  // N / (m/s)
+pub const COULOMB_FRICTION_COEFFICIENT_ANGULAR: f32 = 0.0;  // Nm / (rad/s)
+pub const VISCOUS_FRICTION_COEFFICIENT_LINEAR: f32 = 0.0;  // N / (m/s)
+pub const VISCOUS_FRICTION_COEFFICIENT_ANGULAR: f32 = 0.0;  // Nm / (rad/s)
