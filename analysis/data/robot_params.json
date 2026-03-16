@@ -17,9 +17,22 @@
     "PHYS_WHEEL_DISTANCE": 0.0814,
     "PHYS_WHEEL_RADIUS": 0.030,
     "PHYS_BODY_MASS": 2.7,
-    "PHYS_BODY_MOMENT_Z": 0.006,
+    "body moment Z is highly approximated. A little bit less than 0.5*M*R^2": "",
+    "PHYS_BODY_MOMENT_Z": 0.008,
     "PHYS_MOTOR_TORQUE_CONSTANT": 0.0335,
-    "PHYS_MOTOR_EFFICIENCY_FACTOR": 5.1,
+
+    "efficiency before adding friction constants": "",
+    "_PHYS_MOTOR_EFFICIENCY_FACTOR": 7.5,
+    "PHYS_MOTOR_EFFICIENCY_FACTOR": 7.5,
+
+    "_PHYS_COULOMB_FRICTION_COEFFICIENT_LINEAR": 1.08,
+    "_PHYS_VISCOUS_FRICTION_COEFFICIENT_LINEAR": 3.51,
+    "PHYS_COULOMB_FRICTION_COEFFICIENT_LINEAR": 0.0,
+    "PHYS_VISCOUS_FRICTION_COEFFICIENT_LINEAR": 0.0,
+    "PHYS_COULOMB_FRICTION_COEFFICIENT_ANGULAR": 0.042,
+    "PHYS_VISCOUS_FRICTION_COEFFICIENT_ANGULAR": 0.0006,
+    "_PHYS_COULOMB_FRICTION_COEFFICIENT_ANGULAR": 0.0,
+    "_PHYS_VISCOUS_FRICTION_COEFFICIENT_ANGULAR": 0.0,
 
     "PIDII_X":     [25, 0, 0, 0, 0],
     "PIDII_Y":     [25, 0, 0, 0, 0],
@@ -39,14 +52,14 @@
     "TRAJ_MAX_ACCEL_ANGULAR": 1.0,
 
 
-    "recompute once on start 0.5 m away from destination": -1,
+    "recompute once on start 0.5 m away from destination": "",
 
     "TRAJ_RECOMPUTE_ERROR_POS_LINEAR": 0.45,
     "TRAJ_RECOMPUTE_ERROR_VEL_LINEAR": 10.0,
     "TRAJ_RECOMPUTE_ERROR_POS_ANGULAR": 5.0,
     "TRAJ_RECOMPUTE_ERROR_VEL_ANGULAR": 10.0,
 
-    "always pid with these values": -1,
+    "always pid with these values": "",
 
     "HYST_PID_ENTER_ERROR_POS_LINEAR": 5,
     "HYST_PID_ENTER_ERROR_POS_ANGULAR": 5,
