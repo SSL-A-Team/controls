@@ -336,7 +336,7 @@ impl RobotModel {
 
     pub fn compute_friction_force(&self, body_twist_cmd: Vector3f) -> Vector3f {
         let vel_linear: Vector2f = body_twist_cmd.fixed_rows::<2>(0).into();
-        let vel_angular: f32 = - body_twist_cmd[2];
+        let vel_angular: f32 = body_twist_cmd[2];
 
         let vel_linear_magnitude = vel_linear.magnitude();
         let vel_linear_dir = if vel_linear_magnitude > 0. {
@@ -354,6 +354,8 @@ impl RobotModel {
         let linear_friction = self.physical_params.viscous_friction_coefficient_linear * (- vel_linear) + self.physical_params.coulomb_friction_coefficient_linear * (- vel_linear_dir);
         let angular_friction = self.physical_params.viscous_friction_coefficient_angular * (- vel_angular) + self.physical_params.coulomb_friction_coefficient_angular * (- vel_angular_dir);
 
-        linear_friction.push(angular_friction)
+        let friction_force = linear_friction.push(angular_friction);
+
+        friction_force
     }
 }
