@@ -206,6 +206,10 @@ impl RobotModel {
         RobotModel::new(kf_dt, KalmanFilterParams::default(), RobotPhysicalParams::default())
     }
 
+    pub fn reset(&mut self) {
+        self.x = Vector6f::zeros();
+    }
+
     pub fn update_kf_params(&mut self, kf_params: KalmanFilterParams) {
         self.kf_params = kf_params;
         // Reset state covariance to max reasonable values
