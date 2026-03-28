@@ -16,6 +16,14 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Launch test-model",
+            "program": "${workspaceFolder}/target/debug/test-model",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Launch compute_trajectory",
             "program": "${workspaceFolder}/target/debug/compute_trajectory",
             "args": ["--param-json", "analysis/data/robot_params.json"],

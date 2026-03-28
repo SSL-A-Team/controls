@@ -9,6 +9,7 @@ nalgebra = "0.34.1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+libm = "0.2.16"
 
 [[bin]]
 name = "trajectory_sim"
@@ -22,5 +23,10 @@ harness = false
 
 [[bin]]
 name = "compute_state_measurement"
+test = false
+harness = false
+
+[[bin]]
+name = "test-model"
 test = false
 harness = false
