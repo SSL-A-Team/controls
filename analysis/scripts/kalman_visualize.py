@@ -167,19 +167,30 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualize telemetry data")
     parser.add_argument("--telemetry", type=str, required=True, help="Path to the telemetry NPZ file")
     parser.add_argument("--param-json", type=str, default=None, help="Path to a JSON file containing RobotModel parameters")
+    parser.add_argument("--velocity-window", type=float, default=0.2,
+                        help="Sliding window size in seconds for vision-derived velocity (default: 0.2)")
     args = parser.parse_args()
     
     compile_controls()
     telemetry = np.load(args.telemetry)
     fig, axs, t, state_est = plot_state_meas(telemetry, param_json=args.param_json)
 
-    # Toggle trajectory overlay with the space key.
+    # Toggle trajectory + velocity overlay with the space key.
     try:
         from trajectory_overlay import TrajectoryOverlay
+        from velocity_overlay import VelocityOverlay
+
         overlay = TrajectoryOverlay(fig, axs, t, state_est, telemetry, param_json=args.param_json)
-        fig.canvas.mpl_connect("key_press_event",
-                               lambda event: overlay.toggle() if event.key == " " else None)
-        print("[kalman_visualize] Press Space to toggle trajectory overlay.")
+        vel_overlay = VelocityOverlay(fig, axs, t, telemetry, window=args.velocity_window)
+
+        def _toggle_overlays(event):
+            if event.key == " ":
+                overlay.toggle()
+                vel_overlay.toggle()
+
+        fig.canvas.mpl_connect("key_press_event", _toggle_overlays)
+        print("[kalman_visualize] Press Space to toggle trajectory & velocity overlay.")
+        print(f"[kalman_visualize] Velocity window: {args.velocity_window:.2f}s  (adjust with [ / ])")
     except Exception as exc:
         print(f"Failed to set up trajectory overlay: {exc}")
 

@@ -44,7 +44,7 @@
             "request": "launch",
             "program": "analysis/scripts/kalman_visualize.py",
             "console": "integratedTerminal",
-            "args": "--telemetry data/tuning_iter_269.npz --param-json analysis/data/robot_params.json"
+            "args": "--telemetry data/tuning_iter_94.npz --param-json analysis/data/robot_params.json"
         },
         {
             "name": "Run telem_visualize.py",
