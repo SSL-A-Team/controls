@@ -115,6 +115,8 @@ pub struct RobotPhysicalParams {
     pub viscous_friction_coefficient_linear: f32,
     #[cfg_attr(feature = "serde", serde(rename = "PHYS_VISCOUS_FRICTION_COEFFICIENT_ANGULAR"))]
     pub viscous_friction_coefficient_angular: f32,
+    #[cfg_attr(feature = "serde", serde(rename = "PHYS_BODY_COM_HEIGHT"))]
+    pub h_cm: f32,
 }
 
 impl Default for RobotPhysicalParams {
@@ -132,6 +134,7 @@ impl Default for RobotPhysicalParams {
             coulomb_friction_coefficient_angular: physical_params::COULOMB_FRICTION_COEFFICIENT_ANGULAR,
             viscous_friction_coefficient_linear: physical_params::VISCOUS_FRICTION_COEFFICIENT_LINEAR,
             viscous_friction_coefficient_angular: physical_params::VISCOUS_FRICTION_COEFFICIENT_ANGULAR,
+            h_cm: physical_params::BODY_COM_HEIGHT,
         }
     }
 }
@@ -156,6 +159,12 @@ pub struct RobotModel {
     pub m: Matrix3x4f,
     /// Inverse of m
     pub m_inv: Matrix4x3f,
+    /// Null space vector of m (unit vector satisfying m * m_null = 0), used for torque vectoring
+    pub m_null: Vector4f,
+    /// Normal-force constraint matrix: rows are [1,1,1,1], [x_i], [y_i] (wheel positions in body frame)
+    pub w_normal: Matrix3x4f,
+    /// Pseudo-inverse of w_normal, used to solve for per-wheel normal forces
+    pub w_normal_inv: Matrix4x3f,
     /// Robot inertial matrix, robot frame x_linear, y_linear, zaxis_moment
     pub i: Matrix3f,
     /// Inverse of i
@@ -248,6 +257,32 @@ impl RobotModel {
              physical_params.l          ,  physical_params.l         ,  physical_params.l         , physical_params.l
         );
         self.m_inv = self.m.pseudo_inverse(1e-6).map_err(|_| ControlsError::SingularMatrix)?;
+        // Build the normal-force constraint matrix from wheel contact positions in the body frame.
+        // Each wheel's contact point is obtained by rotating its drive direction (M column) by -90°:
+        //   drive dir (vx,vy) -> position (vy, -vx) * l
+        // This gives:
+        //   FL: ( sin(α)*l,  cos(α)*l)   BL: (-sin(β)*l,  cos(β)*l)
+        //   BR: (-sin(β)*l, -cos(β)*l)   FR: ( sin(α)*l, -cos(α)*l)
+        let (sa, ca) = (sinf(physical_params.alpha), cosf(physical_params.alpha));
+        let (sb, cb) = (sinf(physical_params.beta),  cosf(physical_params.beta));
+        let l = physical_params.l;
+        self.w_normal = Matrix3x4f::new(
+            1.0,     1.0,     1.0,    1.0,
+            sa * l, -sb * l, -sb * l, sa * l,
+            ca * l,  cb * l, -cb * l, -ca * l,
+        );
+        self.w_normal_inv = self.w_normal.pseudo_inverse(1e-6).map_err(|_| ControlsError::SingularMatrix)?;
+        // Compute the null space of M (1D for a 3x4 matrix with rank 3).
+        // The last right singular vector (last row of V^T) corresponds to the
+        // smallest singular value, which is ~0 for our full-rank-3 coupling matrix.
+        let svd = self.m.svd(false, true);
+        self.m_null = svd.v_t
+            .map(|v_t| {
+                let n: Vector4f = v_t.row(3).transpose().into();
+                let norm = n.norm();
+                if norm > 1e-6 { n / norm } else { Vector4f::zeros() }
+            })
+            .unwrap_or(Vector4f::zeros());
         self.i = Matrix3f::new(
             physical_params.mass, 0., 0.,
             0., physical_params.mass, 0.,
@@ -332,6 +367,97 @@ impl RobotModel {
     /// Calculate wheel currents in amps from wheel torques in Nm
     pub fn torques_to_currents(&self, torques: Vector4f) -> Vector4f {
         torques / self.physical_params.motor_torque_constant / self.physical_params.motor_efficiency_factor
+    }
+
+    /// Compute per-wheel normal forces (N) accounting for load transfer due to acceleration.
+    ///
+    /// When the robot accelerates, the CoM at height `h_cm` creates a pitching/rolling moment that
+    /// redistributes normal force across the four wheels.  Moment equilibrium gives three constraints:
+    ///
+    ///   Σ N_i         = m·g
+    ///   Σ (x_i · N_i) = −h_cm·m·ax   (load shifts rearward under forward accel)
+    ///   Σ (y_i · N_i) = −h_cm·m·ay   (load shifts right under leftward accel)
+    ///
+    /// The system is underdetermined (4 unknowns, 3 equations); the minimum-norm (pseudo-inverse)
+    /// solution models equal wheel-contact stiffness.  Normal forces are clamped to ≥ 0 (wheels
+    /// cannot pull the floor).
+    ///
+    /// `body_accel` is the acceleration in the robot body frame [ax, ay, alpha_z].
+    pub fn compute_wheel_normal_forces(&self, body_accel: Vector3f) -> Vector4f {
+        const G: f32 = 9.81;
+        let m   = self.physical_params.mass;
+        let h   = self.physical_params.h_cm;
+        let ax  = body_accel[0];
+        let ay  = body_accel[1];
+        let b   = Vector3f::new(m * G, -h * m * ax, -h * m * ay);
+        let n   = self.w_normal_inv * b;
+        // Clamp: a wheel that lifts off contributes zero traction
+        Vector4f::new(n[0].max(0.0), n[1].max(0.0), n[2].max(0.0), n[3].max(0.0))
+    }
+
+    /// Compute wheel torques using load-transfer-aware torque vectoring.
+    ///
+    /// Uses the 1D null space of `M` to redistribute torques across wheels while preserving the
+    /// net body wrench.  Unlike the plain pseudo-inverse, the optimisation weights each wheel by
+    /// its current normal force so that traction utilisation (`|τ_i| / N_i`) is equalised — wheels
+    /// carrying more load are allowed proportionally more torque, and wheels that have partially
+    /// unloaded due to acceleration are protected from overload.
+    pub fn compute_wheel_torques_vectored(&self, theta: f32, accel_cmd: Vector3f) -> Vector4f {
+        let tau_nom = self.transform_accel2wheel(theta) * accel_cmd;
+        if self.m_null.norm() < 1e-6 {
+            return tau_nom;
+        }
+        let body_accel = z_rotation_mat(-theta) * accel_cmd;
+        let normal_forces = self.compute_wheel_normal_forces(body_accel);
+        let k = Self::find_optimal_null_space_gain_weighted(tau_nom, self.m_null, normal_forces);
+        tau_nom + self.m_null.scale(k)
+    }
+
+    /// Find the scalar `k` that minimises `max_i |tau[i] + k·n[i]| / w[i]` (weighted L∞).
+    ///
+    /// `w[i]` is the normal force on wheel i; larger normal force = more traction capacity = higher
+    /// allowable torque.  The minimum of the convex piecewise-linear objective occurs where two
+    /// wheels tie for the peak utilisation ratio, so we check all O(n²) pairwise candidate k
+    /// values (same-sign and opposite-sign equalisation) and return the best.
+    fn find_optimal_null_space_gain_weighted(tau: Vector4f, n: Vector4f, w: Vector4f) -> f32 {
+        let load_ratio = |k: f32| -> f32 {
+            let mut max_val = 0.0_f32;
+            for i in 0..4 {
+                if w[i] > 1e-6 {
+                    let v = (tau[i] + k * n[i]).abs() / w[i];
+                    if v > max_val { max_val = v; }
+                }
+            }
+            max_val
+        };
+
+        let mut best_k   = 0.0_f32;
+        let mut best_val = load_ratio(0.0);
+
+        for i in 0..4 {
+            for j in (i + 1)..4 {
+                if w[i] < 1e-6 || w[j] < 1e-6 { continue; }
+                let (wi, wj) = (w[i], w[j]);
+
+                // Case 1: (tau_i + k·n_i)/wi = (tau_j + k·n_j)/wj  (same sign)
+                let dn = n[i] * wj - n[j] * wi;
+                if dn.abs() > 1e-6 {
+                    let k = (tau[j] * wi - tau[i] * wj) / dn;
+                    let v = load_ratio(k);
+                    if v < best_val { best_val = v; best_k = k; }
+                }
+
+                // Case 2: (tau_i + k·n_i)/wi = −(tau_j + k·n_j)/wj  (opposite sign)
+                let sn = n[i] * wj + n[j] * wi;
+                if sn.abs() > 1e-6 {
+                    let k = -(tau[i] * wj + tau[j] * wi) / sn;
+                    let v = load_ratio(k);
+                    if v < best_val { best_val = v; best_k = k; }
+                }
+            }
+        }
+
+        best_k
     }
 
     pub fn compute_friction_force(&self, body_twist_cmd: Vector3f) -> Vector3f {
