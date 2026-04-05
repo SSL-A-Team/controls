@@ -249,14 +249,41 @@ impl RobotModel {
 
     pub fn update_physical_params(&mut self, physical_params: RobotPhysicalParams) -> Result<(), ControlsError> {
         self.physical_params = physical_params;
+
         // Initialize robot physical matrices and params
         self.r = physical_params.r;
+
         self.m = Matrix3x4f::new(
             -cosf(physical_params.alpha), -cosf(physical_params.beta),  cosf(physical_params.beta), cosf(physical_params.alpha),
              sinf(physical_params.alpha), -sinf(physical_params.beta), -sinf(physical_params.beta), sinf(physical_params.alpha),
              physical_params.l          ,  physical_params.l         ,  physical_params.l         , physical_params.l
         );
+
+        // Compute the pseudo-inverse of M for use in velocity and torque transformations.  
+        // M is not square (3x4) but has full row rank (rank 3), so the pseudo-inverse gives a 
+        // left-inverse that maps from robot frame twist to wheel velocities.
         self.m_inv = self.m.pseudo_inverse(1e-6).map_err(|_| ControlsError::SingularMatrix)?;
+
+        // Compute the null space of M (1D for a 3x4 matrix with rank 3).
+        // The orthogonal projector onto null(M) is (I - M⁺M).  Applying it to each
+        // standard basis vector until we get a non-degenerate result gives the null vector.
+        // This avoids relying on the thin SVD (which only returns 3 right singular vectors
+        // and would be missing the fourth that spans the null space).
+        self.m_null = {
+            let mut null_vec = Vector4f::zeros();
+            for i in 0..4 {
+                let mut e = Vector4f::zeros();
+                e[i] = 1.0;
+                let projected = e - self.m_inv * (self.m * e);
+                let norm = projected.norm();
+                if norm > 1e-6 {
+                    null_vec = projected / norm;
+                    break;
+                }
+            }
+            null_vec
+        };
+
         // Build the normal-force constraint matrix from wheel contact positions in the body frame.
         // Each wheel's contact point is obtained by rotating its drive direction (M column) by -90°:
         //   drive dir (vx,vy) -> position (vy, -vx) * l
@@ -272,17 +299,7 @@ impl RobotModel {
             ca * l,  cb * l, -cb * l, -ca * l,
         );
         self.w_normal_inv = self.w_normal.pseudo_inverse(1e-6).map_err(|_| ControlsError::SingularMatrix)?;
-        // Compute the null space of M (1D for a 3x4 matrix with rank 3).
-        // The last right singular vector (last row of V^T) corresponds to the
-        // smallest singular value, which is ~0 for our full-rank-3 coupling matrix.
-        let svd = self.m.svd(false, true);
-        self.m_null = svd.v_t
-            .map(|v_t| {
-                let n: Vector4f = v_t.row(3).transpose().into();
-                let norm = n.norm();
-                if norm > 1e-6 { n / norm } else { Vector4f::zeros() }
-            })
-            .unwrap_or(Vector4f::zeros());
+
         self.i = Matrix3f::new(
             physical_params.mass, 0., 0.,
             0., physical_params.mass, 0.,
@@ -483,5 +500,188 @@ impl RobotModel {
         let friction_force = linear_friction.push(angular_friction);
 
         friction_force
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Vector3f, Vector4f};
+
+    fn default_model() -> RobotModel {
+        RobotModel::new_from_default_params(0.01).unwrap()
+    }
+
+    fn approx_eq(a: f32, b: f32, tol: f32) -> bool {
+        (a - b).abs() < tol
+    }
+
+    // --- compute_wheel_normal_forces ---
+
+    /// At rest: all normal forces are positive, their sum is m*g, and the robot's
+    /// left-right symmetry (alpha/beta are equal for left/right pairs) means FL==FR and BL==BR.
+    /// Note: FL ≠ BL in general because alpha ≠ beta shifts the CoM projection.
+    #[test]
+    fn normal_forces_static_physical_validity() {
+        let model = default_model();
+        let total = model.physical_params.mass * 9.81;
+        let n = model.compute_wheel_normal_forces(Vector3f::zeros());
+        // All normal forces must be non-negative
+        for i in 0..4 {
+            assert!(n[i] >= 0.0, "N[{i}] = {} should be non-negative", n[i]);
+        }
+        // Must sum to m*g
+        assert!(approx_eq(n.sum(), total, 1e-3), "N sum = {}, expected {total}", n.sum());
+        // Left-right symmetry: FL(0)==FR(3), BL(1)==BR(2)
+        assert!(approx_eq(n[0], n[3], 1e-3), "FL ({}) != FR ({}) at rest", n[0], n[3]);
+        assert!(approx_eq(n[1], n[2], 1e-3), "BL ({}) != BR ({}) at rest", n[1], n[2]);
+    }
+
+    /// Normal forces must always sum to m*g regardless of acceleration.
+    #[test]
+    fn normal_forces_sum_invariant() {
+        let model = default_model();
+        let total = model.physical_params.mass * 9.81;
+        for &(ax, ay) in &[(0.0_f32, 0.0_f32), (3.0, 0.0), (-3.0, 0.0), (0.0, 2.0), (2.0, -2.0)] {
+            let n = model.compute_wheel_normal_forces(Vector3f::new(ax, ay, 0.0));
+            assert!(
+                approx_eq(n.sum(), total, 1e-3),
+                "Sum of N = {} ≠ m*g = {total} at ax={ax} ay={ay}", n.sum()
+            );
+        }
+    }
+
+    /// Under forward acceleration the rear wheels (BL=1, BR=2) carry more load than the
+    /// front wheels (FL=0, FR=3).
+    #[test]
+    fn normal_forces_load_transfer_forward_accel() {
+        let model = default_model();
+        let n = model.compute_wheel_normal_forces(Vector3f::new(5.0, 0.0, 0.0));
+        let front_avg = (n[0] + n[3]) / 2.0;
+        let rear_avg  = (n[1] + n[2]) / 2.0;
+        assert!(
+            rear_avg > front_avg,
+            "Rear avg N ({rear_avg:.4}) should exceed front avg N ({front_avg:.4}) under +x accel"
+        );
+    }
+
+    /// Under leftward acceleration the right wheels (BR=2, FR=3) carry more load than the
+    /// left wheels (FL=0, BL=1).
+    #[test]
+    fn normal_forces_load_transfer_lateral_accel() {
+        let model = default_model();
+        // +y is left in body frame, so accelerating left loads the right side
+        let n = model.compute_wheel_normal_forces(Vector3f::new(0.0, 5.0, 0.0));
+        let left_avg  = (n[0] + n[1]) / 2.0;
+        let right_avg = (n[2] + n[3]) / 2.0;
+        assert!(
+            right_avg > left_avg,
+            "Right avg N ({right_avg:.4}) should exceed left avg N ({left_avg:.4}) under +y accel"
+        );
+    }
+
+    /// The computed normal forces satisfy the three moment-equilibrium equations exactly
+    /// (up to pseudo-inverse rounding).
+    #[test]
+    fn normal_forces_satisfy_equilibrium() {
+        let model = default_model();
+        let m = model.physical_params.mass;
+        let h = model.physical_params.h_cm;
+        let accel = Vector3f::new(3.0, -1.5, 0.0);
+        let n = model.compute_wheel_normal_forces(accel);
+        let rhs = Vector3f::new(m * 9.81, -h * m * accel[0], -h * m * accel[1]);
+        let residual = model.w_normal * n - rhs;
+        for i in 0..3 {
+            assert!(
+                residual[i].abs() < 1e-4,
+                "Equilibrium residual[{i}] = {} (should be ~0)", residual[i]
+            );
+        }
+    }
+
+    // --- compute_wheel_torques_vectored ---
+
+    /// The vectored torques must produce the same net body wrench as the nominal
+    /// pseudo-inverse solution: M * tau_vectored == M * tau_nominal.
+    #[test]
+    fn vectored_torques_preserve_body_wrench() {
+        let model = default_model();
+        for &(theta, ax, ay, az) in &[
+            (0.0_f32, 1.5_f32, -0.8_f32,  0.5_f32),
+            (0.785,   2.0,      1.0,       0.0),
+            (1.57,   -1.0,      0.0,       0.3),
+            (0.0,    5.0,       0.0,       0.0),  // hard forward accel (large load transfer)
+        ] {
+            let accel_cmd = Vector3f::new(ax, ay, az);
+            let tau_nom      = model.transform_accel2wheel(theta) * accel_cmd;
+            let tau_vectored = model.compute_wheel_torques_vectored(theta, accel_cmd);
+            let wrench_diff  = (model.m * tau_nom - model.m * tau_vectored).norm();
+            assert!(
+                wrench_diff < 1e-4,
+                "Wrench changed by {wrench_diff} at theta={theta} accel=({ax},{ay},{az})"
+            );
+        }
+    }
+
+    /// The vectored torques must never produce a higher peak traction utilisation than the
+    /// nominal pseudo-inverse, across a variety of headings and acceleration commands.
+    #[test]
+    fn vectored_torques_traction_utilisation_not_worse() {
+        let model = default_model();
+        for &(theta, ax, ay, az) in &[
+            (0.0_f32,  2.0_f32,  0.5_f32, 0.2_f32),
+            (0.785,   -1.0,      2.0,     0.0),
+            (1.57,     0.0,     -3.0,     0.1),
+            (0.3,      3.0,     -1.5,    -0.3),
+        ] {
+            let accel_cmd  = Vector3f::new(ax, ay, az);
+            let body_accel = z_rotation_mat(-theta) * accel_cmd;
+            let n          = model.compute_wheel_normal_forces(body_accel);
+
+            let peak_utilisation = |tau: Vector4f| -> f32 {
+                (0..4)
+                    .filter(|&i| n[i] > 1e-6)
+                    .map(|i| tau[i].abs() / n[i])
+                    .fold(0.0_f32, f32::max)
+            };
+
+            let tau_nom      = model.transform_accel2wheel(theta) * accel_cmd;
+            let tau_vectored = model.compute_wheel_torques_vectored(theta, accel_cmd);
+            let u_nom        = peak_utilisation(tau_nom);
+            let u_vectored   = peak_utilisation(tau_vectored);
+            assert!(
+                u_vectored <= u_nom + 1e-4,
+                "Vectored utilisation ({u_vectored:.5}) > nominal ({u_nom:.5}) at theta={theta} accel=({ax},{ay},{az})"
+            );
+        }
+    }
+
+    /// Under significant load transfer the vectored solution must have lower or equal peak
+    /// traction utilisation (|τ_i| / N_i) compared to the nominal pseudo-inverse.
+    #[test]
+    fn vectored_torques_reduce_traction_utilisation() {
+        let model = default_model();
+        // Hard forward acceleration: FL/FR are nearly unloaded, BL/BR are heavily loaded.
+        let theta     = 0.0_f32;
+        let accel_cmd = Vector3f::new(5.0, 0.0, 0.0);
+        let body_accel = z_rotation_mat(-theta) * accel_cmd;
+        let n = model.compute_wheel_normal_forces(body_accel);
+
+        let peak_utilisation = |tau: Vector4f| -> f32 {
+            (0..4)
+                .filter(|&i| n[i] > 1e-6)
+                .map(|i| tau[i].abs() / n[i])
+                .fold(0.0_f32, f32::max)
+        };
+
+        let tau_nom      = model.transform_accel2wheel(theta) * accel_cmd;
+        let tau_vectored = model.compute_wheel_torques_vectored(theta, accel_cmd);
+
+        let u_nom      = peak_utilisation(tau_nom);
+        let u_vectored = peak_utilisation(tau_vectored);
+        assert!(
+            u_vectored <= u_nom + 1e-4,
+            "Vectored peak utilisation ({u_vectored:.5}) > nominal ({u_nom:.5})"
+        );
     }
 }
