@@ -218,7 +218,7 @@ def main():
         help="Dimension to oscillate: x, y, or theta (default: x)",
     )
     parser.add_argument(
-        "--fn-type", type=str, default="oscillate", choices=["pulse", "oscillate", "step", "bangbang"],
+        "--fn-type", type=str, default="oscillate", choices=["pulse", "oscillate", "step", "bangbang_pose", "bangbang_accel"],
         help="Control function type (default: oscillate)",
     )
     parser.add_argument(
