@@ -214,8 +214,8 @@ def main():
         help="Amplitude of oscillation (default: 0.2)",
     )
     parser.add_argument(
-        "--dimension", type=str, default="x", choices=["x", "y", "theta"],
-        help="Dimension to oscillate: x, y, or theta (default: x)",
+        "--dimension", type=str, default="x", choices=["x", "y", "xy", "theta"],
+        help="Dimension to oscillate: x, y, xy, or theta (default: x)",
     )
     parser.add_argument(
         "--fn-type", type=str, default="oscillate", choices=["pulse", "oscillate", "step", "bangbang_pose", "bangbang_accel"],
