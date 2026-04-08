@@ -79,10 +79,10 @@ impl Default for KalmanFilterParams {
             measurement_noise_std_vision_pos_angular: kalman_params::MEASUREMENT_NOISE_STDDEV_VISION_POS_ANGULAR,
             measurement_noise_std_encoder_vel_angular: kalman_params::MEASUREMENT_NOISE_STDDEV_ENCODER_VEL_ANGULAR,
             measurement_noise_std_gyro_vel_angular: kalman_params::MEASUREMENT_NOISE_STDDEV_GYRO_VEL_ANGULAR,
-            max_pos_linear: 64.,  // 64 meters should be large enough for initial uncertainty
-            max_pos_angular: 2. * PI,
-            max_vel_linear: trajectory_params::MAX_VEL_LINEAR,
-            max_vel_angular: trajectory_params::MAX_VEL_ANGULAR,
+            max_pos_linear: kalman_params::MAX_POS_LINEAR,
+            max_pos_angular: kalman_params::MAX_POS_ANGULAR,
+            max_vel_linear: kalman_params::MAX_VEL_LINEAR,
+            max_vel_angular: kalman_params::MAX_VEL_ANGULAR,
         }
     }
 }
