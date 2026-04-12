@@ -134,44 +134,51 @@ class BangBangTraj3D(ctypes.Structure):
 
 # ---------------------------------------------------------------------------
 # JSON key → ctypes field mapping (matches Rust serde renames)
+#
+# The robot_params.json now stores grouped parameter vectors matching the
+# firmware ParameterName enum.  Each entry below is:
+#   (json_key, array_index, ctypes_field_name)
 # ---------------------------------------------------------------------------
 
-_TRAJ_JSON_MAP = {
-    "TRAJ_ALLOWABLE_ERROR_POS_LINEAR": "allowable_error_pos_linear",
-    "TRAJ_ALLOWABLE_ERROR_POS_ANGULAR": "allowable_error_pos_angular",
-    "TRAJ_ALLOWABLE_ERROR_VEL_LINEAR": "allowable_error_vel_linear",
-    "TRAJ_ALLOWABLE_ERROR_VEL_ANGULAR": "allowable_error_vel_angular",
-    "TRAJ_MAX_VEL_LINEAR": "max_vel_linear",
-    "TRAJ_MAX_VEL_ANGULAR": "max_vel_angular",
-    "TRAJ_MAX_ACCEL_LINEAR": "max_accel_linear",
-    "TRAJ_MAX_ACCEL_ANGULAR": "max_accel_angular",
-}
+_TRAJ_JSON_MAP = [
+    # TRAJ_MAX [MAX_VEL_LINEAR, MAX_VEL_ANGULAR, MAX_ACCEL_LINEAR, MAX_ACCEL_ANGULAR]
+    ("TRAJ_MAX", 0, "max_vel_linear"),
+    ("TRAJ_MAX", 1, "max_vel_angular"),
+    ("TRAJ_MAX", 2, "max_accel_linear"),
+    ("TRAJ_MAX", 3, "max_accel_angular"),
+]
 
-_KF_JSON_MAP = {
-    "KF_PROCESS_STD_POS_LINEAR": "process_noise_std_pos_linear",
-    "KF_PROCESS_STD_POS_ANGULAR": "process_noise_std_pos_angular",
-    "KF_PROCESS_STD_VEL_LINEAR": "process_noise_std_vel_linear",
-    "KF_PROCESS_STD_VEL_ANGULAR": "process_noise_std_vel_angular",
-    "KF_VISION_STD_LINEAR": "measurement_noise_std_vision_pos_linear",
-    "KF_VISION_STD_ANGULAR": "measurement_noise_std_vision_pos_angular",
-    "KF_ENCODER_STD_ANGULAR": "measurement_noise_std_encoder_vel_angular",
-    "KF_GYRO_STD_ANGULAR": "measurement_noise_std_gyro_vel_angular",
-    "KF_MAX_POS_LINEAR": "max_pos_linear",
-    "KF_MAX_POS_ANGULAR": "max_pos_angular",
-    "KF_MAX_VEL_LINEAR": "max_vel_linear",
-    "KF_MAX_VEL_ANGULAR": "max_vel_angular",
-}
+_KF_JSON_MAP = [
+    # KF_PROCESS_STD [POS_LINEAR, POS_ANGULAR, VEL_LINEAR, VEL_ANGULAR]
+    ("KF_PROCESS_STD", 0, "process_noise_std_pos_linear"),
+    ("KF_PROCESS_STD", 1, "process_noise_std_pos_angular"),
+    ("KF_PROCESS_STD", 2, "process_noise_std_vel_linear"),
+    ("KF_PROCESS_STD", 3, "process_noise_std_vel_angular"),
+    # KF_MEASUREMENT_STD [VISION_LINEAR, VISION_ANGULAR, ENCODER_ANGULAR, GYRO_ANGULAR]
+    ("KF_MEASUREMENT_STD", 0, "measurement_noise_std_vision_pos_linear"),
+    ("KF_MEASUREMENT_STD", 1, "measurement_noise_std_vision_pos_angular"),
+    ("KF_MEASUREMENT_STD", 2, "measurement_noise_std_encoder_vel_angular"),
+    ("KF_MEASUREMENT_STD", 3, "measurement_noise_std_gyro_vel_angular"),
+    # KF_MAX_STATE [POS_LINEAR, POS_ANGULAR, VEL_LINEAR, VEL_ANGULAR]
+    ("KF_MAX_STATE", 0, "max_pos_linear"),
+    ("KF_MAX_STATE", 1, "max_pos_angular"),
+    ("KF_MAX_STATE", 2, "max_vel_linear"),
+    ("KF_MAX_STATE", 3, "max_vel_angular"),
+]
 
-_PHYS_JSON_MAP = {
-    "PHYS_WHEEL_ANGLE_ALPHA": "alpha",
-    "PHYS_WHEEL_ANGLE_BETA": "beta",
-    "PHYS_WHEEL_DISTANCE": "l",
-    "PHYS_WHEEL_RADIUS": "r",
-    "PHYS_BODY_MASS": "mass",
-    "PHYS_BODY_MOMENT_Z": "iz",
-    "PHYS_MOTOR_TORQUE_CONSTANT": "motor_torque_constant",
-    "PHYS_MOTOR_EFFICIENCY_FACTOR": "motor_efficiency_factor",
-}
+_PHYS_JSON_MAP = [
+    # PHYS_WHEEL [ALPHA, BETA, DISTANCE, RADIUS]
+    ("PHYS_WHEEL", 0, "alpha"),
+    ("PHYS_WHEEL", 1, "beta"),
+    ("PHYS_WHEEL", 2, "l"),
+    ("PHYS_WHEEL", 3, "r"),
+    # PHYS_INERTIA [BODY_MASS, BODY_MOMENT_Z]
+    ("PHYS_INERTIA", 0, "mass"),
+    ("PHYS_INERTIA", 1, "iz"),
+    # PHYS_MOTOR_MODEL [TORQUE_CONSTANT, EFFICIENCY_FACTOR]
+    ("PHYS_MOTOR_MODEL", 0, "motor_torque_constant"),
+    ("PHYS_MOTOR_MODEL", 1, "motor_efficiency_factor"),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -238,27 +245,27 @@ def _setup_signatures(lib):
 # ---------------------------------------------------------------------------
 
 def _load_traj_params_from_json(params: TrajectoryParams, path: str) -> TrajectoryParams:
-    """Load TrajectoryParams from a JSON file using the TRAJ_* serde keys."""
+    """Load TrajectoryParams from a JSON file using the grouped parameter vectors."""
     with open(path) as f:
         data = json.load(f)
-    for json_key, field in _TRAJ_JSON_MAP.items():
+    for json_key, idx, field in _TRAJ_JSON_MAP:
         if json_key in data:
-            setattr(params, field, float(data[json_key]))
+            setattr(params, field, float(data[json_key][idx]))
     return params
 
 
 def _load_robot_model_from_json(lib, path: str):
-    """Create a RobotModel from a JSON file using the KF_* / PHYS_* serde keys."""
+    """Create a RobotModel from a JSON file using the grouped parameter vectors."""
     with open(path) as f:
         data = json.load(f)
     kf = KalmanFilterParams()
-    for json_key, field in _KF_JSON_MAP.items():
+    for json_key, idx, field in _KF_JSON_MAP:
         if json_key in data:
-            setattr(kf, field, float(data[json_key]))
+            setattr(kf, field, float(data[json_key][idx]))
     phys = RobotPhysicalParams()
-    for json_key, field in _PHYS_JSON_MAP.items():
+    for json_key, idx, field in _PHYS_JSON_MAP:
         if json_key in data:
-            setattr(phys, field, float(data[json_key]))
+            setattr(phys, field, float(data[json_key][idx]))
     model = ctypes.c_void_p()
     rc = lib.ateam_controls_robot_model_new(
         ctypes.c_float(0.001), kf, phys, ctypes.byref(model))
