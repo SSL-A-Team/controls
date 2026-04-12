@@ -91,7 +91,7 @@ class TelemVisualizer:
         wt_br = np.mean(self.data['back_right_motor__current_telemetry__current_samples_ma'][self.idx])
         wt_fr = np.mean(self.data['front_right_motor__current_telemetry__current_samples_ma'][self.idx])
 
-        if self.data['body_pose_control_enabled'][self.idx]:
+        if self.data['body_control_mode'][self.idx] == 1:  # BCM_GLOBAL_POSE
             # Compute trajectory
             traj_data = compute_trajectory([x, y, theta, xd, yd, thetad], self.data['body_cmd'][self.idx].tolist())
             

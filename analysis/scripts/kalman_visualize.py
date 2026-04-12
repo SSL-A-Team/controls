@@ -134,23 +134,25 @@ def plot_state_meas(telemetry, param_json=None):
         ax.legend()
 
     ##### Plot software command #####
-    # Use the first packet to determine which control type is active
+    # Use body_control_mode to determine which control type is active
+    # BCM_OFF=0, BCM_GLOBAL_POSE=1, BCM_GLOBAL_TWIST=2, BCM_LOCAL_TWIST=3, BCM_GLOBAL_ACCEL=4, BCM_LOCAL_ACCEL=5
+    bcm = telemetry["body_control_mode"]
     i = 0
     for j in range(3):
         ax = axs[i, j]
-        mask = telemetry["body_pose_control_enabled"].astype(bool)
+        mask = (bcm == 1)  # BCM_GLOBAL_POSE
         if any(mask):
             ax.plot(t[mask], telemetry["body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
     i = 1
     for j in range(3):
         ax = axs[i, j]
-        mask = telemetry["body_twist_control_enabled"].astype(bool)
+        mask = (bcm == 2) | (bcm == 3)  # BCM_GLOBAL_TWIST or BCM_LOCAL_TWIST
         if any(mask):
             ax.plot(t[mask], telemetry["body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
     i = 2
     for j in range(3):
         ax = axs[i, j]
-        mask = telemetry["body_accel_control_enabled"].astype(bool)
+        mask = (bcm == 4) | (bcm == 5)  # BCM_GLOBAL_ACCEL or BCM_LOCAL_ACCEL
         if any(mask):
             ax.plot(t[mask], telemetry["body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
 
