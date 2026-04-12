@@ -42,36 +42,36 @@ def compute_all_state_measurements(state_estimates, sensor_measurements, param_j
 def plot_state_meas(telemetry, param_json=None):
     # Construct sensor measurement array from time sequence of ExtendedTelemetry, t x n_meas, n_meas = 8 (vision x,y,theta + 4 encoders + gyro thetad)
     sensor_meas = np.stack([
-        telemetry["vision_pose"][:,0], 
-        telemetry["vision_pose"][:,1], 
-        telemetry["vision_pose"][:,2], 
+        telemetry["body_control_telemetry__vision_pose"][:,0], 
+        telemetry["body_control_telemetry__vision_pose"][:,1], 
+        telemetry["body_control_telemetry__vision_pose"][:,2], 
         telemetry['front_left_motor__velocity_telemetry__wheel_vel_rads'], 
         telemetry['back_left_motor__velocity_telemetry__wheel_vel_rads'], 
         telemetry['back_right_motor__velocity_telemetry__wheel_vel_rads'], 
         telemetry['front_right_motor__velocity_telemetry__wheel_vel_rads'], 
-        telemetry['imu_gyro'][:,2], 
+        telemetry['body_control_telemetry__imu_gyro'][:,2], 
     ], axis=1)
 
     t = telemetry['timestamp_us'] * 1e-6
 
     # t x 6 (x, y, theta, xd, yd, thetad)
     state_pred = np.append(
-        telemetry['kf_body_pose_prediction'], 
-        telemetry['kf_body_twist_prediction'], 
+        telemetry['body_control_telemetry__kf_body_pose_prediction'], 
+        telemetry['body_control_telemetry__kf_body_twist_prediction'], 
         axis=1
     )
     # t x 6 (x, y, theta, xd, yd, thetad)
     state_est = np.append(
-        telemetry['kf_body_pose_estimate'], 
-        telemetry['kf_body_twist_estimate'], 
+        telemetry['body_control_telemetry__kf_body_pose_estimate'], 
+        telemetry['body_control_telemetry__kf_body_twist_estimate'], 
         axis=1
     )
     # dictionary with labels as keys and t len arrays as values
     state_meas = compute_all_state_measurements(state_est, sensor_meas, param_json=param_json)
     # t x 3 (xdd, ydd, thetadd)
-    cmd = telemetry['body_accel_u']
+    cmd = telemetry['body_control_telemetry__body_accel_u']
     # t x 2 (xdd, ydd)
-    cmd_meas = telemetry['imu_accel'][:, :2]
+    cmd_meas = telemetry['body_control_telemetry__imu_accel'][:, :2]
 
 
     ##### Configure the figure #####
@@ -105,7 +105,7 @@ def plot_state_meas(telemetry, param_json=None):
 
             for meas_label in state_measurement_labels[i][j]:
                 if "vision" in meas_label:
-                    mask = telemetry["vision_update"].astype(bool)
+                    mask = telemetry["body_control_telemetry__vision_update"].astype(bool)
                     t_meas = telemetry['timestamp_us'][mask] * 1e-6
                     m_meas = state_meas[meas_label][mask]
                     ax.plot(t_meas, m_meas, label=f'{meas_label}', alpha=alpha)
@@ -116,12 +116,12 @@ def plot_state_meas(telemetry, param_json=None):
     i = 0
     for j in range(3):
         ax = axs[i, j]
-        ax.plot(t, telemetry["body_traj_pose"][:, j], label=f'trajectory', alpha=alpha)
+        ax.plot(t, telemetry["body_control_telemetry__body_traj_pose"][:, j], label=f'trajectory', alpha=alpha)
         ax.legend()
     i = 1
     for j in range(3):
         ax = axs[i, j]
-        ax.plot(t, telemetry["body_traj_twist"][:, j], label=f'trajectory', alpha=alpha)
+        ax.plot(t, telemetry["body_control_telemetry__body_traj_twist"][:, j], label=f'trajectory', alpha=alpha)
         ax.legend()
 
     ##### Plot body controller command  #####
@@ -136,25 +136,25 @@ def plot_state_meas(telemetry, param_json=None):
     ##### Plot software command #####
     # Use body_control_mode to determine which control type is active
     # BCM_OFF=0, BCM_GLOBAL_POSE=1, BCM_GLOBAL_TWIST=2, BCM_LOCAL_TWIST=3, BCM_GLOBAL_ACCEL=4, BCM_LOCAL_ACCEL=5
-    bcm = telemetry["body_control_mode"]
+    bcm = telemetry["body_control_telemetry__body_control_mode"]
     i = 0
     for j in range(3):
         ax = axs[i, j]
         mask = (bcm == 1)  # BCM_GLOBAL_POSE
         if any(mask):
-            ax.plot(t[mask], telemetry["body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
+            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
     i = 1
     for j in range(3):
         ax = axs[i, j]
         mask = (bcm == 2) | (bcm == 3)  # BCM_GLOBAL_TWIST or BCM_LOCAL_TWIST
         if any(mask):
-            ax.plot(t[mask], telemetry["body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
+            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
     i = 2
     for j in range(3):
         ax = axs[i, j]
         mask = (bcm == 4) | (bcm == 5)  # BCM_GLOBAL_ACCEL or BCM_LOCAL_ACCEL
         if any(mask):
-            ax.plot(t[mask], telemetry["body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
+            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
 
 
     ##### Add legends and make sure t is labeled for all subplots #####

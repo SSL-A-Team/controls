@@ -85,9 +85,9 @@ class VelocityOverlay:
         self.window = window
 
         # Vision data at frames where vision fired.
-        self.vision_mask = telemetry["vision_update"].astype(bool)
+        self.vision_mask = telemetry["body_control_telemetry__vision_update"].astype(bool)
         self.vision_t = t[self.vision_mask]
-        self.vision_pos = telemetry["vision_pose"][self.vision_mask]  # (M, 3)
+        self.vision_pos = telemetry["body_control_telemetry__vision_pose"][self.vision_mask]  # (M, 3)
 
         self._active = False
 

@@ -65,18 +65,18 @@ class TelemVisualizer:
         t = self.data['timestamp_us'][self.idx] * 1e-6
 
         # Extract body command
-        cmd = self.data['body_cmd'][self.idx]
+        cmd = self.data['body_control_telemetry__body_cmd'][self.idx]
         
         # Extract pose (x, y, theta) from body pose estimate
-        pose = self.data['kf_body_pose_estimate'][self.idx]
+        pose = self.data['body_control_telemetry__kf_body_pose_estimate'][self.idx]
         x, y, theta = pose[0], pose[1], pose[2]
         
         # Extract twist (xd, yd, thetad)
-        twist = self.data['kf_body_twist_estimate'][self.idx]
+        twist = self.data['body_control_telemetry__kf_body_twist_estimate'][self.idx]
         xd, yd, thetad = twist[0], twist[1], twist[2]
 
         # Extract accelerations
-        accel = self.data['body_accel_u'][self.idx]
+        accel = self.data['body_control_telemetry__body_accel_u'][self.idx]
         xdd, ydd, thetadd = accel[0], accel[1], accel[2]
         
         # Extract wheel velocities
@@ -91,9 +91,9 @@ class TelemVisualizer:
         wt_br = np.mean(self.data['back_right_motor__current_telemetry__current_samples_ma'][self.idx])
         wt_fr = np.mean(self.data['front_right_motor__current_telemetry__current_samples_ma'][self.idx])
 
-        if self.data['body_control_mode'][self.idx] == 1:  # BCM_GLOBAL_POSE
+        if self.data['body_control_telemetry__body_control_mode'][self.idx] == 1:  # BCM_GLOBAL_POSE
             # Compute trajectory
-            traj_data = compute_trajectory([x, y, theta, xd, yd, thetad], self.data['body_cmd'][self.idx].tolist())
+            traj_data = compute_trajectory([x, y, theta, xd, yd, thetad], self.data['body_control_telemetry__body_cmd'][self.idx].tolist())
             
             # Update trajectory line
             self.trajectory_line.set_data(traj_data['x'], traj_data['y'])
