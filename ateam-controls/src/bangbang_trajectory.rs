@@ -9,14 +9,6 @@ use crate::{ControlsError, Vector3f, Vector6f, wrap_angle};
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TrajectoryParams {
-    #[cfg_attr(feature = "serde", serde(rename = "TRAJ_ALLOWABLE_ERROR_POS_LINEAR"))]
-    pub allowable_error_pos_linear: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "TRAJ_ALLOWABLE_ERROR_POS_ANGULAR"))]
-    pub allowable_error_pos_angular: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "TRAJ_ALLOWABLE_ERROR_VEL_LINEAR"))]
-    pub allowable_error_vel_linear: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "TRAJ_ALLOWABLE_ERROR_VEL_ANGULAR"))]
-    pub allowable_error_vel_angular: f32,
     #[cfg_attr(feature = "serde", serde(rename = "TRAJ_MAX_VEL_LINEAR"))]
     pub max_vel_linear: f32,
     #[cfg_attr(feature = "serde", serde(rename = "TRAJ_MAX_VEL_ANGULAR"))]
@@ -30,10 +22,6 @@ pub struct TrajectoryParams {
 impl Default for TrajectoryParams {
     fn default() -> Self {
         TrajectoryParams {
-            allowable_error_pos_linear: ALLOWABLE_ERROR_POS_LINEAR,
-            allowable_error_pos_angular: ALLOWABLE_ERROR_POS_ANGULAR,
-            allowable_error_vel_linear: ALLOWABLE_ERROR_VEL_LINEAR,
-            allowable_error_vel_angular: ALLOWABLE_ERROR_VEL_ANGULAR,
             max_vel_linear: MAX_VEL_LINEAR,
             max_vel_angular: MAX_VEL_ANGULAR,
             max_accel_linear: MAX_ACCEL_LINEAR,
@@ -75,18 +63,6 @@ pub struct BangBangTraj3D {
 impl BangBangTraj3D {
     /// Compute optimal bang-bang trajectory to reach a target pose from an initial state.
     pub fn from_target_pose(init_state: Vector6f, target_pose: Vector3f, params: TrajectoryParams) -> Result<Self, ControlsError> {
-        let pos_err_linear = sqrtf((init_state[0] - target_pose[0]) * (init_state[0] - target_pose[0]) +
-                                      (init_state[1] - target_pose[1]) * (init_state[1] - target_pose[1]));
-        // Use shortest angular difference for the error check
-        let pos_err_angular = wrap_angle(init_state[2] - target_pose[2]);
-        let vel_err_linear = sqrtf(init_state[3] * init_state[3] + init_state[4] * init_state[4]);
-        let vel_err_angular = init_state[5];
-        if pos_err_linear < params.allowable_error_pos_linear &&
-           pos_err_angular.abs() < params.allowable_error_pos_angular &&
-           vel_err_linear < params.allowable_error_vel_linear &&
-           vel_err_angular.abs() < params.allowable_error_vel_angular {
-            return Ok(BangBangTraj3D::default());
-        }
         let mut alpha = PI / 4.0;
         let mut increment = PI / 8.0;
         let precision = 0.1;
@@ -125,10 +101,7 @@ impl BangBangTraj3D {
         }
         let diff = target_twist - init_twist;
         let diff_xy_mag = sqrtf(diff.x * diff.x + diff.y * diff.y);
-        if diff_xy_mag < params.allowable_error_vel_linear &&
-           diff.z.abs() < params.allowable_error_vel_angular {
-            return Ok(BangBangTraj3D::default());
-        }
+
         // Solve for optimal ratio of x and y accelerations using magnitude to avoid division by zero
         let (xdd, x_time, ydd, y_time) = if diff_xy_mag < 1e-9 {
             (0.0, 0.0, 0.0, 0.0)
