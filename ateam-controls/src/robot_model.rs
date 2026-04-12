@@ -362,4 +362,8 @@ impl RobotModel {
 
         friction_force
     }
+
+    pub fn get_state(&self) -> Vector6f {
+        self.x
+    }
 }
