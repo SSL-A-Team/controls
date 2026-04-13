@@ -125,12 +125,14 @@ def plot_state_meas(telemetry, param_json=None):
         ax.legend()
 
     ##### Plot body controller command  #####
+    cmd_fric_comp = telemetry['body_control_telemetry__body_accel_u_fric_comp']
     i = 2
     for j in range(3):
         ax = axs[i, j]
         ax.plot(t, cmd[:, j], label=f'firmware_cmd', alpha=alpha)
         # if j < 2:  # only plot accel measurements for x and y, not theta
             # ax.plot(t, cmd_meas[:, j], label=f'accelerometer_measured', alpha=alpha)
+        ax.plot(t, cmd_fric_comp[:, j], label=f'firmware_cmd_fric_comp', alpha=alpha)
         ax.legend()
 
     ##### Plot software command #####

@@ -54,5 +54,10 @@
     "POSE_FB_PIDII [P, I, D, I_MIN, I_MAX]": "",
     "POSE_FB_PIDII_X":     [115.0, 0.0, 2.75, 0.0, 0.0],
     "POSE_FB_PIDII_Y":     [115.0, 0.0, 2.75, 0.0, 0.0],
-    "POSE_FB_PIDII_THETA": [250.0, 0.0, 10.0, 0.0, 0.0]
+    "POSE_FB_PIDII_THETA": [250.0, 0.0, 10.0, 0.0, 0.0],
+
+    "TWIST_FB_PIDII [P, I, D, I_MIN, I_MAX]": "",
+    "TWIST_FB_PIDII_X":     [0.0, 0.0, 0.0, 0.0, 0.0],
+    "TWIST_FB_PIDII_Y":     [0.0, 0.0, 0.0, 0.0, 0.0],
+    "TWIST_FB_PIDII_THETA": [0.0, 0.0, 0.0, 0.0, 0.0]
 }
