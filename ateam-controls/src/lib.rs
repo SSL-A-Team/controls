@@ -39,7 +39,7 @@ pub fn add(left: u64, right: u64) -> u64 {
 }
 
 /// Rotation matrix around z axis by theta radians
-fn z_rotation_mat(theta: f32) -> Matrix3f {
+pub fn z_rotation_mat(theta: f32) -> Matrix3f {
     let c = cosf(theta);
     let s = sinf(theta);
     Matrix3f::new(
