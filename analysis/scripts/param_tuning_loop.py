@@ -142,8 +142,17 @@ def run_motion_input_node(robot_id: int, amp: float = 0.2, dimension: str = "x",
     ]
     if param_json:
         cmd.extend(["-p", f"param_json:={param_json}"])
-    print(f"Running motion_input_node for {duration}s on robot {robot_id} (fn={fn_type}, dim={dimension}, amp={amp})...")
-    subprocess.run(cmd, timeout=duration + 10)
+    if duration > 0:
+        print(f"Running motion_input_node for {duration}s on robot {robot_id} (fn={fn_type}, dim={dimension}, amp={amp})...")
+        subprocess.run(cmd, timeout=duration + 10)
+    else:
+        print(f"Running motion_input_node indefinitely on robot {robot_id} (fn={fn_type}, dim={dimension}, amp={amp}). Ctrl+C to stop.")
+        proc = subprocess.Popen(cmd, preexec_fn=os.setsid)
+        try:
+            proc.wait()
+        except KeyboardInterrupt:
+            os.killpg(os.getpgid(proc.pid), signal.SIGINT)
+            proc.wait(timeout=10)
     print("motion_input_node finished.\n")
 
 
@@ -218,7 +227,7 @@ def main():
         help="Dimension to oscillate: x, y, xy, or theta (default: x)",
     )
     parser.add_argument(
-        "--fn-type", type=str, default="oscillate", choices=["pulse", "oscillate", "step", "bangbang_pose", "bangbang_accel"],
+        "--fn-type", type=str, default="oscillate", choices=["pulse", "oscillate", "step", "bangbang_pose", "bangbang_accel", "square"],
         help="Control function type (default: oscillate)",
     )
     parser.add_argument(
