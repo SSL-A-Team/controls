@@ -17,7 +17,7 @@
     "KF_PROCESS_STD": [0.01, 0.05, 0.02, 0.1],
 
     "KF_MEASUREMENT_STD [VISION_LINEAR, VISION_ANGULAR, ENCODER_ANGULAR, GYRO_ANGULAR]": "",
-    "KF_MEASUREMENT_STD": [1.0, 3.14, 0.5, 0.015],
+    "KF_MEASUREMENT_STD": [1.0, 3.14, 50.0, 0.015],
 
     "KF_MAX_STATE [POS_LINEAR, POS_ANGULAR, VEL_LINEAR, VEL_ANGULAR]": "",
     "KF_MAX_STATE": [64.0, 3.14, 3.0, 20.0],
@@ -46,7 +46,6 @@
     "TRAJ_MAX": [3.0, 10.0, 1.0, 6.283],
 
     "TRAJ_RECOMPUTE_ERROR [POS_LINEAR, POS_ANGULAR, VEL_LINEAR, VEL_ANGULAR]": "",
-    "recompute once on start 0.5 m away from destination": "",
     "TRAJ_RECOMPUTE_ERROR": [0.5, 1.0, 1.0, 2.0],
 
     "============ FEEDBACK ===========": "",
