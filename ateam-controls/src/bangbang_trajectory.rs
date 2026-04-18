@@ -322,5 +322,7 @@ fn eval_1d_state_at(traj: BangBangTraj1D, s: f32, sd: f32, current_time: f32, t:
             }
         }
     }
-    Ok((s, sd))  // t was equal to or after the trajectory end time
+    // Coast at final velocity for any remaining time past the trajectory end
+    s += sd * (t - current_time);
+    Ok((s, sd))
 }
