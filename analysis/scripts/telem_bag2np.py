@@ -76,9 +76,9 @@ def load_extended_telemetry_bag(bag_path, topic, msg_type):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert ROS2 bag to numpy archive")
-    parser.add_argument("--bag", type=str, required=True, help="Path to the ROS2 bag directory")
-    parser.add_argument("--robot", type=int, default=2, help="Robot number (default: 2)")
-    parser.add_argument("--output", type=str, default="telemetry.npz", help="Output path for the NPZ file (default: telemetry.npz)")
+    parser.add_argument("-b", "--bag", type=str, required=True, help="Path to the ROS2 bag directory")
+    parser.add_argument("-r", "--robot", type=int, default=2, help="Robot number (default: 2)")
+    parser.add_argument("-o", "--output", type=str, default="telemetry.npz", help="Output path for the NPZ file (default: telemetry.npz)")
     args = parser.parse_args()
     
     topic = f"/robot_feedback/extended/robot{args.robot}"

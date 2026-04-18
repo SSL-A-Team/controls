@@ -15,7 +15,7 @@ from the CLI via --velocity-window.
 import numpy as np
 
 
-_LINE_STYLE = dict(color="lime", linewidth=1.5, linestyle="-", alpha=0.85)
+_LINE_STYLE = dict(color="lime", linewidth=1.5, linestyle="-", alpha=0.85, label="vision_slope_vel")
 
 
 def _compute_sliding_velocity(vision_t, vision_pos, window):
@@ -95,7 +95,7 @@ class VelocityOverlay:
         self._vel_lines = {}
         for j in range(3):
             ax = self.axs[1, j]
-            line, = ax.plot([], [], **_LINE_STYLE, label="vision_slope_vel", visible=False)
+            line, = ax.plot([], [], **_LINE_STYLE, visible=False)
             self._vel_lines[j] = line
 
         self._window_text = self.fig.text(
@@ -159,6 +159,7 @@ class VelocityOverlay:
             line = self._vel_lines[j]
             line.set_data(self.vision_t, self._vel[:, j])
             line.set_visible(True)
+            self.axs[1, j].legend()
         self._window_text.set_text(f"vel window: {self.window:.2f}s")
         self._window_text.set_visible(True)
 
@@ -166,4 +167,5 @@ class VelocityOverlay:
         for j in range(3):
             self._vel_lines[j].set_data([], [])
             self._vel_lines[j].set_visible(False)
+            self.axs[1, j].legend()
         self._window_text.set_visible(False)

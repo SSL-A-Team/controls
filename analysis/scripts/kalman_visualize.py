@@ -100,28 +100,30 @@ def plot_state_meas(telemetry, param_json=None):
     for i in range(2):
         for j in range(3):
             ax = axs[i, j]
-            ax.plot(t, state_pred[:, 3*i + j], label=f'predicted', alpha=alpha)
-            ax.plot(t, state_est[:, 3*i + j], label=f'estimate', color="red", alpha=alpha)
+            ax.plot(t, state_pred[:, 3*i + j], label=f'predicted', color='tab:blue', alpha=alpha)
+            ax.plot(t, state_est[:, 3*i + j], label=f'estimate', color='red', alpha=alpha, zorder=10)
 
             for meas_label in state_measurement_labels[i][j]:
                 if "vision" in meas_label:
                     mask = telemetry["body_control_telemetry__vision_update"].astype(bool)
                     t_meas = telemetry['timestamp_us'][mask] * 1e-6
                     m_meas = state_meas[meas_label][mask]
-                    ax.plot(t_meas, m_meas, label=f'{meas_label}', alpha=alpha)
+                    ax.plot(t_meas, m_meas, label=f'{meas_label}', color='lime', alpha=alpha)
+                elif "gyro" in meas_label:
+                    ax.plot(t, state_meas[meas_label], label=f'{meas_label}', color='cyan', alpha=alpha)
                 else:
-                    ax.plot(t, state_meas[meas_label], label=f'{meas_label}', alpha=alpha)
+                    ax.plot(t, state_meas[meas_label], label=f'{meas_label}', color='tab:orange', alpha=alpha)
 
     ##### Plot onboard computed trajectory state #####
     i = 0
     for j in range(3):
         ax = axs[i, j]
-        ax.plot(t, telemetry["body_control_telemetry__body_traj_pose"][:, j], label=f'trajectory', alpha=alpha)
+        ax.plot(t, telemetry["body_control_telemetry__body_traj_pose"][:, j], label=f'trajectory', color='tab:green', alpha=alpha)
         ax.legend()
     i = 1
     for j in range(3):
         ax = axs[i, j]
-        ax.plot(t, telemetry["body_control_telemetry__body_traj_twist"][:, j], label=f'trajectory', alpha=alpha)
+        ax.plot(t, telemetry["body_control_telemetry__body_traj_twist"][:, j], label=f'trajectory', color='tab:green', alpha=alpha)
         ax.legend()
 
     ##### Plot body controller command  #####
@@ -129,10 +131,10 @@ def plot_state_meas(telemetry, param_json=None):
     i = 2
     for j in range(3):
         ax = axs[i, j]
-        ax.plot(t, cmd[:, j], label=f'firmware_cmd', alpha=alpha)
+        ax.plot(t, cmd[:, j], label=f'firmware_cmd', color='tab:blue', alpha=alpha)
         # if j < 2:  # only plot accel measurements for x and y, not theta
             # ax.plot(t, cmd_meas[:, j], label=f'accelerometer_measured', alpha=alpha)
-        ax.plot(t, cmd_fric_comp[:, j], label=f'firmware_cmd_fric_comp', alpha=alpha)
+        ax.plot(t, cmd_fric_comp[:, j], label=f'firmware_cmd_fric_comp', color='tab:orange', alpha=alpha)
         ax.legend()
 
     ##### Plot software command #####
@@ -144,19 +146,19 @@ def plot_state_meas(telemetry, param_json=None):
         ax = axs[i, j]
         mask = (bcm == 1)  # BCM_GLOBAL_POSE
         if any(mask):
-            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
+            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', color='purple', alpha=alpha)
     i = 1
     for j in range(3):
         ax = axs[i, j]
         mask = (bcm == 2) | (bcm == 3)  # BCM_GLOBAL_TWIST or BCM_LOCAL_TWIST
         if any(mask):
-            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
+            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', color='purple', alpha=alpha)
     i = 2
     for j in range(3):
         ax = axs[i, j]
         mask = (bcm == 4) | (bcm == 5)  # BCM_GLOBAL_ACCEL or BCM_LOCAL_ACCEL
         if any(mask):
-            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', alpha=alpha)
+            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', color='purple', alpha=alpha)
 
 
     ##### Add legends and make sure t is labeled for all subplots #####
@@ -169,9 +171,9 @@ def plot_state_meas(telemetry, param_json=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualize telemetry data")
-    parser.add_argument("--telemetry", type=str, required=True, help="Path to the telemetry NPZ file")
-    parser.add_argument("--param-json", type=str, default=None, help="Path to a JSON file containing RobotModel parameters")
-    parser.add_argument("--velocity-window", type=float, default=0.2,
+    parser.add_argument("-t", "--telemetry", type=str, required=True, help="Path to the telemetry NPZ file")
+    parser.add_argument("-p", "--param-json", type=str, default=None, help="Path to a JSON file containing RobotModel parameters")
+    parser.add_argument("-w", "--velocity-window", type=float, default=0.2,
                         help="Sliding window size in seconds for vision-derived velocity (default: 0.2)")
     args = parser.parse_args()
     
