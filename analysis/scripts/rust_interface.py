@@ -103,10 +103,6 @@ class RobotPhysicalParams(ctypes.Structure):
 
 class TrajectoryParams(ctypes.Structure):
     _fields_ = [
-        ("allowable_error_pos_linear", ctypes.c_float),
-        ("allowable_error_pos_angular", ctypes.c_float),
-        ("allowable_error_vel_linear", ctypes.c_float),
-        ("allowable_error_vel_angular", ctypes.c_float),
         ("max_vel_linear", ctypes.c_float),
         ("max_vel_angular", ctypes.c_float),
         ("max_accel_linear", ctypes.c_float),
