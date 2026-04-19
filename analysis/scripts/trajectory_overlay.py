@@ -48,7 +48,7 @@ class TrajectoryOverlay:
 
     # Matplotlib keymap names whose default bindings conflict with overlay keys.
     _CURSOR_STYLE = dict(color="black", linewidth=0.8, linestyle="--", alpha=0.6)
-    _TRAJ_STYLE = dict(color="magenta", linewidth=1.5, linestyle="-", alpha=0.85, label="optimal trajectory")
+    _TRAJ_STYLE = dict(color="magenta", linewidth=1.5, linestyle="-", alpha=0.85)
 
     def __init__(self, fig, axs, t, state_est, telemetry, param_json=None):
         self.fig = fig
@@ -70,7 +70,7 @@ class TrajectoryOverlay:
             for j in range(3):
                 ax = self.axs[i, j]
                 vline = ax.axvline(t[0], **self._CURSOR_STYLE, visible=False)
-                tline, = ax.plot([], [], **self._TRAJ_STYLE, visible=False)
+                tline, = ax.plot([], [], **self._TRAJ_STYLE, label="_nolegend_", visible=False)
                 self._cursor_lines[(i, j)] = vline
                 self._traj_lines[(i, j)] = tline
 
@@ -90,6 +90,9 @@ class TrajectoryOverlay:
         self._idx = min(int(np.searchsorted(self.t, self._last_xlim[0], side="left")),
                         len(self.t) - 1)
         self._set_visible(True)
+        for line in self._traj_lines.values():
+            line.set_label("optimal trajectory")
+        self._refresh_legends()
         self._update()
         print(
             "[TrajectoryOverlay] Activated.\n"
@@ -106,6 +109,9 @@ class TrajectoryOverlay:
         self.fig.canvas.mpl_disconnect(self._xlim_cid)
         self._set_visible(False)
         self._hide_traj_lines()
+        for line in self._traj_lines.values():
+            line.set_label("_nolegend_")
+        self._refresh_legends()
         self.fig.canvas.draw_idle()
         print("[TrajectoryOverlay] Deactivated.")
 
@@ -198,3 +204,8 @@ class TrajectoryOverlay:
         # Trajectory lines start hidden until the first update.
         if not visible:
             self._hide_traj_lines()
+
+    def _refresh_legends(self):
+        for i in range(3):
+            for j in range(3):
+                self.axs[i, j].legend()
