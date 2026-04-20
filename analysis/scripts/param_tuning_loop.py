@@ -39,16 +39,16 @@ def upload_params(robot_id: int, param_json_path: str):
     return result.returncode == 0
 
 
-def start_bag_recording(bag_path: str, topics: str = "") -> subprocess.Popen:
+def start_bag_recording(bag_path: str, topics: list = None) -> subprocess.Popen:
     """Start ros2 bag record in the background. Returns the Popen handle."""
     cmd = ["ros2", "bag", "record", "-o", bag_path, "-s", "mcap"]
     if topics:
-        cmd += topics.split()
+        cmd += ["--topics"] + topics
     else:
         cmd.append("--all")
     print(f"Starting bag recording → {bag_path}")
     proc = subprocess.Popen(cmd, preexec_fn=os.setsid)
-    time.sleep(1)  # give it a moment to initialize
+    time.sleep(2)  # give it a moment to initialize
     return proc
 
 
@@ -221,8 +221,13 @@ def main():
 
             # 2. Start bag recording
             bag_path = os.path.join(args.output_dir, f"tuning_iter_{iteration}")
+            bag_topics = [
+                f"/robot_feedback/extended/robot{args.robot_id}",
+                f"/robot_feedback/basic/robot{args.robot_id}",
+                f"/robot_motion_commands/robot{args.robot_id}",
+            ]
             print("Starting bag recording...")
-            bag_proc = start_bag_recording(bag_path)
+            bag_proc = start_bag_recording(bag_path, topics=bag_topics)
             # print("Waiting 2 seconds...")
             # time.sleep(2)  # ensure bag is recording before starting the test
 
