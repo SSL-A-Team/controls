@@ -56,7 +56,7 @@ class TrajectoryOverlay:
         self.t = t
         self.state_est = state_est
         self.body_cmd = telemetry["body_control_telemetry__body_cmd"]
-        self.pose_ctrl = (telemetry["body_control_telemetry__body_control_mode"] == 1)  # BCM_GLOBAL_POSE
+        self.pose_ctrl = (telemetry["body_control_telemetry__body_control_mode"] == 1)  # BCM_GLOBAL_POSITION
         self.param_json = param_json
 
         self._idx = 0

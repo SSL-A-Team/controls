@@ -56,14 +56,14 @@ def plot_state_meas(telemetry, param_json=None):
 
     # t x 6 (x, y, theta, xd, yd, thetad)
     state_pred = np.append(
-        telemetry['body_control_telemetry__kf_body_pose_prediction'], 
-        telemetry['body_control_telemetry__kf_body_twist_prediction'], 
+        telemetry['body_control_telemetry__kf_body_pos_prediction'], 
+        telemetry['body_control_telemetry__kf_body_vel_prediction'], 
         axis=1
     )
     # t x 6 (x, y, theta, xd, yd, thetad)
     state_est = np.append(
-        telemetry['body_control_telemetry__kf_body_pose_estimate'], 
-        telemetry['body_control_telemetry__kf_body_twist_estimate'], 
+        telemetry['body_control_telemetry__kf_body_pos_estimate'], 
+        telemetry['body_control_telemetry__kf_body_vel_estimate'], 
         axis=1
     )
     # dictionary with labels as keys and t len arrays as values
@@ -118,12 +118,12 @@ def plot_state_meas(telemetry, param_json=None):
     i = 0
     for j in range(3):
         ax = axs[i, j]
-        ax.plot(t, telemetry["body_control_telemetry__body_traj_pose"][:, j], label=f'trajectory', color='tab:green', alpha=alpha)
+        ax.plot(t, telemetry["body_control_telemetry__body_traj_pos"][:, j], label=f'trajectory', color='tab:green', alpha=alpha)
         ax.legend()
     i = 1
     for j in range(3):
         ax = axs[i, j]
-        ax.plot(t, telemetry["body_control_telemetry__body_traj_twist"][:, j], label=f'trajectory', color='tab:green', alpha=alpha)
+        ax.plot(t, telemetry["body_control_telemetry__body_traj_vel"][:, j], label=f'trajectory', color='tab:green', alpha=alpha)
         ax.legend()
 
     ##### Plot body controller command  #####
@@ -139,26 +139,35 @@ def plot_state_meas(telemetry, param_json=None):
 
     ##### Plot software command #####
     # Use body_control_mode to determine which control type is active
-    # BCM_OFF=0, BCM_GLOBAL_POSE=1, BCM_GLOBAL_TWIST=2, BCM_LOCAL_TWIST=3, BCM_GLOBAL_ACCEL=4, BCM_LOCAL_ACCEL=5
+    # BCM_OFF=0, BCM_GLOBAL_POSITION=1, BCM_GLOBAL_VELOCITY=2, BCM_LOCAL_VELOCITY=3, BCM_GLOBAL_ACCEL=4, BCM_LOCAL_ACCEL=5
     bcm = telemetry["body_control_telemetry__body_control_mode"]
     i = 0
     for j in range(3):
         ax = axs[i, j]
-        mask = (bcm == 1)  # BCM_GLOBAL_POSE
+        dim_name = ["x", "y", "theta"][j]
+        mask = (bcm == 1)  # BCM_GLOBAL_POSITION
         if any(mask):
-            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', color='purple', alpha=alpha)
+            ax.plot(t[mask], telemetry[f"body_control_telemetry__skill_global_pos__cmd_echo__global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
     i = 1
     for j in range(3):
         ax = axs[i, j]
-        mask = (bcm == 2) | (bcm == 3)  # BCM_GLOBAL_TWIST or BCM_LOCAL_TWIST
+        dim_name = ["xd", "yd", "omega"][j]
+        mask = bcm == 2  # BCM_GLOBAL_VELOCITY
         if any(mask):
-            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', color='purple', alpha=alpha)
+            ax.plot(t[mask], telemetry[f"body_control_telemetry__skill_global_vel__cmd_echo__global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
+        mask = bcm == 3  # BCM_LOCAL_VELOCITY
+        if any(mask):
+            ax.plot(t[mask], telemetry[f"body_control_telemetry__skill_local_vel__cmd_echo__local_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
     i = 2
     for j in range(3):
         ax = axs[i, j]
-        mask = (bcm == 4) | (bcm == 5)  # BCM_GLOBAL_ACCEL or BCM_LOCAL_ACCEL
+        dim_name = ["xdd", "ydd", "alpha"][j]
+        mask = bcm == 4  # BCM_GLOBAL_ACCEL
         if any(mask):
-            ax.plot(t[mask], telemetry["body_control_telemetry__body_cmd"][:, j][mask], label='software_cmd', color='purple', alpha=alpha)
+            ax.plot(t[mask], telemetry[f"body_control_telemetry__skill_global_acc__cmd_echo__global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
+        mask = bcm == 5  # BCM_LOCAL_ACCEL
+        if any(mask):
+            ax.plot(t[mask], telemetry[f"body_control_telemetry__skill_local_acc__cmd_echo__local_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
 
 
     ##### Add legends and make sure t is labeled for all subplots #####
