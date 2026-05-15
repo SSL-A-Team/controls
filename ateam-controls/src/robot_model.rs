@@ -1,11 +1,9 @@
 use libm::{sinf, cosf};
 use nalgebra::matrix;
-use core::f32::consts::PI;
 use crate::{ControlsError, Matrix3f, Matrix3x4f, Matrix4x3f, Matrix6f, Matrix6x3f, Matrix8f, Matrix8x6f, Vector2f, Vector3f, Vector4f, Vector6f, Vector8f};
 use crate::{z_rotation_mat, wrap_angle};
 use crate::physical_params;
 use crate::kalman_params;
-use crate::trajectory_params;
 
 
 /// State: Vector6
