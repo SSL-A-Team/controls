@@ -70,6 +70,18 @@ pub enum ControlsError {
     ExceedsLimits = -5,
 }
 
+impl ControlsError {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ControlsError::InvalidInput => "ControlsError::InvalidInput",
+            ControlsError::SingularMatrix => "ControlsError::SingularMatrix",
+            ControlsError::NoSolution => "ControlsError::NoSolution",
+            ControlsError::InvalidTime => "ControlsError::InvalidTime",
+            ControlsError::ExceedsLimits => "ControlsError::ExceedsLimits",
+        }
+    }
+}
+
 impl core::fmt::Display for ControlsError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -84,6 +96,19 @@ impl core::fmt::Display for ControlsError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for ControlsError {}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for ControlsError {
+    fn format(&self, fmt: defmt::Formatter) {
+        match self {
+            ControlsError::InvalidInput => defmt::write!(fmt, "InvalidInput"),
+            ControlsError::SingularMatrix => defmt::write!(fmt, "SingularMatrix"),
+            ControlsError::NoSolution => defmt::write!(fmt, "NoSolution"),
+            ControlsError::InvalidTime => defmt::write!(fmt, "InvalidTime"),
+            ControlsError::ExceedsLimits => defmt::write!(fmt, "ExceedsLimits"),
+        }
+    }
+}
 
 
 #[cfg(test)]
