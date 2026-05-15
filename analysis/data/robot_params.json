@@ -42,21 +42,16 @@
     "POSE_CONTROL_GAIN [FEEDFORWARD_GAIN, FEEDBACK_GAIN]": "",
     "POSE_CONTROL_GAIN": [1.0, 1.0],
 
-    "TRAJ_MAX [MAX_VEL_LINEAR, MAX_VEL_ANGULAR, MAX_ACCEL_LINEAR, MAX_ACCEL_ANGULAR]": "",
-    "TRAJ_MAX": [3.0, 10.0, 2.0, 6.283],
-
     "TRAJ_RECOMPUTE_ERROR [POS_LINEAR, POS_ANGULAR, VEL_LINEAR, VEL_ANGULAR]": "",
     "TRAJ_RECOMPUTE_ERROR": [0.5, 1.0, 1.0, 2.0],
 
     "============ FEEDBACK ===========": "",
 
     "POSE_FB_PIDII [P, I, D, I_MIN, I_MAX]": "",
-    "POSE_FB_PIDII_X":     [125.0, 0.5, 10.0, 0.0, 0.0],
-    "POSE_FB_PIDII_Y":     [125.0, 0.5, 10.0, 0.0, 0.0],
-    "POSE_FB_PIDII_THETA": [125.0, 0.5, 15.0, 0.0, 0.0],
+    "POSE_FB_PIDII_LINEAR":  [125.0, 0.5, 10.0, 0.0, 0.0],
+    "POSE_FB_PIDII_ANGULAR": [125.0, 0.5, 15.0, 0.0, 0.0],
 
     "TWIST_FB_PIDII [P, I, D, I_MIN, I_MAX]": "",
-    "TWIST_FB_PIDII_X":     [100.0, 0.0, 0.0, 0.0, 0.0],
-    "TWIST_FB_PIDII_Y":     [100.0, 0.0, 0.0, 0.0, 0.0],
-    "TWIST_FB_PIDII_THETA": [20.0, 0.0, 0.0, 0.0, 0.0]
+    "TWIST_FB_PIDII_LINEAR":  [100.0, 0.0, 0.0, 0.0, 0.0],
+    "TWIST_FB_PIDII_ANGULAR": [20.0, 0.0, 0.0, 0.0, 0.0]
 }

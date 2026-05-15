@@ -86,10 +86,6 @@ typedef struct RobotPhysicalParams {
 typedef struct RobotModel RobotModel_t;
 
 typedef struct TrajectoryParams {
-    float allowable_error_pos_linear;
-    float allowable_error_pos_angular;
-    float allowable_error_vel_linear;
-    float allowable_error_vel_angular;
     float max_vel_linear;
     float max_vel_angular;
     float max_accel_linear;

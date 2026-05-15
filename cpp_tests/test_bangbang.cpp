@@ -16,10 +16,6 @@ static Vector6C_t make_state(float x, float y, float z, float dx, float dy, floa
 
 TEST(BangBang, DefaultParamsNonZero) {
   TrajectoryParams_t params = ateam_controls_traj_params_default();
-  EXPECT_GT(params.allowable_error_pos_linear, 0.0f);
-  EXPECT_GT(params.allowable_error_pos_angular, 0.0f);
-  EXPECT_GT(params.allowable_error_vel_linear, 0.0f);
-  EXPECT_GT(params.allowable_error_vel_angular, 0.0f);
   EXPECT_GT(params.max_vel_linear, 0.0f);
   EXPECT_GT(params.max_vel_angular, 0.0f);
   EXPECT_GT(params.max_accel_linear, 0.0f);

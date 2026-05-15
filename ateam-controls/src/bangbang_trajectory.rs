@@ -95,10 +95,6 @@ impl BangBangTraj3D {
 
     /// Compute optimal bang-bang trajectory to reach a target twist from an initial twist.
     pub fn from_target_twist(init_twist: Vector3f, target_twist: Vector3f, params: TrajectoryParams) -> Result<Self, ControlsError> {
-        if target_twist.z.abs() > params.max_vel_angular ||
-            sqrtf(target_twist.x * target_twist.x + target_twist.y * target_twist.y) > params.max_vel_linear {
-            return Err(ControlsError::ExceedsLimits);
-        }
         let diff = target_twist - init_twist;
         let diff_xy_mag = sqrtf(diff.x * diff.x + diff.y * diff.y);
 
