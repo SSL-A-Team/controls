@@ -265,6 +265,31 @@ impl RobotModel {
         self.p = self.a * self.p * self.a.transpose() + self.kf_q;
     }
 
+    /// Snap the Kalman filter pose state to the provided global pose.
+    ///
+    /// Velocity state is left untouched. Position covariance is collapsed to the vision-measurement noise level
+    pub fn kf_set_pose(&mut self, pose: Vector3f) {
+        self.x[0] = pose.x;
+        self.x[1] = pose.y;
+        self.x[2] = wrap_angle(pose.z);
+
+        // Zero the position rows/cols of P then set the diagonal to the vision measurement
+        // variance. This decouples the snapped pose from the previously-accumulated covariance.
+        for i in 0..6 {
+            for j in 0..3 {
+                self.p[(i, j)] = 0.0;
+                self.p[(j, i)] = 0.0;
+            }
+        }
+        let var_lin = self.kf_params.measurement_noise_std_vision_pos_linear
+            * self.kf_params.measurement_noise_std_vision_pos_linear;
+        let var_ang = self.kf_params.measurement_noise_std_vision_pos_angular
+            * self.kf_params.measurement_noise_std_vision_pos_angular;
+        self.p[(0, 0)] = var_lin;
+        self.p[(1, 1)] = var_lin;
+        self.p[(2, 2)] = var_ang;
+    }
+
     pub fn kf_update(&mut self, z: Vector8f, mask_vision: bool, mask_encoder: bool, mask_gyro: bool) -> Result<(), ControlsError> {
         self.update_h_transform(self.x[2], mask_vision, mask_encoder, mask_gyro);
         let h_x = self.h * self.x;
