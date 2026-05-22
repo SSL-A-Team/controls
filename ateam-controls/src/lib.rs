@@ -3,10 +3,8 @@
 use nalgebra;
 
 pub mod ctypes;
-pub mod trajectory_params;
-pub mod physical_params;
-pub mod kalman_params;
 pub mod bangbang_trajectory;
+pub mod defaults;
 pub mod robot_model;
 
 pub type Vector1f = nalgebra::Vector1<f32>;
@@ -33,10 +31,6 @@ pub type Rotation3f = nalgebra::Rotation3<f32>;
 
 use libm::{sinf, cosf, atan2f};
 
-
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
 
 /// Rotation matrix around z axis by theta radians
 pub fn z_rotation_mat(theta: f32) -> Matrix3f {
@@ -107,17 +101,5 @@ impl defmt::Format for ControlsError {
             ControlsError::InvalidTime => defmt::write!(fmt, "InvalidTime"),
             ControlsError::ExceedsLimits => defmt::write!(fmt, "ExceedsLimits"),
         }
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
     }
 }

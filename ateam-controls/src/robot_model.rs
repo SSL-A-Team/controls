@@ -2,8 +2,6 @@ use libm::{sinf, cosf};
 use nalgebra::matrix;
 use crate::{ControlsError, Matrix3f, Matrix3x4f, Matrix4x3f, Matrix6f, Matrix6x3f, Matrix8f, Matrix8x6f, Vector2f, Vector3f, Vector4f, Vector6f, Vector8f};
 use crate::{z_rotation_mat, wrap_angle};
-use crate::physical_params;
-use crate::kalman_params;
 
 
 /// State: Vector6
@@ -38,103 +36,79 @@ use crate::kalman_params;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KalmanFilterParams {
-    #[cfg_attr(feature = "serde", serde(rename = "KF_PROCESS_STD_POS_LINEAR"))]
     pub process_noise_std_pos_linear: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "KF_PROCESS_STD_POS_ANGULAR"))]
     pub process_noise_std_pos_angular: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "KF_PROCESS_STD_VEL_LINEAR"))]
     pub process_noise_std_vel_linear: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "KF_PROCESS_STD_VEL_ANGULAR"))]
     pub process_noise_std_vel_angular: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "KF_VISION_STD_LINEAR"))]
     pub measurement_noise_std_vision_pos_linear: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "KF_VISION_STD_ANGULAR"))]
     pub measurement_noise_std_vision_pos_angular: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "KF_ENCODER_STD_ANGULAR"))]
     pub measurement_noise_std_encoder_vel_angular: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "KF_GYRO_STD_ANGULAR"))]
     pub measurement_noise_std_gyro_vel_angular: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "KF_MAX_POS_LINEAR"))]
     pub max_pos_linear: f32,  // For initialization
-    #[cfg_attr(feature = "serde", serde(rename = "KF_MAX_POS_ANGULAR"))]
     pub max_pos_angular: f32,  // For initialization
-    #[cfg_attr(feature = "serde", serde(rename = "KF_MAX_VEL_LINEAR"))]
     pub max_vel_linear: f32,  // For initialization
-    #[cfg_attr(feature = "serde", serde(rename = "KF_MAX_VEL_ANGULAR"))]
     pub max_vel_angular: f32,  // For initialization
 }
 
 impl Default for KalmanFilterParams {
     fn default() -> Self {
-        KalmanFilterParams {
-            process_noise_std_pos_linear: kalman_params::PROCESS_NOISE_STDDEV_POS_LINEAR,
-            process_noise_std_pos_angular: kalman_params::PROCESS_NOISE_STDDEV_POS_ANGULAR,
-            process_noise_std_vel_linear: kalman_params::PROCESS_NOISE_STDDEV_VEL_LINEAR,
-            process_noise_std_vel_angular: kalman_params::PROCESS_NOISE_STDDEV_VEL_ANGULAR,
-            measurement_noise_std_vision_pos_linear: kalman_params::MEASUREMENT_NOISE_STDDEV_VISION_POS_LINEAR,
-            measurement_noise_std_vision_pos_angular: kalman_params::MEASUREMENT_NOISE_STDDEV_VISION_POS_ANGULAR,
-            measurement_noise_std_encoder_vel_angular: kalman_params::MEASUREMENT_NOISE_STDDEV_ENCODER_VEL_ANGULAR,
-            measurement_noise_std_gyro_vel_angular: kalman_params::MEASUREMENT_NOISE_STDDEV_GYRO_VEL_ANGULAR,
-            max_pos_linear: kalman_params::MAX_POS_LINEAR,
-            max_pos_angular: kalman_params::MAX_POS_ANGULAR,
-            max_vel_linear: kalman_params::MAX_VEL_LINEAR,
-            max_vel_angular: kalman_params::MAX_VEL_ANGULAR,
+        use crate::defaults::*;
+        Self {
+            process_noise_std_pos_linear: DEFAULT_KF_PROCESS_STD_POS_LINEAR,
+            process_noise_std_pos_angular: DEFAULT_KF_PROCESS_STD_POS_ANGULAR,
+            process_noise_std_vel_linear: DEFAULT_KF_PROCESS_STD_VEL_LINEAR,
+            process_noise_std_vel_angular: DEFAULT_KF_PROCESS_STD_VEL_ANGULAR,
+            measurement_noise_std_vision_pos_linear: DEFAULT_KF_MEASUREMENT_STD_VISION_POS_LINEAR,
+            measurement_noise_std_vision_pos_angular: DEFAULT_KF_MEASUREMENT_STD_VISION_POS_ANGULAR,
+            measurement_noise_std_encoder_vel_angular: DEFAULT_KF_MEASUREMENT_STD_ENCODER_VEL_ANGULAR,
+            measurement_noise_std_gyro_vel_angular: DEFAULT_KF_MEASUREMENT_STD_GYRO_VEL_ANGULAR,
+            max_pos_linear: DEFAULT_KF_MAX_POS_LINEAR,
+            max_pos_angular: DEFAULT_KF_MAX_POS_ANGULAR,
+            max_vel_linear: DEFAULT_KF_MAX_VEL_LINEAR,
+            max_vel_angular: DEFAULT_KF_MAX_VEL_ANGULAR,
         }
     }
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RobotPhysicalParams {
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_WHEEL_ANGLE_ALPHA"))]
     pub alpha: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_WHEEL_ANGLE_BETA"))]
     pub beta: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_WHEEL_DISTANCE"))]
     pub l: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_WHEEL_RADIUS"))]
     pub r: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_BODY_MASS"))]
     pub mass: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_BODY_MOMENT_Z"))]
     pub iz: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_MOTOR_TORQUE_CONSTANT"))]
     pub motor_torque_constant: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_MOTOR_EFFICIENCY_FACTOR"))]
     pub motor_efficiency_factor: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_COLOUMB_FRICTION_COEFFICIENT_LINEAR"))]
     pub coulomb_friction_coefficient_linear: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_COLOUMB_FRICTION_COEFFICIENT_ANGULAR"))]
     pub coulomb_friction_coefficient_angular: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_VISCOUS_FRICTION_COEFFICIENT_LINEAR"))]
     pub viscous_friction_coefficient_linear: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "PHYS_VISCOUS_FRICTION_COEFFICIENT_ANGULAR"))]
     pub viscous_friction_coefficient_angular: f32,
 }
 
 impl Default for RobotPhysicalParams {
     fn default() -> Self {
-        RobotPhysicalParams {
-            alpha: physical_params::WHEEL_ANGLE_ALPHA,
-            beta: physical_params::WHEEL_ANGLE_BETA,
-            l: physical_params::WHEEL_DISTANCE,
-            r: physical_params::WHEEL_RADIUS,
-            mass: physical_params::BODY_MASS,
-            iz: physical_params::BODY_MOMENT_Z,
-            motor_torque_constant: physical_params::MOTOR_TORQUE_CONSTANT,
-            motor_efficiency_factor: physical_params::MOTOR_EFFICIENCY_FACTOR,
-            coulomb_friction_coefficient_linear: physical_params::COULOMB_FRICTION_COEFFICIENT_LINEAR,
-            coulomb_friction_coefficient_angular: physical_params::COULOMB_FRICTION_COEFFICIENT_ANGULAR,
-            viscous_friction_coefficient_linear: physical_params::VISCOUS_FRICTION_COEFFICIENT_LINEAR,
-            viscous_friction_coefficient_angular: physical_params::VISCOUS_FRICTION_COEFFICIENT_ANGULAR,
+        use crate::defaults::*;
+        Self {
+            alpha: DEFAULT_PHYS_ALPHA,
+            beta: DEFAULT_PHYS_BETA,
+            l: DEFAULT_PHYS_L,
+            r: DEFAULT_PHYS_R,
+            mass: DEFAULT_PHYS_MASS,
+            iz: DEFAULT_PHYS_IZ,
+            motor_torque_constant: DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT,
+            motor_efficiency_factor: DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR,
+            coulomb_friction_coefficient_linear: DEFAULT_PHYS_COULOMB_FRICTION_LINEAR,
+            coulomb_friction_coefficient_angular: DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR,
+            viscous_friction_coefficient_linear: DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR,
+            viscous_friction_coefficient_angular: DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR,
         }
     }
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub struct RobotModel {
     /// Kalman filter parameters struct for easy updating and access to individual params
     pub kf_params: KalmanFilterParams,
@@ -166,6 +140,18 @@ pub struct RobotModel {
     pub kf_r: Matrix8f,
 }
 
+impl Default for RobotModel {
+    fn default() -> Self {
+        use crate::defaults::DEFAULT_CONTROL_DT;
+        RobotModel::new(
+            DEFAULT_CONTROL_DT,
+            KalmanFilterParams::default(),
+            RobotPhysicalParams::default(),
+        )
+        .expect("Default RobotModel parameters must be valid")
+    }
+}
+
 impl RobotModel {
     /// alpha: angle between robot y axis and segment between robot origin and robot front left wheel, same as angle between robot -y axis and segment between robot origin and robot front right wheel
     /// beta: angle between robot y axis and segment between robot origin and robot back left wheel, same as angle between robot -y axis and segment between robot origin and robot back right wheel
@@ -175,9 +161,22 @@ impl RobotModel {
     /// iz: robot body moment of inertia around z axis
     /// kf_dt: Kalman Filter state update period
     pub fn new(kf_dt: f32, kf_params: KalmanFilterParams, physical_params: RobotPhysicalParams) -> Result<RobotModel, ControlsError> {
-        let mut model = RobotModel::default();
-        // Initialize unknown estimated state to zero
-        model.x = Vector6f::zeros();
+        let mut model = RobotModel {
+            kf_params,
+            physical_params,
+            x: Vector6f::zeros(),
+            p: Matrix6f::zeros(),
+            a: Matrix6f::zeros(),
+            b: Matrix6x3f::zeros(),
+            h: Matrix8x6f::zeros(),
+            m: Matrix3x4f::zeros(),
+            m_inv: Matrix4x3f::zeros(),
+            i: Matrix3f::zeros(),
+            i_inv: Matrix3f::zeros(),
+            r: 0.0,
+            kf_q: Matrix6f::zeros(),
+            kf_r: Matrix8f::zeros(),
+        };
         // Initialize state update matrices
         model.a = Matrix6f::new(
             1., 0., 0., kf_dt, 0., 0.,
@@ -198,10 +197,6 @@ impl RobotModel {
         model.update_kf_params(kf_params);
         model.update_physical_params(physical_params)?;
         Ok(model)
-    }
-
-    pub fn new_from_default_params(kf_dt: f32) -> Result<RobotModel, ControlsError> {
-        RobotModel::new(kf_dt, KalmanFilterParams::default(), RobotPhysicalParams::default())
     }
 
     pub fn reset(&mut self) {
@@ -388,5 +383,242 @@ impl RobotModel {
 
     pub fn get_state(&self) -> Vector6f {
         self.x
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Vector3f;
+    use core::f32::consts::PI;
+
+    fn test_kf_params() -> KalmanFilterParams {
+        KalmanFilterParams {
+            process_noise_std_pos_linear: 0.01,
+            process_noise_std_pos_angular: 0.05,
+            process_noise_std_vel_linear: 0.02,
+            process_noise_std_vel_angular: 0.1,
+            measurement_noise_std_vision_pos_linear: 1.0,
+            measurement_noise_std_vision_pos_angular: 3.14,
+            measurement_noise_std_encoder_vel_angular: 50.0,
+            measurement_noise_std_gyro_vel_angular: 0.015,
+            max_pos_linear: 64.0,
+            max_pos_angular: 3.14,
+            max_vel_linear: 3.0,
+            max_vel_angular: 3.0 * PI,
+        }
+    }
+
+    fn test_phys_params() -> RobotPhysicalParams {
+        RobotPhysicalParams {
+            alpha: PI / 6.0,
+            beta: PI / 4.0,
+            l: 0.0814,
+            r: 0.030,
+            mass: 2.7,
+            iz: 0.008,
+            motor_torque_constant: 0.0335,
+            motor_efficiency_factor: 13.0,
+            coulomb_friction_coefficient_linear: 2.058,
+            coulomb_friction_coefficient_angular: 0.05,
+            viscous_friction_coefficient_linear: 5.0,
+            viscous_friction_coefficient_angular: 0.0063,
+        }
+    }
+
+    fn test_model(kf_dt: f32) -> RobotModel {
+        RobotModel::new(kf_dt, test_kf_params(), test_phys_params()).unwrap()
+    }
+
+    #[test]
+    fn new_succeeds() {
+        let model = test_model(0.01);
+        assert_eq!(model.x, Vector6f::zeros());
+    }
+
+    #[test]
+    fn state_initially_zero() {
+        let model = test_model(0.01);
+        for i in 0..6 {
+            assert!((model.x[i]).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn set_and_get_state() {
+        let mut model = test_model(0.01);
+        let state = Vector6f::new(1.0, 2.0, 0.5, 0.1, -0.2, 0.3);
+        model.x = state;
+        let out = model.get_state();
+        for i in 0..6 {
+            assert!((out[i] - state[i]).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn wheel2twist_and_back() {
+        let model = test_model(0.01);
+        let theta = 0.0;
+        let w2t = model.transform_wheel2twist(theta);
+        let t2w = model.transform_twist2wheel(theta);
+        let result = w2t * t2w;
+        for i in 0..3 {
+            for j in 0..3 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert!((result[(i, j)] - expected).abs() < 1e-4,
+                    "w2t * t2w [{},{}] = {}, expected {}", i, j, result[(i, j)], expected);
+            }
+        }
+    }
+
+    #[test]
+    fn wheel2accel_and_back() {
+        let model = test_model(0.01);
+        let theta = 0.0;
+        let w2a = model.transform_wheel2accel(theta);
+        let a2w = model.transform_accel2wheel(theta);
+        let result = w2a * a2w;
+        for i in 0..3 {
+            for j in 0..3 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert!((result[(i, j)] - expected).abs() < 1e-4,
+                    "w2a * a2w [{},{}] = {}, expected {}", i, j, result[(i, j)], expected);
+            }
+        }
+    }
+
+    #[test]
+    fn transform_consistency_at_angle() {
+        let model = test_model(0.01);
+        let theta = PI / 4.0;
+        let w2t = model.transform_wheel2twist(theta);
+        let t2w = model.transform_twist2wheel(theta);
+        let result = w2t * t2w;
+        for i in 0..3 {
+            for j in 0..3 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert!((result[(i, j)] - expected).abs() < 1e-3,
+                    "w2t * t2w at pi/4 [{},{}] = {}, expected {}", i, j, result[(i, j)], expected);
+            }
+        }
+    }
+
+    #[test]
+    fn torques_to_currents() {
+        let model = test_model(0.01);
+        let torques = Vector4f::new(1.0, 1.0, 1.0, 1.0);
+        let currents = model.torques_to_currents(torques);
+        assert!(currents.x > 0.0);
+        assert!((currents.x - currents.y).abs() < 1e-6);
+        assert!((currents.x - currents.z).abs() < 1e-6);
+        assert!((currents.x - currents.w).abs() < 1e-6);
+
+        let zero_torques = Vector4f::new(0.0, 0.0, 0.0, 0.0);
+        let zero_currents = model.torques_to_currents(zero_torques);
+        for i in 0..4 {
+            assert!(zero_currents[i].abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn torques_to_currents_linearity() {
+        let model = test_model(0.01);
+        let t1 = Vector4f::new(1.0, 0.0, 0.0, 0.0);
+        let t2 = Vector4f::new(2.0, 0.0, 0.0, 0.0);
+        let c1 = model.torques_to_currents(t1);
+        let c2 = model.torques_to_currents(t2);
+        assert!((c2.x - 2.0 * c1.x).abs() < 1e-6);
+    }
+
+    #[test]
+    fn kf_predict_updates_state() {
+        let mut model = test_model(0.01);
+        model.x = Vector6f::new(1.0, 0.0, 0.0, 0.5, 0.0, 0.0);
+        let accel = Vector3f::new(0.0, 0.0, 0.0);
+        model.kf_predict(accel);
+        // x_new ≈ x + dx*dt = 1.0 + 0.5*0.01 = 1.005
+        assert!((model.x[0] - 1.005).abs() < 1e-4);
+        assert!((model.x[3] - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn kf_predict_with_accel() {
+        let mut model = test_model(0.01);
+        model.x = Vector6f::zeros();
+        let accel = Vector3f::new(1.0, 0.0, 0.0);
+        model.kf_predict(accel);
+        // vel_x should be accel * dt = 1.0 * 0.01 = 0.01
+        assert!((model.x[3] - 0.01).abs() < 1e-4);
+    }
+
+    #[test]
+    fn kf_update_moves_toward_measurement() {
+        let mut model = test_model(0.01);
+        model.x = Vector6f::zeros();
+        model.kf_predict(Vector3f::zeros());
+        let mut meas = Vector8f::zeros();
+        meas[0] = 1.0; // vision x
+        model.kf_update(meas, false, true, true).unwrap();
+        assert!(model.x[0] > 0.0);
+    }
+
+    #[test]
+    fn update_kf_params_no_crash() {
+        let mut model = test_model(0.01);
+        let kf = KalmanFilterParams {
+            process_noise_std_pos_linear: 0.02,
+            process_noise_std_pos_angular: 0.02,
+            process_noise_std_vel_linear: 0.2,
+            process_noise_std_vel_angular: 0.2,
+            measurement_noise_std_vision_pos_linear: 0.02,
+            measurement_noise_std_vision_pos_angular: 0.02,
+            measurement_noise_std_encoder_vel_angular: 0.2,
+            measurement_noise_std_gyro_vel_angular: 0.2,
+            max_pos_linear: 64.0,
+            max_pos_angular: 6.2832,
+            max_vel_linear: 4.0,
+            max_vel_angular: 3.0 * PI,
+        };
+        model.update_kf_params(kf);
+        let _ = model.get_state();
+    }
+
+    #[test]
+    fn update_physical_params_no_crash() {
+        let mut model = test_model(0.01);
+        let phys = RobotPhysicalParams {
+            alpha: 0.7854,
+            beta: 0.7854,
+            l: 0.08,
+            r: 0.03,
+            mass: 3.0,
+            iz: 0.015,
+            motor_torque_constant: 0.025,
+            motor_efficiency_factor: 0.9,
+            coulomb_friction_coefficient_linear: 0.0,
+            coulomb_friction_coefficient_angular: 0.0,
+            viscous_friction_coefficient_linear: 0.0,
+            viscous_friction_coefficient_angular: 0.0,
+        };
+        model.update_physical_params(phys).unwrap();
+        let _ = model.transform_wheel2twist(0.0);
+    }
+
+    #[test]
+    fn multiple_predict_update_cycles() {
+        let mut model = test_model(0.01);
+        let accel = Vector3f::zeros();
+        let mut meas = Vector8f::zeros();
+        meas[0] = 1.0;
+        meas[1] = 0.5;
+
+        for _ in 0..100 {
+            model.kf_predict(accel);
+            model.kf_update(meas, false, true, true).unwrap();
+        }
+
+        let state = model.get_state();
+        assert!((state[0] - 1.0).abs() < 0.1);
+        assert!((state[1] - 0.5).abs() < 0.1);
     }
 }

@@ -3,7 +3,6 @@ include(GoogleTest)
 
 add_executable(
   cpp_tests
-  test_add.cpp
   test_bangbang.cpp
   test_robot_model.cpp
 )

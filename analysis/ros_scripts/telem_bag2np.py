@@ -31,7 +31,7 @@ def load_extended_telemetry_bag(bag_path, topic, msg_type):
     def add_msg_to_telem(parent_telem_key, ros_msg):
         for field_name, field_type in ros_msg.get_fields_and_field_types().items():
             if parent_telem_key:
-                telem_key = f"{parent_telem_key}__{field_name}"
+                telem_key = f"{parent_telem_key}/{field_name}"
             else:
                 telem_key = field_name
             value = getattr(ros_msg, field_name)

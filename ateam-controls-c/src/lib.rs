@@ -1,15 +1,24 @@
-use ateam_controls;
 use ateam_controls::ctypes::*;
 use ateam_controls::bangbang_trajectory::*;
 use ateam_controls::robot_model::*;
 
 // ============================================================================
-// Utility
+// Default parameter constructors
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_add(left: u64, right: u64) -> u64 {
-    ateam_controls::add(left, right)
+pub extern "C" fn ateam_controls_default_kf_params() -> KalmanFilterParams {
+    KalmanFilterParams::default()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ateam_controls_default_phys_params() -> RobotPhysicalParams {
+    RobotPhysicalParams::default()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ateam_controls_default_traj_params() -> TrajectoryParams {
+    TrajectoryParams::default()
 }
 
 // ============================================================================
@@ -24,20 +33,6 @@ pub unsafe extern "C" fn ateam_controls_robot_model_new(
     out: *mut *mut RobotModel,
 ) -> i32 {
     match RobotModel::new(kf_dt, kf_params, phys_params) {
-        Ok(model) => {
-            unsafe { *out = Box::into_raw(Box::new(model)); }
-            0
-        }
-        Err(e) => e as i32,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_new_default(
-    kf_dt: f32,
-    out: *mut *mut RobotModel,
-) -> i32 {
-    match RobotModel::new_from_default_params(kf_dt) {
         Ok(model) => {
             unsafe { *out = Box::into_raw(Box::new(model)); }
             0
@@ -152,11 +147,6 @@ pub unsafe extern "C" fn ateam_controls_robot_model_torques_to_currents(
 // ============================================================================
 // BangBang Trajectory
 // ============================================================================
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_traj_params_default() -> TrajectoryParams {
-    TrajectoryParams::default()
-}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_traj_from_target_pose(

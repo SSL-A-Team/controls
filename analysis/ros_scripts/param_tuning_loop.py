@@ -9,7 +9,7 @@ Workflow per iteration:
   4. Run motion_input_node for one fn_period (5 s) then auto-exit
   5. Stop ROS bag recording
   6. Convert bag to npz via telem_bag2np
-  7. Visualize with kalman_visualize (blocks until plot window closed)
+  7. Visualize with telem_visualize (blocks until plot window closed)
   8. Prompt to continue or quit
 """
 
@@ -104,27 +104,18 @@ def convert_bag_to_npz(bag_path: str, robot_id: int, output_path: str):
 
 
 def visualize(npz_path: str, param_json_path: str = None) -> list:
-    """Launch kalman_visualize.py and wheel_visualize.py in the background.
+    """Launch telem_visualize.py in the background.
     Returns the list of Popen handles so they can be killed later."""
-    kalman_cmd = [
+    cmd = [
         sys.executable,
-        str(SCRIPTS_DIR / "kalman_visualize.py"),
+        str(CONTROLS_DIR / "analysis" / "telem_visualize.py"),
         "--telemetry", npz_path,
     ]
     if param_json_path:
-        kalman_cmd += ["--param-json", param_json_path]
-
-    wheel_cmd = [
-        sys.executable,
-        str(SCRIPTS_DIR / "wheel_visualize.py"),
-        "--telemetry", npz_path,
-    ]
+        cmd += ["--param-json", param_json_path]
 
     print("Launching visualization...")
-    procs = [
-        subprocess.Popen(kalman_cmd),
-        subprocess.Popen(wheel_cmd),
-    ]
+    procs = [subprocess.Popen(cmd)]
     return procs
 
 
@@ -176,7 +167,7 @@ def main():
         help="Duration in seconds to run motion_input_node (default: 5.0)",
     )
     parser.add_argument(
-        "--output-dir", type=str, default=str(CONTROLS_DIR / "data"),
+        "--output-dir", type=str, default=str(CONTROLS_DIR / "analysis" / "data"),
         help="Directory to store bags and npz files",
     )
     args = parser.parse_args()

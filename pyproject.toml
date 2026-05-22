@@ -1,0 +1,21 @@
+[project]
+name = "controls"
+version = "0.0.0"
+description = "Python dependencies for the A-Team controls analysis tooling"
+requires-python = ">=3.10"
+dependencies = [
+    "ateam-controls-py",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "pyyaml",
+]
+
+[tool.uv.workspace]
+members = ["ateam-controls-py"]
+
+[tool.uv.sources]
+ateam-controls-py = { workspace = true }
+
+[tool.uv]
+package = false

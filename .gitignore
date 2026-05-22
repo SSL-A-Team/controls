@@ -14,9 +14,10 @@ build
 # Python #
 #########
 *.pyc
+.venv
 
 
 #################
 # Analysis data #
 #################
-/data
+analysis/data

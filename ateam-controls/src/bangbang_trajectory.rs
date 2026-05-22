@@ -1,31 +1,26 @@
 use core::f32::consts::PI;
 use libm::{cosf, sinf, sqrtf};
-use crate::trajectory_params::*;
 use crate::{ControlsError, Vector3f, Vector6f, wrap_angle};
 
 
 /// Parameters controlling trajectory velocity/acceleration limits and error tolerances.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TrajectoryParams {
-    #[cfg_attr(feature = "serde", serde(rename = "TRAJ_MAX_VEL_LINEAR"))]
     pub max_vel_linear: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "TRAJ_MAX_VEL_ANGULAR"))]
     pub max_vel_angular: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "TRAJ_MAX_ACCEL_LINEAR"))]
     pub max_accel_linear: f32,
-    #[cfg_attr(feature = "serde", serde(rename = "TRAJ_MAX_ACCEL_ANGULAR"))]
     pub max_accel_angular: f32,
 }
 
 impl Default for TrajectoryParams {
     fn default() -> Self {
-        TrajectoryParams {
-            max_vel_linear: MAX_VEL_LINEAR,
-            max_vel_angular: MAX_VEL_ANGULAR,
-            max_accel_linear: MAX_ACCEL_LINEAR,
-            max_accel_angular: MAX_ACCEL_ANGULAR,
+        use crate::defaults::*;
+        Self {
+            max_vel_linear: DEFAULT_MAX_VEL_LINEAR,
+            max_vel_angular: DEFAULT_MAX_VEL_ANGULAR,
+            max_accel_linear: DEFAULT_MAX_ACCEL_LINEAR,
+            max_accel_angular: DEFAULT_MAX_ACCEL_ANGULAR,
         }
     }
 }
@@ -321,4 +316,233 @@ fn eval_1d_state_at(traj: BangBangTraj1D, s: f32, sd: f32, current_time: f32, t:
     // Coast at final velocity for any remaining time past the trajectory end
     s += sd * (t - current_time);
     Ok((s, sd))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Vector6f;
+    use core::f32::consts::PI;
+    use libm::fabsf;
+
+    fn test_params() -> TrajectoryParams {
+        TrajectoryParams {
+            max_vel_linear: 3.0,
+            max_vel_angular: 3.0 * PI,
+            max_accel_linear: 2.0,
+            max_accel_angular: 2.0 * PI,
+        }
+    }
+
+    #[test]
+    fn pose_x() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(1.0, 0.0, 0.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        assert!(end > 0.0);
+        let final_state = traj.state_at(init, 0.0, end).unwrap();
+        assert!((final_state[0] - 1.0).abs() < 1e-3);
+        assert!((final_state[1]).abs() < 1e-3);
+        assert!((final_state[2]).abs() < 1e-3);
+    }
+
+    #[test]
+    fn pose_y() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(0.0, 1.0, 0.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        let final_state = traj.state_at(init, 0.0, end).unwrap();
+        assert!((final_state[0]).abs() < 1e-3);
+        assert!((final_state[1] - 1.0).abs() < 1e-3);
+        assert!((final_state[2]).abs() < 1e-3);
+    }
+
+    #[test]
+    fn pose_z() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(0.0, 0.0, 1.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        let final_state = traj.state_at(init, 0.0, end).unwrap();
+        assert!((final_state[0]).abs() < 1e-3);
+        assert!((final_state[1]).abs() < 1e-3);
+        assert!((final_state[2] - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn pose_xyz() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(1.0, 1.0, 1.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        let final_state = traj.state_at(init, 0.0, end).unwrap();
+        assert!((final_state[0] - 1.0).abs() < 1e-3);
+        assert!((final_state[1] - 1.0).abs() < 1e-3);
+        assert!((final_state[2] - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn pose_negative() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(-2.0, -1.5, -0.5);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        let final_state = traj.state_at(init, 0.0, end).unwrap();
+        assert!((final_state[0] - (-2.0)).abs() < 1e-3);
+        assert!((final_state[1] - (-1.5)).abs() < 1e-3);
+        assert!((final_state[2] - (-0.5)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn pose_final_velocity_zero() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(1.0, 0.5, 0.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        let final_state = traj.state_at(init, 0.0, end).unwrap();
+        assert!((final_state[3]).abs() < 1e-3);
+        assert!((final_state[4]).abs() < 1e-3);
+        assert!((final_state[5]).abs() < 1e-3);
+    }
+
+    #[test]
+    fn accel_symmetry() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(1.0, 0.0, 1.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        assert!((traj.x.sdd1 - (-traj.x.sdd3)).abs() < 1e-6);
+        assert!((traj.z.sdd1 - (-traj.z.sdd3)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn accel_at_time_after_end() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(1.0, 0.0, 0.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        let accel = traj.accel_at(end + 1.0).unwrap();
+        assert!(accel.x.abs() < 1e-6);
+        assert!(accel.y.abs() < 1e-6);
+        assert!(accel.z.abs() < 1e-6);
+    }
+
+    #[test]
+    fn accel_at_time_start() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(1.0, 0.0, 0.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let accel = traj.accel_at(0.0).unwrap();
+        assert!(accel.x.abs() > 0.0);
+    }
+
+    #[test]
+    fn time_shift_3d() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(1.0, 0.0, 0.0);
+        let mut traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let shift = 2.5;
+        let initial_end = traj.end_time();
+        traj.time_shift(shift);
+        let shifted_end = traj.end_time();
+        assert!((shifted_end - initial_end - shift).abs() < 1e-6);
+    }
+
+    #[test]
+    fn time_shift_1d() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(1.0, 0.5, 0.0);
+        let mut traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let orig_t1 = traj.x.t1;
+        let shift = 3.0;
+        traj.x.time_shift(shift);
+        assert!((traj.x.t1 - orig_t1 - shift).abs() < 1e-6);
+    }
+
+    #[test]
+    fn already_at_target() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(0.0, 0.0, 0.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        assert!(traj.end_time().abs() < 1e-6);
+    }
+
+    #[test]
+    fn twist_target() {
+        let init_twist = Vector3f::new(0.0, 0.0, 0.0);
+        let target_twist = Vector3f::new(0.3, 0.0, 0.0);
+        let traj = BangBangTraj3D::from_target_twist(init_twist, target_twist, test_params()).unwrap();
+        let end = traj.end_time();
+        assert!(end > 0.0);
+        assert!(traj.x.sdd1 > 0.0);
+    }
+
+    #[test]
+    fn twist_already_at_target() {
+        let twist = Vector3f::new(0.0, 0.0, 0.0);
+        let traj = BangBangTraj3D::from_target_twist(twist, twist, test_params()).unwrap();
+        assert!(traj.end_time().abs() < 1e-6);
+    }
+
+    #[test]
+    fn state_at_midpoint() {
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(2.0, 0.0, 0.0);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        let mid = end / 2.0;
+        let mid_state = traj.state_at(init, 0.0, mid).unwrap();
+        assert!(mid_state[0] > 0.0);
+        assert!(mid_state[0] < 2.0);
+    }
+
+    #[test]
+    fn theta_wraps_around_pi() {
+        let start_theta = 2.8_f32;
+        let target_theta = -2.8_f32;
+        let init = Vector6f::new(0.0, 0.0, start_theta, 0.0, 0.0, 0.0);
+        let target = Vector3f::new(0.0, 0.0, target_theta);
+        let traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        assert!(end > 0.0);
+
+        let n = 50;
+        for i in 0..=n {
+            let t = end * (i as f32) / (n as f32);
+            let st = traj.state_at(init, 0.0, t).unwrap();
+            let theta = st[2];
+            assert!(fabsf(theta) > PI / 2.0,
+                "theta crossed through 0 at sample {} (t={}, theta={})", i, t, theta);
+        }
+    }
+
+    #[test]
+    fn theta_stays_within_pi_bounds() {
+        let cases: &[(f32, f32)] = &[
+            (0.0, 2.5), (0.0, -2.5),
+            (2.8, -2.8), (-2.8, 2.8),
+            (1.0, -1.0), (3.0, 0.5), (-3.0, -0.5),
+        ];
+
+        let params = test_params();
+        let n = 100;
+
+        for &(start, target_theta) in cases {
+            let init = Vector6f::new(0.0, 0.0, start, 0.0, 0.0, 0.0);
+            let target = Vector3f::new(0.0, 0.0, target_theta);
+            let traj = BangBangTraj3D::from_target_pose(init, target, params).unwrap();
+            let end = traj.end_time();
+
+            for i in 0..=n {
+                let t = end * (i as f32) / (n as f32);
+                let st = traj.state_at(init, 0.0, t).unwrap();
+                let theta = st[2];
+                assert!(theta <= PI + 1e-3,
+                    "theta > π: start={} target={} t={} theta={}", start, target_theta, t, theta);
+                assert!(theta >= -PI - 1e-3,
+                    "theta < -π: start={} target={} t={} theta={}", start, target_theta, t, theta);
+            }
+        }
+    }
 }

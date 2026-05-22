@@ -1,0 +1,12 @@
+[project]
+name = "ateam-controls-py"
+version = "0.1.0"
+description = "Python ctypes bindings for the ateam_controls C library"
+requires-python = ">=3.10"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ateam_controls"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

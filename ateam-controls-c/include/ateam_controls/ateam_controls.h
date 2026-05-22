@@ -80,6 +80,10 @@ typedef struct RobotPhysicalParams {
     float iz;
     float motor_torque_constant;
     float motor_efficiency_factor;
+    float coulomb_friction_coefficient_linear;
+    float coulomb_friction_coefficient_angular;
+    float viscous_friction_coefficient_linear;
+    float viscous_friction_coefficient_angular;
 } RobotPhysicalParams_t;
 
 // Opaque handle to the full RobotModel (includes KF state, physical matrices, etc.)
@@ -109,10 +113,12 @@ typedef struct BangBangTraj3D {
 } BangBangTraj3D_t;
 
 // ============================================================================
-// Utility
+// Default parameter constructors
 // ============================================================================
 
-uint64_t ateam_controls_add(uint64_t left, uint64_t right);
+KalmanFilterParams_t ateam_controls_default_kf_params(void);
+RobotPhysicalParams_t ateam_controls_default_phys_params(void);
+TrajectoryParams_t ateam_controls_default_traj_params(void);
 
 // ============================================================================
 // RobotModel
@@ -123,7 +129,6 @@ int32_t ateam_controls_robot_model_new(
     KalmanFilterParams_t kf_params,
     RobotPhysicalParams_t phys_params,
     RobotModel_t** out);
-int32_t ateam_controls_robot_model_new_default(float kf_dt, RobotModel_t** out);
 void ateam_controls_robot_model_free(RobotModel_t* model);
 
 void ateam_controls_robot_model_update_kf_params(
@@ -159,8 +164,6 @@ Vector4C_t ateam_controls_robot_model_torques_to_currents(
 // ============================================================================
 // BangBang Trajectory
 // ============================================================================
-
-TrajectoryParams_t ateam_controls_traj_params_default(void);
 
 int32_t ateam_controls_traj_from_target_pose(
     Vector6C_t init_state,
