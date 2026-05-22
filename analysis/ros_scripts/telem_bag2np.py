@@ -84,5 +84,6 @@ if __name__ == "__main__":
     topic = f"/robot_feedback/extended/robot{args.robot}"
     telem = load_extended_telemetry_bag(args.bag, topic, MSG_TYPE)
     print("Frames loaded:", telem["ros_t"].shape[0])
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     np.savez(args.output, **telem)
     print(f"Saved to {args.output}")
