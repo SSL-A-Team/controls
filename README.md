@@ -57,40 +57,19 @@ source .venv/bin/activate
 
 ## Analysis
 
-Activate the python virtual environment
+Activate the python virtual environment and change to the analysis directory
 
 ```bash
 source .venv/bin/activate
-```
-
-Change to the analysis directory
-
-```bash
 cd analysis
 ```
 
-While running robots, capture telemetry
+While running robots, capture telemetry to a ros bag, convert it to a numpy archive, and visualize the telemetry
 
 ```bash
-ros2 bag record -a -o data/bags/robot_telemetry
-```
-
-or from a single robot only
-
-```bash
-ros2 bag record --topics /robot_feedback/extended/robot0 -o data/bags/robot_telemetry
-```
-
-extract the telemetry for a specific robot for visualization
-
-```bash
-python ros_scripts/telem_bag2np.py -b data/bags/robot_telemetry -r 0 -o data/telemetry/robot_telemetry.npz
-```
-
-visualize the telemetry, if non-default parameters were uploaded to the robot make sure to incude the --param-json/-p argument
-
-```bash
-python telem_visualize.py -t data/telemetry/robot_telemetry.npz -p data/robot_params.json
+rm -rf data/bags/robot_telemetry && ros2 bag record -o data/bags/robot_telemetry --topics /robot_feedback/extended/robot0
+python ros_scripts/telem_bag2np.py --bag data/bags/robot_telemetry -o data/telemetry/robot_telemetry.npz --robot 0
+python telem_visualize.py -t data/telemetry/robot_telemetry.npz
 ```
 
 This opens:
