@@ -2,133 +2,166 @@
 #include <ateam_controls/ateam_controls.h>
 #include <cmath>
 
-// Test global to robot pose transform at origin with no rotation
-TEST(RobotModel, TransformGlobal2RobotPoseAtOrigin) {
-  Vector3C_t robot_pose = {0.0f, 0.0f, 0.0f};
-  Vector3C_t global_pose = {1.0f, 0.0f, 0.0f};
-  Vector3C_t robot_frame_pose = ateam_controls_transform_frame_global2robot_pose(robot_pose, global_pose);
-  EXPECT_NEAR(robot_frame_pose.x, 1.0f, 1e-6f);
-  EXPECT_NEAR(robot_frame_pose.y, 0.0f, 1e-6f);
-  EXPECT_NEAR(robot_frame_pose.z, 0.0f, 1e-6f);
+// ============================================================================
+// Test helpers – construct params explicitly
+// ============================================================================
+
+static KalmanFilterParams_t test_kf_params() {
+  KalmanFilterParams_t kf = {};
+  kf.process_noise_std_pos_linear = 0.01f;
+  kf.process_noise_std_pos_angular = 0.05f;
+  kf.process_noise_std_vel_linear = 0.02f;
+  kf.process_noise_std_vel_angular = 0.1f;
+  kf.measurement_noise_std_vision_pos_linear = 1.0f;
+  kf.measurement_noise_std_vision_pos_angular = 3.14f;
+  kf.measurement_noise_std_encoder_vel_angular = 50.0f;
+  kf.measurement_noise_std_gyro_vel_angular = 0.015f;
+  kf.max_pos_linear = 64.0f;
+  kf.max_pos_angular = 3.14f;
+  kf.max_vel_linear = 3.0f;
+  kf.max_vel_angular = 3.0f * static_cast<float>(M_PI);
+  return kf;
 }
 
-// Test robot to global pose transform at origin with no rotation
-TEST(RobotModel, TransformRobot2GlobalPoseAtOrigin) {
-  Vector3C_t robot_pose = {0.0f, 0.0f, 0.0f};
-  Vector3C_t robot_frame_pose = {1.0f, 0.0f, 0.0f};
-  Vector3C_t global_pose = ateam_controls_transform_frame_robot2global_pose(robot_pose, robot_frame_pose);
-  EXPECT_NEAR(global_pose.x, 1.0f, 1e-6f);
-  EXPECT_NEAR(global_pose.y, 0.0f, 1e-6f);
-  EXPECT_NEAR(global_pose.z, 0.0f, 1e-6f);
+static RobotPhysicalParams_t test_phys_params() {
+  RobotPhysicalParams_t phys = {};
+  phys.alpha = static_cast<float>(M_PI / 6.0);
+  phys.beta = static_cast<float>(M_PI / 4.0);
+  phys.l = 0.0814f;
+  phys.r = 0.030f;
+  phys.mass = 2.7f;
+  phys.iz = 0.008f;
+  phys.motor_torque_constant = 0.0335f;
+  phys.motor_efficiency_factor = 13.0f;
+  phys.coulomb_friction_coefficient_linear = 2.058f;
+  phys.coulomb_friction_coefficient_angular = 0.05f;
+  phys.viscous_friction_coefficient_linear = 5.0f;
+  phys.viscous_friction_coefficient_angular = 0.0063f;
+  return phys;
 }
 
-// Test that pose transforms are inverses of each other
-TEST(RobotModel, PoseTransformsAreInverses) {
-  Vector3C_t robot_pose = {1.0f, 2.0f, 0.0f};
-  Vector3C_t global_pose = {3.0f, 4.0f, 0.0f};
-  
-  Vector3C_t to_robot = ateam_controls_transform_frame_global2robot_pose(robot_pose, global_pose);
-  Vector3C_t back_to_global = ateam_controls_transform_frame_robot2global_pose(robot_pose, to_robot);
-  
-  EXPECT_NEAR(back_to_global.x, global_pose.x, 1e-5f);
-  EXPECT_NEAR(back_to_global.y, global_pose.y, 1e-5f);
-  EXPECT_NEAR(back_to_global.z, global_pose.z, 1e-5f);
+static int32_t create_test_model(float kf_dt, RobotModel_t** out) {
+  return ateam_controls_robot_model_new(kf_dt, test_kf_params(), test_phys_params(), out);
 }
 
-// Test global to robot twist transform at origin with no rotation
-TEST(RobotModel, TransformGlobal2RobotTwistNoRotation) {
-  Vector3C_t robot_pose = {0.0f, 0.0f, 0.0f};
-  Vector3C_t global_twist = {1.0f, 0.0f, 0.0f};
-  Vector3C_t robot_twist = ateam_controls_transform_frame_global2robot_twist(robot_pose, global_twist);
-  EXPECT_NEAR(robot_twist.x, 1.0f, 1e-6f);
-  EXPECT_NEAR(robot_twist.y, 0.0f, 1e-6f);
-  EXPECT_NEAR(robot_twist.z, 0.0f, 1e-6f);
+// ============================================================================
+// Binding smoke tests – verify C FFI round-trips work correctly
+// ============================================================================
+
+TEST(RobotModelBindings, NewAndFree) {
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(create_test_model(0.01f, &model), ATEAM_CONTROLS_OK);
+  ASSERT_NE(model, nullptr);
+  ateam_controls_robot_model_free(model);
 }
 
-// Test robot to global twist transform at origin with no rotation
-TEST(RobotModel, TransformRobot2GlobalTwistNoRotation) {
-  Vector3C_t robot_pose = {0.0f, 0.0f, 0.0f};
-  Vector3C_t robot_twist = {1.0f, 0.0f, 0.0f};
-  Vector3C_t global_twist = ateam_controls_transform_frame_robot2global_twist(robot_pose, robot_twist);
-  EXPECT_NEAR(global_twist.x, 1.0f, 1e-6f);
-  EXPECT_NEAR(global_twist.y, 0.0f, 1e-6f);
-  EXPECT_NEAR(global_twist.z, 0.0f, 1e-6f);
+TEST(RobotModelBindings, NewWithCustomParams) {
+  KalmanFilterParams_t kf = {};
+  kf.process_noise_std_pos_linear = 0.01f;
+  kf.process_noise_std_pos_angular = 0.01f;
+  kf.process_noise_std_vel_linear = 0.1f;
+  kf.process_noise_std_vel_angular = 0.1f;
+  kf.measurement_noise_std_vision_pos_linear = 0.01f;
+  kf.measurement_noise_std_vision_pos_angular = 0.01f;
+  kf.measurement_noise_std_encoder_vel_angular = 0.1f;
+  kf.measurement_noise_std_gyro_vel_angular = 0.1f;
+  kf.max_pos_linear = 64.0f;
+  kf.max_pos_angular = 6.2832f;
+  kf.max_vel_linear = 4.0f;
+  kf.max_vel_angular = 3.0f * static_cast<float>(M_PI);
+
+  RobotPhysicalParams_t phys = {};
+  phys.alpha = 0.7854f;
+  phys.beta = 0.7854f;
+  phys.l = 0.08f;
+  phys.r = 0.025f;
+  phys.mass = 2.5f;
+  phys.iz = 0.01f;
+  phys.motor_torque_constant = 0.02f;
+  phys.motor_efficiency_factor = 0.85f;
+
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(ateam_controls_robot_model_new(0.01f, kf, phys, &model), ATEAM_CONTROLS_OK);
+  ASSERT_NE(model, nullptr);
+  ateam_controls_robot_model_free(model);
 }
 
-// Test that twist transforms are inverses of each other
-TEST(RobotModel, TwistTransformsAreInverses) {
-  Vector3C_t robot_pose = {0.0f, 0.0f, 0.0f};
-  Vector3C_t global_twist = {1.0f, 2.0f, 0.0f};
-  
-  Vector3C_t to_robot = ateam_controls_transform_frame_global2robot_twist(robot_pose, global_twist);
-  Vector3C_t back_to_global = ateam_controls_transform_frame_robot2global_twist(robot_pose, to_robot);
-  
-  EXPECT_NEAR(back_to_global.x, global_twist.x, 1e-5f);
-  EXPECT_NEAR(back_to_global.y, global_twist.y, 1e-5f);
-  EXPECT_NEAR(back_to_global.z, global_twist.z, 1e-5f);
+TEST(RobotModelBindings, FreeNull) {
+  ateam_controls_robot_model_free(nullptr);
 }
 
-// Test global to robot accel transform at origin with no rotation
-TEST(RobotModel, TransformGlobal2RobotAccelNoRotation) {
-  Vector3C_t robot_pose = {0.0f, 0.0f, 0.0f};
-  Vector3C_t global_accel = {1.0f, 0.0f, 0.0f};
-  Vector3C_t robot_accel = ateam_controls_transform_frame_global2robot_accel(robot_pose, global_accel);
-  EXPECT_NEAR(robot_accel.x, 1.0f, 1e-6f);
-  EXPECT_NEAR(robot_accel.y, 0.0f, 1e-6f);
-  EXPECT_NEAR(robot_accel.z, 0.0f, 1e-6f);
+TEST(RobotModelBindings, SetAndGetStateRoundTrip) {
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(create_test_model(0.01f, &model), ATEAM_CONTROLS_OK);
+  Vector6C_t state = {};
+  state.data[0] = 1.0f;
+  state.data[1] = 2.0f;
+  state.data[2] = 0.5f;
+  state.data[3] = 0.1f;
+  state.data[4] = -0.2f;
+  state.data[5] = 0.3f;
+  ateam_controls_robot_model_set_state(model, state);
+  Vector6C_t out = ateam_controls_robot_model_get_state(model);
+  for (int i = 0; i < 6; i++) {
+    EXPECT_NEAR(out.data[i], state.data[i], 1e-9f);
+  }
+  ateam_controls_robot_model_free(model);
 }
 
-// Test robot to global accel transform at origin with no rotation
-TEST(RobotModel, TransformRobot2GlobalAccelNoRotation) {
-  Vector3C_t robot_pose = {0.0f, 0.0f, 0.0f};
-  Vector3C_t robot_accel = {1.0f, 0.0f, 0.0f};
-  Vector3C_t global_accel = ateam_controls_transform_frame_robot2global_accel(robot_pose, robot_accel);
-  EXPECT_NEAR(global_accel.x, 1.0f, 1e-6f);
-  EXPECT_NEAR(global_accel.y, 0.0f, 1e-6f);
-  EXPECT_NEAR(global_accel.z, 0.0f, 1e-6f);
+TEST(RobotModelBindings, UpdateKfParams) {
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(create_test_model(0.01f, &model), ATEAM_CONTROLS_OK);
+  KalmanFilterParams_t kf = test_kf_params();
+  kf.process_noise_std_pos_linear = 0.05f;
+  ateam_controls_robot_model_update_kf_params(model, kf);
+  Vector6C_t state = ateam_controls_robot_model_get_state(model);
+  (void)state;
+  ateam_controls_robot_model_free(model);
 }
 
-// Test that accel transforms are inverses of each other
-TEST(RobotModel, AccelTransformsAreInverses) {
-  Vector3C_t robot_pose = {0.0f, 0.0f, 0.0f};
-  Vector3C_t global_accel = {1.0f, 2.0f, 0.0f};
-  
-  Vector3C_t to_robot = ateam_controls_transform_frame_global2robot_accel(robot_pose, global_accel);
-  Vector3C_t back_to_global = ateam_controls_transform_frame_robot2global_accel(robot_pose, to_robot);
-  
-  EXPECT_NEAR(back_to_global.x, global_accel.x, 1e-5f);
-  EXPECT_NEAR(back_to_global.y, global_accel.y, 1e-5f);
-  EXPECT_NEAR(back_to_global.z, global_accel.z, 1e-5f);
+TEST(RobotModelBindings, UpdatePhysicalParams) {
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(create_test_model(0.01f, &model), ATEAM_CONTROLS_OK);
+  RobotPhysicalParams_t phys = test_phys_params();
+  phys.mass = 3.0f;
+  ASSERT_EQ(ateam_controls_robot_model_update_physical_params(model, phys), ATEAM_CONTROLS_OK);
+  Matrix3x4C_t w2t = ateam_controls_robot_model_transform_wheel2twist(model, 0.0f);
+  (void)w2t;
+  ateam_controls_robot_model_free(model);
 }
 
-// Test robot model initialization
-TEST(RobotModel, RobotModelNewFromConstants) {
-  RobotModelC_t robot_model = ateam_controls_robot_model_new_from_constants();
-  EXPECT_GT(robot_model.wheel_radius, 0.0f);
+TEST(RobotModelBindings, TransformReturnsSomething) {
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(create_test_model(0.01f, &model), ATEAM_CONTROLS_OK);
+  Matrix3x4C_t w2t = ateam_controls_robot_model_transform_wheel2twist(model, 0.0f);
+  Matrix4x3C_t t2w = ateam_controls_robot_model_transform_twist2wheel(model, 0.0f);
+  Matrix3x4C_t w2a = ateam_controls_robot_model_transform_wheel2accel(model, 0.0f);
+  Matrix4x3C_t a2w = ateam_controls_robot_model_transform_accel2wheel(model, 0.0f);
+  // Just verify the binding returned without crashing and has non-zero data
+  bool any_nonzero = false;
+  for (int i = 0; i < 12; i++) {
+    if (w2t.data[i] != 0.0f) any_nonzero = true;
+  }
+  EXPECT_TRUE(any_nonzero);
+  (void)t2w; (void)w2a; (void)a2w;
+  ateam_controls_robot_model_free(model);
 }
 
-// Test wheel velocities to twist conversion and back
-TEST(RobotModel, WheelVelocitiesToTwistAndBack) {
-  RobotModelC_t robot_model = ateam_controls_robot_model_new_from_constants();
-  Vector3C_t twist = {1.0f, 0.0f, 0.0f};
-  
-  Vector4C wheel_velocities = ateam_controls_robot_model_twist_to_wheel_velocities(robot_model, twist);
-  Vector3C_t twist_back = ateam_controls_robot_model_wheel_velocities_to_twist(robot_model, wheel_velocities);
-  
-  EXPECT_NEAR(twist_back.x, twist.x, 1e-4f);
-  EXPECT_NEAR(twist_back.y, twist.y, 1e-4f);
-  EXPECT_NEAR(twist_back.z, twist.z, 1e-4f);
+TEST(RobotModelBindings, KfPredictAndUpdate) {
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(create_test_model(0.01f, &model), ATEAM_CONTROLS_OK);
+  Vector3C_t accel = {0.0f, 0.0f, 0.0f};
+  ateam_controls_robot_model_kf_predict(model, accel);
+  Vector8C_t meas = {};
+  ASSERT_EQ(ateam_controls_robot_model_kf_update(model, meas, false, false, false), ATEAM_CONTROLS_OK);
+  ateam_controls_robot_model_free(model);
 }
 
-// Test accel to wheel torques conversion and back
-TEST(RobotModel, AccelToWheelTorquesAndBack) {
-  RobotModelC_t robot_model = ateam_controls_robot_model_new_from_constants();
-  Vector3C_t accel = {1.0f, 0.0f, 0.0f};
-  
-  Vector4C torques = ateam_controls_robot_model_accel_to_wheel_torques(robot_model, accel);
-  Vector3C_t accel_back = ateam_controls_robot_model_wheel_torques_to_accel(robot_model, torques);
-  
-  EXPECT_NEAR(accel_back.x, accel.x, 1e-4f);
-  EXPECT_NEAR(accel_back.y, accel.y, 1e-4f);
-  EXPECT_NEAR(accel_back.z, accel.z, 1e-4f);
+TEST(RobotModelBindings, TorquesToCurrents) {
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(create_test_model(0.01f, &model), ATEAM_CONTROLS_OK);
+  Vector4C_t torques = {1.0f, 1.0f, 1.0f, 1.0f};
+  Vector4C_t currents = ateam_controls_robot_model_torques_to_currents(model, torques);
+  EXPECT_GT(currents.x, 0.0f);
+  ateam_controls_robot_model_free(model);
 }

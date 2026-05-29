@@ -1,5 +1,4 @@
-use nalgebra::{Vector3, Vector4, Matrix3, Matrix3x4, Matrix4x3};
-use crate::{RigidBodyState, robot_model::RobotModel};
+use nalgebra::{Vector3, Vector4, SVector, Matrix3, Matrix3x4, Matrix4x3};
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
@@ -44,12 +43,55 @@ impl From<Vector4C> for Vector4<f32> {
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
+pub struct Vector6C {
+    pub data: [f32; 6],
+}
+
+impl From<SVector<f32, 6>> for Vector6C {
+    fn from(v: SVector<f32, 6>) -> Self {
+        let mut data = [0.0f32; 6];
+        for i in 0..6 {
+            data[i] = v[i];
+        }
+        Vector6C { data }
+    }
+}
+
+impl From<Vector6C> for SVector<f32, 6> {
+    fn from(v: Vector6C) -> Self {
+        SVector::from_column_slice(&v.data)
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
+pub struct Vector8C {
+    pub data: [f32; 8],
+}
+
+impl From<SVector<f32, 8>> for Vector8C {
+    fn from(v: SVector<f32, 8>) -> Self {
+        let mut data = [0.0f32; 8];
+        for i in 0..8 {
+            data[i] = v[i];
+        }
+        Vector8C { data }
+    }
+}
+
+impl From<Vector8C> for SVector<f32, 8> {
+    fn from(v: Vector8C) -> Self {
+        SVector::from_column_slice(&v.data)
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct Matrix3C {
     pub data: [f32; 9],
 }
 
 impl Matrix3C {
-    /// Create a new Matrix3C from a flat array in column-major order
     pub fn new(data: [f32; 9]) -> Self {
         Matrix3C { data }
     }
@@ -81,7 +123,6 @@ impl From<Matrix3C> for Matrix3<f32> {
     }
 }
 
-
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Matrix3x4C {
@@ -89,13 +130,11 @@ pub struct Matrix3x4C {
 }
 
 impl Matrix3x4C {
-    /// Create a new Matrix3x4C from a flat array in column-major order
     pub fn new(data: [f32; 12]) -> Self {
         Matrix3x4C { data }
     }
 
     pub fn get(&self, row: usize, col: usize) -> f32 {
-        // 3 rows, 4 cols
         self.data[col * 3 + row]
     }
 
@@ -122,7 +161,6 @@ impl From<Matrix3x4C> for Matrix3x4<f32> {
     }
 }
 
-
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct Matrix4x3C {
@@ -130,13 +168,11 @@ pub struct Matrix4x3C {
 }
 
 impl Matrix4x3C {
-    /// Create a new Matrix4x3C from a flat array in column-major order
     pub fn new(data: [f32; 12]) -> Self {
         Matrix4x3C { data }
     }
 
     pub fn get(&self, row: usize, col: usize) -> f32 {
-        // 4 rows, 3 cols
         self.data[col * 4 + row]
     }
 
@@ -160,64 +196,5 @@ impl From<Matrix4x3<f32>> for Matrix4x3C {
 impl From<Matrix4x3C> for Matrix4x3<f32> {
     fn from(mat: Matrix4x3C) -> Self {
         Matrix4x3::from_column_slice(&mat.data)
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug)]
-pub struct RigidBodyStateC {
-    pub pose: Vector3C,
-    pub twist: Vector3C,
-}
-
-impl From<RigidBodyState> for RigidBodyStateC {
-    fn from(state: RigidBodyState) -> Self {
-        Self {
-            pose: state.pose.into(),
-            twist: state.twist.into(),
-        }
-    }
-}
-
-impl From<RigidBodyStateC> for RigidBodyState {
-    fn from(state: RigidBodyStateC) -> Self {
-        Self {
-            pose: state.pose.into(),
-            twist: state.twist.into(),
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Default, Debug)]
-pub struct RobotModelC {
-    wheel_transform_mat: Matrix3x4C,
-    wheel_transform_mat_inv: Matrix4x3C,
-    wheel_radius: f32,
-    body_inirtia: Matrix3C,
-    body_inirtia_inv: Matrix3C,
-}
-
-impl From<RobotModel> for RobotModelC {
-    fn from(robot_model: RobotModel) -> Self {
-        Self {
-            wheel_transform_mat: robot_model.wheel_transform_mat.into(),
-            wheel_transform_mat_inv: robot_model.wheel_transform_mat_inv.into(),
-            wheel_radius: robot_model.wheel_radius.into(),
-            body_inirtia: robot_model.body_inirtia.into(),
-            body_inirtia_inv: robot_model.body_inirtia_inv.into(),
-        }
-    }
-}
-
-impl From<RobotModelC> for RobotModel {
-    fn from(robot_model: RobotModelC) -> Self {
-        Self {
-            wheel_transform_mat: robot_model.wheel_transform_mat.into(),
-            wheel_transform_mat_inv: robot_model.wheel_transform_mat_inv.into(),
-            wheel_radius: robot_model.wheel_radius.into(),
-            body_inirtia: robot_model.body_inirtia.into(),
-            body_inirtia_inv: robot_model.body_inirtia_inv.into(),
-        }
     }
 }

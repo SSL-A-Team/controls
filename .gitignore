@@ -8,3 +8,16 @@ target
 # Cmake #
 #########
 build
+
+
+#########
+# Python #
+#########
+*.pyc
+.venv
+
+
+#################
+# Analysis data #
+#################
+analysis/data
