@@ -33,9 +33,11 @@ static RobotPhysicalParams_t test_phys_params() {
   phys.iz = 0.008f;
   phys.motor_torque_constant = 0.0335f;
   phys.motor_efficiency_factor = 13.0f;
-  phys.coulomb_friction_coefficient_linear = 2.058f;
+  phys.coulomb_friction_coefficient_linear_x = 2.058f;
+  phys.coulomb_friction_coefficient_linear_y = 2.058f;
   phys.coulomb_friction_coefficient_angular = 0.05f;
-  phys.viscous_friction_coefficient_linear = 5.0f;
+  phys.viscous_friction_coefficient_linear_x = 5.0f;
+  phys.viscous_friction_coefficient_linear_y = 5.0f;
   phys.viscous_friction_coefficient_angular = 0.0063f;
   return phys;
 }

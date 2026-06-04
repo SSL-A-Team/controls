@@ -5,9 +5,9 @@ pub const DEFAULT_CONTROL_DT: f32 = 0.001;              // s (1ms, 1kHz control 
 
 // Trajectory limits
 pub const DEFAULT_MAX_VEL_LINEAR: f32 = 3.0;            // m/s
-pub const DEFAULT_MAX_VEL_ANGULAR: f32 = 3.0 * PI;      // rad/s
-pub const DEFAULT_MAX_ACCEL_LINEAR: f32 = 2.0;           // m/s^2
-pub const DEFAULT_MAX_ACCEL_ANGULAR: f32 = 2.0 * PI;     // rad/s^2
+pub const DEFAULT_MAX_VEL_ANGULAR: f32 = 4.0 * PI;      // rad/s
+pub const DEFAULT_MAX_ACCEL_LINEAR: f32 = 3.0;           // m/s^2
+pub const DEFAULT_MAX_ACCEL_ANGULAR: f32 = 4.0 * PI;     // rad/s^2
 
 // Kalman filter noise standard deviations
 pub const DEFAULT_KF_PROCESS_STD_POS_LINEAR: f32 = 0.01;
@@ -33,8 +33,16 @@ pub const DEFAULT_PHYS_R: f32 = 0.030;                   // m, wheel radius
 pub const DEFAULT_PHYS_MASS: f32 = 2.7;                  // kg
 pub const DEFAULT_PHYS_IZ: f32 = 0.008;                  // kg*m^2, moment of inertia
 pub const DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT: f32 = 0.0335;       // N*m/A
-pub const DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR: f32 = 13.0;
-pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR: f32 = 2.058;
-pub const DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR: f32 = 0.05;
-pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR: f32 = 5.0;
-pub const DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR: f32 = 0.0063;
+pub const DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR: f32 = 17.36;
+// pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_X: f32 = 1.86 ;
+// pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_Y: f32 = 1.86 ;
+// pub const DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR: f32 = 0.05;
+// pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_X: f32 = 3.30;
+// pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_Y: f32 = 3.30;
+// pub const DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR: f32 = 0.0063;
+pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_X: f32 = 0.0;
+pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_Y: f32 = 0.0;
+pub const DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR: f32 = 0.0;
+pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_X: f32 = 0.0;
+pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_Y: f32 = 0.0;
+pub const DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR: f32 = 0.0;

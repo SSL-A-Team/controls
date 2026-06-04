@@ -80,9 +80,11 @@ typedef struct RobotPhysicalParams {
     float iz;
     float motor_torque_constant;
     float motor_efficiency_factor;
-    float coulomb_friction_coefficient_linear;
+    float coulomb_friction_coefficient_linear_x;
+    float coulomb_friction_coefficient_linear_y;
     float coulomb_friction_coefficient_angular;
-    float viscous_friction_coefficient_linear;
+    float viscous_friction_coefficient_linear_x;
+    float viscous_friction_coefficient_linear_y;
     float viscous_friction_coefficient_angular;
 } RobotPhysicalParams_t;
 
