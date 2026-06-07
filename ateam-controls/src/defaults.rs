@@ -5,9 +5,9 @@ pub const DEFAULT_CONTROL_DT: f32 = 0.001;              // s (1ms, 1kHz control 
 
 // Trajectory limits
 pub const DEFAULT_MAX_VEL_LINEAR: f32 = 3.0;            // m/s
-pub const DEFAULT_MAX_VEL_ANGULAR: f32 = 4.0 * PI;      // rad/s
+pub const DEFAULT_MAX_VEL_ANGULAR: f32 = 5.0 * PI;      // rad/s
 pub const DEFAULT_MAX_ACCEL_LINEAR: f32 = 3.0;           // m/s^2
-pub const DEFAULT_MAX_ACCEL_ANGULAR: f32 = 4.0 * PI;     // rad/s^2
+pub const DEFAULT_MAX_ACCEL_ANGULAR: f32 = 10.0 * PI;     // rad/s^2
 
 // Kalman filter noise standard deviations
 pub const DEFAULT_KF_PROCESS_STD_POS_LINEAR: f32 = 0.01;
