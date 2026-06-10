@@ -1,0 +1,105 @@
+COULOMB_X
+
+python analysis/ros_scripts/accel_model_tune.py coulomb -r 2 \
+	--axis x  \
+	--run-id coulomb_x1  \
+	--start-accel 0.05  \
+	--step 0.005  \
+	--max-accel 0.1  \
+	--pulse-duration 5.0  \
+	--rest-duration 1.0
+	
+"a_min": 0.050
+"v_min": 0.145
+  
+ ###############################################################################################
+ 
+ VISCOUS_X
+ 
+python analysis/ros_scripts/accel_model_tune.py viscous \
+     -r 2 --axis x --mode search \
+     --run-id viscous_x1 \
+     --baseline-params analysis/data/accel_tuning/coulomb_x1/coulomb/x/result.json \
+     --a-min 0.05 --v-min 0.145 \
+     --amplitude 1.0 \
+     --motor-efficiency 13.0 \
+     --max-iter 8 \
+     --replicates 3 \
+     --max-replacements 2 \
+     --plot
+
+###############################################################################################
+
+EFFICIENCY
+
+python analysis/ros_scripts/accel_model_tune.py efficiency \
+     -r 2 --axis x --mode search \
+     --run-id efficiency_x1 \
+     --baseline-params analysis/data/accel_tuning/viscous_x1/viscous/x/result.json \
+     --a-min 0.05 --v-min 0.145 \
+     --amplitude 1.0 \
+     --initial 13.0 \
+     --max-iter 8 --min-iter 5 \
+     --tol 0.05 --tol-x-frac 0.05 \
+     --replicates 3 --max-replacements 2 \
+     --plot
+     
+###############################################################################################
+
+VISCOUS_X
+
+python analysis/ros_scripts/accel_model_tune.py viscous \
+     -r 2 --axis x --mode search \
+     --run-id viscous_x2 \
+     --baseline-params analysis/data/accel_tuning/efficiency_x1/efficiency/x/result.json \
+     --a-min 0.05 --v-min 0.145 \
+     --amplitude 1.0 \
+     --bounds-low 0.0 --bounds-high 5.0 \
+     --max-iter 8 \
+     --replicates 3 --max-replacements 2 \
+     --plot
+     
+ ###############################################################################################
+
+EFFICIENCY
+
+python analysis/ros_scripts/accel_model_tune.py efficiency \
+     -r 2 --axis x --mode search \
+     --run-id efficiency_x3 \
+     --baseline-params analysis/data/accel_tuning/viscous_x2/viscous/x/result.json \
+     --a-min 0.05 --v-min 0.145 \
+     --amplitude 1.0 \
+     --initial 17.52 \
+     --bounds-low 12.0 --bounds-high 23.0 \
+     --max-iter 8 --min-iter 5 \
+     --tol 0.05 --tol-x-frac 0.05 \
+     --replicates 3 --max-replacements 2 \
+     --plot
+ 
+###############################################################################################
+
+VERIFY X
+
+python analysis/ros_scripts/accel_model_tune.py verify \
+     -r 2 --axis x \
+     --run-id verify_x_0.75mss_accel1 \
+     --baseline-params analysis/data/accel_tuning/efficiency_x3/efficiency/x/result.json \
+     --amplitude 0.75 \
+     --trials 5 \
+     --plot
+
+python analysis/ros_scripts/accel_model_tune.py verify \
+     -r 2 --axis x \
+     --run-id verify_x_1mss_accel1 \
+     --baseline-params analysis/data/accel_tuning/efficiency_x3/efficiency/x/result.json \
+     --amplitude 1 \
+     --trials 5 \
+     --plot
+     
+python analysis/ros_scripts/accel_model_tune.py verify \
+     -r 2 --axis x \
+     --run-id verify_x_2mss_accel1 \
+     --baseline-params analysis/data/accel_tuning/efficiency_x3/efficiency/x/result.json \
+     --amplitude 2 \
+     --trials 5 \
+     --plot

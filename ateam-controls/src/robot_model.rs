@@ -1,6 +1,6 @@
 use libm::{sinf, cosf};
 use nalgebra::matrix;
-use crate::{ControlsError, Matrix3f, Matrix3x4f, Matrix4x3f, Matrix6f, Matrix6x3f, Matrix8f, Matrix8x6f, Vector2f, Vector3f, Vector4f, Vector6f, Vector8f};
+use crate::{ControlsError, Matrix3f, Matrix3x4f, Matrix4x3f, Matrix6f, Matrix6x3f, Matrix8f, Matrix8x6f, Vector3f, Vector4f, Vector6f, Vector8f};
 use crate::{z_rotation_mat, wrap_angle};
 
 
@@ -82,9 +82,15 @@ pub struct RobotPhysicalParams {
     pub iz: f32,
     pub motor_torque_constant: f32,
     pub motor_efficiency_factor: f32,
-    pub coulomb_friction_coefficient_linear: f32,
+    /// Local-frame x-axis (forward/backward) Coulomb friction coefficient.
+    pub coulomb_friction_coefficient_linear_x: f32,
+    /// Local-frame y-axis (strafe) Coulomb friction coefficient.
+    pub coulomb_friction_coefficient_linear_y: f32,
     pub coulomb_friction_coefficient_angular: f32,
-    pub viscous_friction_coefficient_linear: f32,
+    /// Local-frame x-axis viscous friction coefficient.
+    pub viscous_friction_coefficient_linear_x: f32,
+    /// Local-frame y-axis viscous friction coefficient.
+    pub viscous_friction_coefficient_linear_y: f32,
     pub viscous_friction_coefficient_angular: f32,
 }
 
@@ -100,9 +106,11 @@ impl Default for RobotPhysicalParams {
             iz: DEFAULT_PHYS_IZ,
             motor_torque_constant: DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT,
             motor_efficiency_factor: DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR,
-            coulomb_friction_coefficient_linear: DEFAULT_PHYS_COULOMB_FRICTION_LINEAR,
+            coulomb_friction_coefficient_linear_x: DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_X,
+            coulomb_friction_coefficient_linear_y: DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_Y,
             coulomb_friction_coefficient_angular: DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR,
-            viscous_friction_coefficient_linear: DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR,
+            viscous_friction_coefficient_linear_x: DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_X,
+            viscous_friction_coefficient_linear_y: DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_Y,
             viscous_friction_coefficient_angular: DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR,
         }
     }
@@ -356,29 +364,37 @@ impl RobotModel {
         torques / self.physical_params.motor_torque_constant / self.physical_params.motor_efficiency_factor
     }
 
+    /// Compute the friction-only force/torque that opposes a body twist.
+    ///
+    /// **Frame assumption:** the input ``body_twist_cmd`` must be in the
+    /// robot's **local frame** ``(local_vx, local_vy, v_theta)``. The output
+    /// is also in the local frame ``[Fx_local, Fy_local, Tz]``. Callers
+    /// operating in the global frame must rotate the twist by ``R_z(-theta)``
+    /// before calling and rotate the returned force by ``R_z(theta)`` after.
+    ///
+    /// Per-axis model (independent x and y constants because strafing and
+    /// forward/backward friction can differ noticeably):
+    ///
+    /// ```text
+    /// Fx = -c_visc_x * vx - c_coul_x * sign(vx)
+    /// Fy = -c_visc_y * vy - c_coul_y * sign(vy)
+    /// Tz = -c_visc_ang * v_theta - c_coul_ang * sign(v_theta)
+    /// ```
     pub fn compute_friction_force(&self, body_twist_cmd: Vector3f) -> Vector3f {
-        let vel_linear: Vector2f = body_twist_cmd.fixed_rows::<2>(0).into();
-        let vel_angular: f32 = body_twist_cmd[2];
+        let vx = body_twist_cmd[0];
+        let vy = body_twist_cmd[1];
+        let v_theta = body_twist_cmd[2];
 
-        let vel_linear_magnitude = vel_linear.magnitude();
-        let vel_linear_dir = if vel_linear_magnitude > 0. {
-            vel_linear / vel_linear_magnitude
-        } else {
-            Vector2f::zeros()
-        };
+        let sign = |v: f32| if v > 0.0 { 1.0 } else if v < 0.0 { -1.0 } else { 0.0 };
 
-        let vel_angular_dir = if vel_angular.abs() > 0. { 
-            vel_angular.signum()
-        } else {
-            0.
-        };
+        let fx = -self.physical_params.viscous_friction_coefficient_linear_x * vx
+            - self.physical_params.coulomb_friction_coefficient_linear_x * sign(vx);
+        let fy = -self.physical_params.viscous_friction_coefficient_linear_y * vy
+            - self.physical_params.coulomb_friction_coefficient_linear_y * sign(vy);
+        let tz = -self.physical_params.viscous_friction_coefficient_angular * v_theta
+            - self.physical_params.coulomb_friction_coefficient_angular * sign(v_theta);
 
-        let linear_friction = self.physical_params.viscous_friction_coefficient_linear * (- vel_linear) + self.physical_params.coulomb_friction_coefficient_linear * (- vel_linear_dir);
-        let angular_friction = self.physical_params.viscous_friction_coefficient_angular * (- vel_angular) + self.physical_params.coulomb_friction_coefficient_angular * (- vel_angular_dir);
-
-        let friction_force = linear_friction.push(angular_friction);
-
-        friction_force
+        Vector3f::new(fx, fy, tz)
     }
 
     pub fn get_state(&self) -> Vector6f {
@@ -419,9 +435,11 @@ mod tests {
             iz: 0.008,
             motor_torque_constant: 0.0335,
             motor_efficiency_factor: 13.0,
-            coulomb_friction_coefficient_linear: 2.058,
+            coulomb_friction_coefficient_linear_x: 2.058,
+            coulomb_friction_coefficient_linear_y: 2.058,
             coulomb_friction_coefficient_angular: 0.05,
-            viscous_friction_coefficient_linear: 5.0,
+            viscous_friction_coefficient_linear_x: 5.0,
+            viscous_friction_coefficient_linear_y: 5.0,
             viscous_friction_coefficient_angular: 0.0063,
         }
     }
@@ -595,9 +613,11 @@ mod tests {
             iz: 0.015,
             motor_torque_constant: 0.025,
             motor_efficiency_factor: 0.9,
-            coulomb_friction_coefficient_linear: 0.0,
+            coulomb_friction_coefficient_linear_x: 0.0,
+            coulomb_friction_coefficient_linear_y: 0.0,
             coulomb_friction_coefficient_angular: 0.0,
-            viscous_friction_coefficient_linear: 0.0,
+            viscous_friction_coefficient_linear_x: 0.0,
+            viscous_friction_coefficient_linear_y: 0.0,
             viscous_friction_coefficient_angular: 0.0,
         };
         model.update_physical_params(phys).unwrap();

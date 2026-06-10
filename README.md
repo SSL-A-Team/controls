@@ -86,3 +86,60 @@ Scripts in `analysis/ros_scripts/` require a sourced ROS2 workspace:
 - `upload_params.py` — Upload parameters to robot firmware via ROS2 services
 - `param_tuning_loop.py` — Interactive edit → upload → record → visualize workflow
 - `record_and_visualize.sh` — Record a ROS bag and visualize
+- `accel_model_tune.py` — Feed-forward acceleration model tuning toolkit (see below)
+
+### Feed-forward acceleration model tuning
+
+`accel_model_tune.py` is a modular tuning toolkit for the parameters of
+`RobotModel` that participate in the feed-forward `accel → wheel current`
+pipeline:
+
+| Step          | Tunes                                                                           |
+|---------------|---------------------------------------------------------------------------------|
+| `coulomb`     | `coulomb_friction_coefficient_{linear,angular}` — minimum-motion pulse search   |
+| `viscous`     | `viscous_friction_coefficient_{linear,angular}` — triangular profile linearity  |
+| `efficiency`  | `motor_efficiency_factor` — realized vs. commanded acceleration                 |
+| `inertia`     | `iz` — realized vs. commanded angular acceleration (theta axis only)            |
+| `all`         | Runs the four steps in sequence with a re-convergence pass on angular coulomb   |
+
+Each step pushes only the parameters it owns to the robot via
+`/set_firmware_param`. Telemetry and parameter checkpoints land in
+`analysis/data/accel_tuning/<run_id>/`. The `y` axis is allowed for
+diagnostic-only runs (no firmware param push).
+
+Examples:
+
+```bash
+# 1) Coulomb step on x (pushes η=1, c_*=0 first, then searches a_min)
+python ros_scripts/accel_model_tune.py coulomb -r 0 --axis x
+
+# 2) Chain viscous on x using the coulomb result as the starting params
+python ros_scripts/accel_model_tune.py viscous -r 0 --axis x \
+    --baseline-params data/accel_tuning/<run_id>/coulomb/x/result.json \
+    --a-min 1.4 --v-min 0.12
+
+# 3) Run a single user-chosen value instead of searching
+python ros_scripts/accel_model_tune.py efficiency -r 0 --axis x \
+    --mode single --value 13.0 --a-min 1.4 --v-min 0.12
+
+# 4) End-to-end automated pipeline
+python ros_scripts/accel_model_tune.py all -r 0
+```
+
+The friction model being tuned is
+
+```
+F_friction = -c_visc·v - c_coul·sign(v)
+a_cmd_comp = a_cmd + I⁻¹·(c_visc·v + c_coul·sign(v))
+i_wheel    ≈ (I·a_cmd + c_visc·v + c_coul) / (Kt·η)
+```
+
+so the coulomb step records `(a_min, v_min)` and the viscous / efficiency /
+inertia steps recompute `c_coul = η·I·a_min − c_visc·v_min` on every
+candidate to keep the friction balance satisfied as the other parameters
+change.
+
+Triangular-profile amplitudes (`TRIANGULAR_PULSE_ACCEL_{LIN,ANG}`), pulse
+durations, and search bounds are constants at the top of the relevant
+modules in `analysis/ros_scripts/accel_tuning/` for easy editing.
+
