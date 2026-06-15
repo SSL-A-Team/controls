@@ -156,6 +156,8 @@ def run_signal_input(args: argparse.Namespace) -> int:
         "--chirp-end-freq", str(args.chirp_end_freq),
         "--chirp-duration", str(args.chirp_duration),
         "--step-time", str(args.step_time),
+        "--square-side-length", str(args.square_side_length),
+        "--square-side-duration", str(args.square_side_duration),
         "--warmup-duration", str(args.warmup_duration),
         "--duration", str(args.duration),
         "--rate-hz", str(args.rate_hz),
@@ -217,7 +219,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--axis", type=str, default="x",
                    choices=["x", "y", "theta"])
     p.add_argument("--signal", type=str, default="sinusoid",
-                   choices=["pulse", "sinusoid", "step", "chirp"])
+                   choices=["pulse", "sinusoid", "step", "chirp", "square"])
     p.add_argument("--amplitude", type=float, default=0.2)
     p.add_argument("--pulse-frequency", type=float, default=1.0)
     p.add_argument("--pulse-width", type=float, default=0.2)
@@ -226,6 +228,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--chirp-end-freq", type=float, default=5.0)
     p.add_argument("--chirp-duration", type=float, default=30.0)
     p.add_argument("--step-time", type=float, default=1.0)
+    p.add_argument("--square-side-length", type=float, default=0.5)
+    p.add_argument("--square-side-duration", type=float, default=2.0)
     p.add_argument("--warmup-duration", type=float, default=2.0)
     p.add_argument("--duration", type=float, default=5.0,
                    help="signal-phase duration in seconds; must be > 0 "
