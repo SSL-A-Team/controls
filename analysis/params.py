@@ -203,17 +203,53 @@ def kf_params_to_json_dict(kf: KalmanFilterParams) -> dict:
     return _struct_to_dict(kf, "kf")
 
 
-def default_params_dict() -> dict:
-    """Full parameter dict built from the Rust library defaults.
+def default_controller_params_dict() -> dict:
+    """Default controller-side firmware parameters.
 
-    Includes everything PARAM_MAP knows how to materialize from
-    KalmanFilterParams and RobotPhysicalParams. Entries that have no
-    ctypes-field mapping (e.g. controller gains) are omitted; callers
-    should merge them in from a baseline JSON if needed.
+    These are the firmware defaults from
+    ``firmware/control-board/src/motion/params/controller_params.rs``.
+    They are independent of the ``RobotModel`` / ``BangBangTraj`` structs
+    (which have their own defaults in the Rust controls lib), so we hard-code
+    them here. Keep this in sync with ``controller_params.rs``.
+
+    Excluded:
+      * ``TWIST_FB_PIDII_LINEAR`` / ``TWIST_FB_PIDII_ANGULAR`` — declared in
+        the ``ParameterName`` enum but **not implemented** in the firmware
+        (``robot_controller::expected_format`` returns ``None``). Uploading
+        them would be silently rejected. Add them here if/when the firmware
+        wires them up.
+    """
+    # PID gains: [P, I, D, I_min, I_max]
+    linear_pose_pid = [125.0, 0.5, 10.0, -1.0, 1.0]
+    angular_pose_pid = [125.0, 0.5, 15.0, -1.0, 1.0]
+    return {
+        # FRICTION_COMP_GATING:
+        #   [lin_vel_thresh, lin_accel_thresh, ang_vel_thresh, ang_accel_thresh]
+        "FRICTION_COMP_GATING": [0.1, 0.5, 0.5, 1.0],
+        # POSE_CONTROL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for accel path
+        "POSE_CONTROL_GAIN": [1.0, 1.0],
+        # TRAJ_RECOMPUTE_ERROR:
+        #   [ERROR_POS_LINEAR, ERROR_POS_ANGULAR, ERROR_VEL_LINEAR, ERROR_VEL_ANGULAR]
+        "TRAJ_RECOMPUTE_ERROR": [0.5, 1.0, 4.0, 8.0],
+        "POSE_FB_PIDII_LINEAR": linear_pose_pid,
+        "POSE_FB_PIDII_ANGULAR": angular_pose_pid,
+    }
+
+
+def default_params_dict() -> dict:
+    """Full parameter dict built from the Rust library and firmware defaults.
+
+    Includes:
+      * Every PARAM_MAP entry materialized from ``KalmanFilterParams`` and
+        ``RobotPhysicalParams`` (the Rust controls library defaults).
+      * Controller-side firmware defaults from
+        ``default_controller_params_dict()`` (PID gains, friction-comp
+        gating, trajectory recompute thresholds, pose control gain).
     """
     return {
         **kf_params_to_json_dict(default_kf_params()),
         **phys_params_to_json_dict(default_phys_params()),
+        **default_controller_params_dict(),
     }
 
 

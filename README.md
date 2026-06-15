@@ -84,7 +84,8 @@ Scripts in `analysis/ros_scripts/` require a sourced ROS2 workspace:
 
 - `telem_bag2np.py` — Convert ROS2 bags to NumPy archives
 - `upload_params.py` — Upload parameters to robot firmware via ROS2 services
-- `param_tuning_loop.py` — Interactive edit → upload → record → visualize workflow
+- `signal_input.py` — Signal generator (pulse / sinusoid / step / chirp) for one axis in position or velocity mode
+- `controller_tune.py` — One-shot controller-tuning trial: upload → record → drive signal → visualize
 - `record_and_visualize.sh` — Record a ROS bag and visualize
 - `accel_model_tune.py` — Feed-forward acceleration model tuning toolkit (see below)
 
