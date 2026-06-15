@@ -89,14 +89,16 @@ class SignalInputNode(Node):
             VisionStateRobot, topic_robot, self.robot_cb, sensor_qos)
 
         topic_cmd = f"/robot_motion_commands/robot{args.robot_id}"
-        # Use default RELIABLE QoS. The radio_bridge subscriber requests
-        # BEST_EFFORT, which is compatible with a RELIABLE publisher
-        # (publisher's offered quality >= subscriber's request). Using
-        # BEST_EFFORT here was wrong: it prevented any other RELIABLE
-        # subscribers (e.g. `ros2 topic echo`) from receiving messages,
-        # without solving any real problem.
+        # Match the joystick controller's publisher QoS exactly:
+        # RELIABLE with keep_last(1). A larger publisher history (the rclpy
+        # default depth=10) combined with this script's 100Hz publish rate
+        # was creating local DDS contention that starved the radio_bridge's
+        # vision subscription, causing 200ms+ vision_update gaps which the
+        # firmware interprets as a vision timeout and resets the controller.
+        # See ateam_joystick_control/src/joystick_control_node.cpp:143 for
+        # the canonical pattern.
         self.cmd_pub = self.create_publisher(
-            RobotMotionCommand, topic_cmd, 10)
+            RobotMotionCommand, topic_cmd, 1)
 
         self.robot = None
         self.center_pose = None  # (x, y, theta)
