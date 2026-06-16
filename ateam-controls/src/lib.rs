@@ -5,7 +5,9 @@ use nalgebra;
 pub mod ctypes;
 pub mod bangbang_trajectory;
 pub mod defaults;
+pub mod pivot_trajectory;
 pub mod robot_model;
+pub(crate) mod trajectory;
 
 pub type Vector1f = nalgebra::Vector1<f32>;
 pub type Vector2f = nalgebra::Vector2<f32>;
@@ -103,3 +105,4 @@ impl defmt::Format for ControlsError {
         }
     }
 }
+
