@@ -1,7 +1,6 @@
 use libm::{cosf, sinf};
-use crate::{ControlsError, Vector3f, Vector6f, wrap_angle};
-use crate::trajectory::{solve_1d_pose, eval_1d_state_at, eval_1d_accel_at};
-use crate::bangbang_trajectory::BangBangTraj1D;
+use crate::{wrap_angle, ControlsError, Vector2f, Vector3f, Vector6f};
+use crate::bangbang_trajectory::{BangBangTraj1D, solve_1d_pose, eval_1d_state_at, eval_1d_accel_at};
 
 /// Default SSL ball radius in meters.
 pub const DEFAULT_BALL_RADIUS: f32 = 0.0215;
@@ -16,20 +15,17 @@ pub struct PivotParams {
     pub max_vel_angular: f32,
     /// Maximum heading angular acceleration (rad/s²).
     pub max_accel_angular: f32,
-    /// Ball radius (m). Combined with `robot_radius` to form the orbit radius.
-    pub ball_radius: f32,
-    /// Robot front-face radius (m). Distance from the robot center to its front face.
-    pub robot_radius: f32,
+    /// Radius of the pivot orbit (m).
+    pub orbit_radius: f32,
 }
 
 impl Default for PivotParams {
     fn default() -> Self {
         use core::f32::consts::PI;
         Self {
-            max_vel_angular: 3.0 * PI,
-            max_accel_angular: 6.0 * PI,
-            ball_radius: DEFAULT_BALL_RADIUS,
-            robot_radius: DEFAULT_ROBOT_RADIUS,
+            max_vel_angular: 1.0 * PI,
+            max_accel_angular: 2.0 * PI,
+            orbit_radius: DEFAULT_BALL_RADIUS + DEFAULT_ROBOT_RADIUS,
         }
     }
 }
@@ -64,10 +60,10 @@ impl Default for PivotParams {
 pub struct PivotTrajectory {
     /// Heading (θ) bang-bang 1D trajectory.
     pub theta: BangBangTraj1D,
-    /// Ball center x in the global frame (m).
-    pub ball_x: f32,
-    /// Ball center y in the global frame (m).
-    pub ball_y: f32,
+    /// Orbit center x in the global frame (m).
+    pub center_x: f32,
+    /// Orbit center y in the global frame (m).
+    pub center_y: f32,
     /// Orbit radius: `ball_radius + robot_radius` (m).
     pub orbit_radius: f32,
 }
@@ -86,19 +82,16 @@ impl PivotTrajectory {
     /// * `params`         – velocity/acceleration limits and geometry constants.
     pub fn new(
         init_state: Vector6f,
-        ball_pos: Vector3f,
+        center_pos: Vector2f,
         target_heading: f32,
         params: PivotParams,
     ) -> Result<Self, ControlsError> {
         if params.max_vel_angular <= 0.0 || params.max_accel_angular <= 0.0 {
             return Err(ControlsError::InvalidInput);
         }
-        if params.ball_radius < 0.0 || params.robot_radius < 0.0 {
+        if params.orbit_radius <= 0.0 {
             return Err(ControlsError::InvalidInput);
         }
-
-        let orbit_radius = params.ball_radius + params.robot_radius;
-
         let current_heading = init_state[2];
         let current_heading_dot = init_state[5];
         // Shortest angular path: adjust target so the solver sees a direct displacement
@@ -114,9 +107,9 @@ impl PivotTrajectory {
 
         Ok(PivotTrajectory {
             theta,
-            ball_x: ball_pos.x,
-            ball_y: ball_pos.y,
-            orbit_radius,
+            center_x: center_pos.x,
+            center_y: center_pos.y,
+            orbit_radius: params.orbit_radius,
         })
     }
 
@@ -152,8 +145,8 @@ impl PivotTrajectory {
         let st = sinf(theta_t);
         let r = self.orbit_radius;
 
-        let x = self.ball_x - r * ct;
-        let y = self.ball_y - r * st;
+        let x = self.center_x - r * ct;
+        let y = self.center_y - r * st;
         // ẋ = r · sin(θ) · θ̇
         let xd = r * st * theta_dot_t;
         // ẏ = -r · cos(θ) · θ̇
@@ -180,7 +173,6 @@ impl PivotTrajectory {
             current_time,
             t,
         )?;
-
         let ct = cosf(theta_t);
         let st = sinf(theta_t);
         let r = self.orbit_radius;
@@ -204,16 +196,11 @@ mod tests {
     use libm::{fabsf, sqrtf};
 
     fn test_params() -> PivotParams {
-        PivotParams {
-            max_vel_angular: 2.0 * PI,
-            max_accel_angular: 4.0 * PI,
-            ball_radius: 0.0215,
-            robot_radius: 0.090,
-        }
+        PivotParams::default()
     }
 
     fn init_state_at_heading(theta: f32) -> Vector6f {
-        let r = test_params().ball_radius + test_params().robot_radius;
+        let r = test_params().orbit_radius;
         Vector6f::new(
             -r * cosf(theta), // x: robot positioned behind ball at given heading
             -r * sinf(theta), // y
@@ -258,8 +245,8 @@ mod tests {
         for i in 0..=n {
             let t = end * (i as f32) / (n as f32);
             let state = traj.state_at(init, 0.0, t).unwrap();
-            let dx = state[0] - traj.ball_x;
-            let dy = state[1] - traj.ball_y;
+            let dx = state[0] - traj.center_x;
+            let dy = state[1] - traj.center_y;
             let dist = sqrtf(dx * dx + dy * dy);
             assert!(fabsf(dist - r) < 1e-4, "t={}: dist={}, r={}", t, dist, r);
         }
@@ -276,10 +263,10 @@ mod tests {
         for i in 0..=n {
             let t = end * (i as f32) / (n as f32);
             let state = traj.state_at(init, 0.0, t).unwrap();
-            // Robot should be at ball - r*[cos(theta), sin(theta)]
+            // Robot should be at center - r*[cos(theta), sin(theta)]
             let theta = state[2];
-            let expected_x = traj.ball_x - traj.orbit_radius * cosf(theta);
-            let expected_y = traj.ball_y - traj.orbit_radius * sinf(theta);
+            let expected_x = traj.center_x - traj.orbit_radius * cosf(theta);
+            let expected_y = traj.center_y - traj.orbit_radius * sinf(theta);
             assert!(fabsf(state[0] - expected_x) < 1e-4);
             assert!(fabsf(state[1] - expected_y) < 1e-4);
         }

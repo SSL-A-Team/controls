@@ -23,6 +23,11 @@ extern "C" {
 // Types
 // ============================================================================
 
+typedef struct Vector2C {
+    float x;
+    float y;
+} Vector2C_t;
+
 typedef struct Vector3C {
     float x;
     float y;
@@ -189,6 +194,49 @@ int32_t ateam_controls_traj_state_at(
     float t,
     Vector6C_t* out);
 int32_t ateam_controls_traj_accel_at(BangBangTraj3D_t traj, float t, Vector3C_t* out);
+
+// ============================================================================
+// Pivot Trajectory
+// ============================================================================
+
+typedef struct PivotParams {
+    float max_vel_angular;
+    float max_accel_angular;
+    float orbit_radius;
+} PivotParams_t;
+
+typedef struct PivotTrajectory {
+    BangBangTraj1D_t theta;
+    float center_x;
+    float center_y;
+    float orbit_radius;
+} PivotTrajectory_t;
+
+PivotParams_t ateam_controls_default_pivot_params(void);
+
+int32_t ateam_controls_pivot_traj_new(
+    Vector6C_t init_state,
+    Vector2C_t center_pos,
+    float target_heading,
+    PivotParams_t params,
+    PivotTrajectory_t* out);
+
+void ateam_controls_pivot_traj_time_shift(PivotTrajectory_t* traj, float dt);
+float ateam_controls_pivot_traj_end_time(PivotTrajectory_t traj);
+
+int32_t ateam_controls_pivot_traj_state_at(
+    PivotTrajectory_t traj,
+    Vector6C_t current_state,
+    float current_time,
+    float t,
+    Vector6C_t* out);
+
+int32_t ateam_controls_pivot_traj_accel_at(
+    PivotTrajectory_t traj,
+    Vector6C_t current_state,
+    float current_time,
+    float t,
+    Vector3C_t* out);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,23 @@
-use nalgebra::{Vector3, Vector4, SVector, Matrix3, Matrix3x4, Matrix4x3};
+use nalgebra::{Vector2, Vector3, Vector4, SVector, Matrix3, Matrix3x4, Matrix4x3};
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug)]
+pub struct Vector2C {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl From<Vector2<f32>> for Vector2C {
+    fn from(v: Vector2<f32>) -> Self {
+        Vector2C { x: v.x, y: v.y }
+    }
+}
+
+impl From<Vector2C> for Vector2<f32> {
+    fn from(v: Vector2C) -> Self {
+        Self::new(v.x, v.y)
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]

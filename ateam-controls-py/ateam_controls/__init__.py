@@ -13,6 +13,7 @@ from ._bindings import (
     ATEAM_CONTROLS_INVALID_TIME,
     ATEAM_CONTROLS_EXCEEDS_LIMIT,
     # Types
+    Vector2C,
     Vector3C,
     Vector4C,
     Vector6C,
@@ -25,10 +26,13 @@ from ._bindings import (
     TrajectoryParams,
     BangBangTraj1D,
     BangBangTraj3D,
+    PivotParams,
+    PivotTrajectory,
     # Default parameter constructors
     default_kf_params,
     default_phys_params,
     default_traj_params,
+    default_pivot_params,
     # RobotModel functions
     robot_model_new,
     robot_model_free,
@@ -43,7 +47,7 @@ from ._bindings import (
     robot_model_transform_wheel2accel,
     robot_model_transform_accel2wheel,
     robot_model_torques_to_currents,
-    # Trajectory functions
+    # BangBang trajectory functions
     traj_from_target_pose,
     traj_from_target_twist,
     traj_1d_time_shift,
@@ -51,4 +55,10 @@ from ._bindings import (
     traj_end_time,
     traj_state_at,
     traj_accel_at,
+    # Pivot trajectory functions
+    pivot_traj_new,
+    pivot_traj_time_shift,
+    pivot_traj_end_time,
+    pivot_traj_state_at,
+    pivot_traj_accel_at,
 )
