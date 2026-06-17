@@ -67,8 +67,8 @@ cd analysis
 While running robots, capture telemetry to a ros bag, convert it to a numpy archive, and visualize the telemetry
 
 ```bash
-rm -rf data/bags/robot_telemetry && ros2 bag record -o data/bags/robot_telemetry --topics /robot_feedback/extended/robot0
-python ros_scripts/telem_bag2np.py --bag data/bags/robot_telemetry -o data/telemetry/robot_telemetry.npz --robot 0
+rm -rf data/bags/robot_telemetry && ros2 bag record -o data/bags/robot_telemetry --topics /robot_feedback/extended/robot0 && \
+python ros_scripts/telem_bag2np.py --bag data/bags/robot_telemetry -o data/telemetry/robot_telemetry.npz --robot 0 && \
 python telem_visualize.py -t data/telemetry/robot_telemetry.npz
 ```
 
