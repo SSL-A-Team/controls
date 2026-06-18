@@ -203,6 +203,7 @@ typedef struct PivotParams {
     float max_vel_angular;
     float max_accel_angular;
     float orbit_radius;
+    float heading_lag;
 } PivotParams_t;
 
 typedef struct PivotTrajectory {
@@ -210,6 +211,11 @@ typedef struct PivotTrajectory {
     float center_x;
     float center_y;
     float orbit_radius;
+    float heading_lag;
+    float orbit_start;
+    float orbit_start_dot;
+    float orbit_target;
+    float direction;
 } PivotTrajectory_t;
 
 PivotParams_t ateam_controls_default_pivot_params(void);

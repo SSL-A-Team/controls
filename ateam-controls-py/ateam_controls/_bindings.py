@@ -169,6 +169,7 @@ class PivotParams(ctypes.Structure):
         ("max_vel_angular", ctypes.c_float),
         ("max_accel_angular", ctypes.c_float),
         ("orbit_radius", ctypes.c_float),
+        ("heading_lag", ctypes.c_float),
     ]
 
 class PivotTrajectory(ctypes.Structure):
@@ -177,6 +178,11 @@ class PivotTrajectory(ctypes.Structure):
         ("center_x", ctypes.c_float),
         ("center_y", ctypes.c_float),
         ("orbit_radius", ctypes.c_float),
+        ("heading_lag", ctypes.c_float),
+        ("orbit_start", ctypes.c_float),
+        ("orbit_start_dot", ctypes.c_float),
+        ("orbit_target", ctypes.c_float),
+        ("direction", ctypes.c_float),
     ]
 
 # ---------------------------------------------------------------------------
