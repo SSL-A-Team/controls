@@ -160,36 +160,36 @@ def plot_telem(telemetry, param_json=None):
         dim_name = ["x", "y", "theta"][j]
         mask = (bcm == 1)
         if any(mask):
-            ax.plot(t[mask], telemetry[f"body_control_telemetry/skill_global_pos/cmd_echo/global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
+            ax.plot(t[mask], telemetry[f"body_control_telemetry/maneuver_global_pos/cmd_echo/global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
     i = 1
     local_vel_mask = bcm == 3
     if any(local_vel_mask):
-        local_vx = telemetry["body_control_telemetry/skill_local_vel/cmd_echo/local_xd"]
-        local_vy = telemetry["body_control_telemetry/skill_local_vel/cmd_echo/local_yd"]
+        local_vx = telemetry["body_control_telemetry/maneuver_local_vel/cmd_echo/local_xd"]
+        local_vy = telemetry["body_control_telemetry/maneuver_local_vel/cmd_echo/local_yd"]
         global_vx, global_vy = local_to_global_xy(theta, local_vx, local_vy)
-        local_omega = telemetry["body_control_telemetry/skill_local_vel/cmd_echo/local_omega"]
+        local_omega = telemetry["body_control_telemetry/maneuver_local_vel/cmd_echo/local_omega"]
     for j in range(3):
         ax = axs[i, j]
         dim_name = ["xd", "yd", "omega"][j]
         mask = bcm == 2
         if any(mask):
-            ax.plot(t[mask], telemetry[f"body_control_telemetry/skill_global_vel/cmd_echo/global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
+            ax.plot(t[mask], telemetry[f"body_control_telemetry/maneuver_global_vel/cmd_echo/global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
         if any(local_vel_mask):
             local_vel_global = [global_vx, global_vy, local_omega][j]
             ax.plot(t[local_vel_mask], local_vel_global[local_vel_mask], label='software_cmd (local→global)', color='purple', alpha=alpha)
     i = 2
     local_acc_mask = bcm == 5
     if any(local_acc_mask):
-        local_ax = telemetry["body_control_telemetry/skill_local_acc/cmd_echo/local_xdd"]
-        local_ay = telemetry["body_control_telemetry/skill_local_acc/cmd_echo/local_ydd"]
+        local_ax = telemetry["body_control_telemetry/maneuver_local_acc/cmd_echo/local_xdd"]
+        local_ay = telemetry["body_control_telemetry/maneuver_local_acc/cmd_echo/local_ydd"]
         global_ax, global_ay = local_to_global_xy(theta, local_ax, local_ay)
-        local_alpha = telemetry["body_control_telemetry/skill_local_acc/cmd_echo/local_alpha"]
+        local_alpha = telemetry["body_control_telemetry/maneuver_local_acc/cmd_echo/local_alpha"]
     for j in range(3):
         ax = axs[i, j]
         dim_name = ["xdd", "ydd", "alpha"][j]
         mask = bcm == 4
         if any(mask):
-            ax.plot(t[mask], telemetry[f"body_control_telemetry/skill_global_acc/cmd_echo/global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
+            ax.plot(t[mask], telemetry[f"body_control_telemetry/maneuver_global_acc/cmd_echo/global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
         if any(local_acc_mask):
             local_acc_global = [global_ax, global_ay, local_alpha][j]
             ax.plot(t[local_acc_mask], local_acc_global[local_acc_mask], label='software_cmd (local→global)', color='purple', alpha=alpha)
