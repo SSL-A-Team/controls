@@ -207,15 +207,15 @@ typedef struct PivotParams {
 } PivotParams_t;
 
 typedef struct PivotTrajectory {
-    BangBangTraj1D_t theta;
+    BangBangTraj1D_t orbit;
+    BangBangTraj1D_t heading;
     float center_x;
     float center_y;
     float orbit_radius;
-    float heading_lag;
     float orbit_start;
     float orbit_start_dot;
     float orbit_target;
-    float direction;
+    float t_heading_start;
 } PivotTrajectory_t;
 
 PivotParams_t ateam_controls_default_pivot_params(void);

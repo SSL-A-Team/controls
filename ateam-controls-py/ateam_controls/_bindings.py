@@ -174,15 +174,15 @@ class PivotParams(ctypes.Structure):
 
 class PivotTrajectory(ctypes.Structure):
     _fields_ = [
-        ("theta", BangBangTraj1D),
+        ("orbit", BangBangTraj1D),
+        ("heading", BangBangTraj1D),
         ("center_x", ctypes.c_float),
         ("center_y", ctypes.c_float),
         ("orbit_radius", ctypes.c_float),
-        ("heading_lag", ctypes.c_float),
         ("orbit_start", ctypes.c_float),
         ("orbit_start_dot", ctypes.c_float),
         ("orbit_target", ctypes.c_float),
-        ("direction", ctypes.c_float),
+        ("t_heading_start", ctypes.c_float),
     ]
 
 # ---------------------------------------------------------------------------
