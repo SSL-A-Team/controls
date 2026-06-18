@@ -57,10 +57,9 @@ def main():
 
     # Build trajectory ---------------------------------------------------
     params = default_pivot_params()
-    params.theta_lag = 0.5
     orbit_radius = params.orbit_radius      # ball_radius + robot_radius
     robot_radius = 0.090                    # display radius of robot body
-    ball_radius = orbit_radius - robot_radius  # ≈ 0.0215 m
+    ball_radius = 0.0215
 
     # Robot initially positioned on the orbit at theta_start, ball at origin
     init_x = float(-orbit_radius * np.cos(theta_start))

@@ -34,8 +34,9 @@ impl Default for PivotParams {
         Self {
             max_vel_angular: 1.0 * PI,
             max_accel_angular: 2.0 * PI,
-            orbit_radius: DEFAULT_BALL_RADIUS + DEFAULT_ROBOT_RADIUS,
-            heading_lag: 0.5,
+            // orbit_radius: DEFAULT_BALL_RADIUS + DEFAULT_ROBOT_RADIUS,
+            orbit_radius: 0.2,
+            heading_lag: 1.0,
         }
     }
 }
