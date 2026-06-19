@@ -67,8 +67,8 @@ cd analysis
 While running robots, capture telemetry to a ros bag, convert it to a numpy archive, and visualize the telemetry
 
 ```bash
-rm -rf data/bags/robot_telemetry && ros2 bag record -o data/bags/robot_telemetry --topics /robot_feedback/extended/robot0
-python ros_scripts/telem_bag2np.py --bag data/bags/robot_telemetry -o data/telemetry/robot_telemetry.npz --robot 0
+rm -rf data/bags/robot_telemetry && ros2 bag record -o data/bags/robot_telemetry --topics /robot_feedback/extended/robot0 && \
+python ros_scripts/telem_bag2np.py --bag data/bags/robot_telemetry -o data/telemetry/robot_telemetry.npz --robot 0 && \
 python telem_visualize.py -t data/telemetry/robot_telemetry.npz
 ```
 
@@ -84,7 +84,8 @@ Scripts in `analysis/ros_scripts/` require a sourced ROS2 workspace:
 
 - `telem_bag2np.py` — Convert ROS2 bags to NumPy archives
 - `upload_params.py` — Upload parameters to robot firmware via ROS2 services
-- `param_tuning_loop.py` — Interactive edit → upload → record → visualize workflow
+- `signal_input.py` — Signal generator (pulse / sinusoid / step / chirp) for one axis in position or velocity mode
+- `controller_tune.py` — One-shot controller-tuning trial: upload → record → drive signal → visualize
 - `record_and_visualize.sh` — Record a ROS bag and visualize
 - `accel_model_tune.py` — Feed-forward acceleration model tuning toolkit (see below)
 
