@@ -40,7 +40,7 @@ TEST(PivotTrajBindings, DefaultParams) {
 TEST(PivotTrajBindings, NewSucceeds) {
   PivotParams_t params = test_pivot_params();
   Vector6C_t init = init_state_at_heading(0.0f, params.orbit_radius);
-  Vector3C_t center = {0.0f, 0.0f, 0.0f};
+  Vector2C_t center = {0.0f, 0.0f};
   PivotTrajectory_t traj = {};
   ASSERT_EQ(ateam_controls_pivot_traj_new(init, center, PI / 2.0f, params, &traj), ATEAM_CONTROLS_OK);
   EXPECT_GT(ateam_controls_pivot_traj_end_time(traj), 0.0f);
@@ -49,7 +49,7 @@ TEST(PivotTrajBindings, NewSucceeds) {
 TEST(PivotTrajBindings, HeadingReachesTarget) {
   PivotParams_t params = test_pivot_params();
   Vector6C_t init = init_state_at_heading(0.0f, params.orbit_radius);
-  Vector3C_t center = {0.0f, 0.0f, 0.0f};
+  Vector2C_t center = {0.0f, 0.0f};
   float target = PI / 2.0f;
   PivotTrajectory_t traj = {};
   ASSERT_EQ(ateam_controls_pivot_traj_new(init, center, target, params, &traj), ATEAM_CONTROLS_OK);
@@ -62,7 +62,7 @@ TEST(PivotTrajBindings, HeadingReachesTarget) {
 TEST(PivotTrajBindings, StateAtMaintainsOrbitRadius) {
   PivotParams_t params = test_pivot_params();
   Vector6C_t init = init_state_at_heading(0.0f, params.orbit_radius);
-  Vector3C_t center = {1.0f, 0.5f, 0.0f};
+  Vector2C_t center = {1.0f, 0.5f};
   PivotTrajectory_t traj = {};
   ASSERT_EQ(ateam_controls_pivot_traj_new(init, center, PI / 2.0f, params, &traj), ATEAM_CONTROLS_OK);
   float end = ateam_controls_pivot_traj_end_time(traj);
@@ -81,7 +81,7 @@ TEST(PivotTrajBindings, StateAtMaintainsOrbitRadius) {
 TEST(PivotTrajBindings, AccelAtRoundTrip) {
   PivotParams_t params = test_pivot_params();
   Vector6C_t init = init_state_at_heading(0.0f, params.orbit_radius);
-  Vector3C_t center = {0.0f, 0.0f, 0.0f};
+  Vector2C_t center = {0.0f, 0.0f};
   PivotTrajectory_t traj = {};
   ASSERT_EQ(ateam_controls_pivot_traj_new(init, center, PI / 2.0f, params, &traj), ATEAM_CONTROLS_OK);
   Vector3C_t accel = {};
@@ -91,7 +91,7 @@ TEST(PivotTrajBindings, AccelAtRoundTrip) {
 TEST(PivotTrajBindings, TimeShift) {
   PivotParams_t params = test_pivot_params();
   Vector6C_t init = init_state_at_heading(0.0f, params.orbit_radius);
-  Vector3C_t center = {0.0f, 0.0f, 0.0f};
+  Vector2C_t center = {0.0f, 0.0f};
   PivotTrajectory_t traj = {};
   ASSERT_EQ(ateam_controls_pivot_traj_new(init, center, PI / 2.0f, params, &traj), ATEAM_CONTROLS_OK);
   float initial_end = ateam_controls_pivot_traj_end_time(traj);
@@ -103,7 +103,7 @@ TEST(PivotTrajBindings, TimeShift) {
 TEST(PivotTrajBindings, ZeroDisplacementHasZeroEndTime) {
   PivotParams_t params = test_pivot_params();
   Vector6C_t init = init_state_at_heading(1.0f, params.orbit_radius);
-  Vector3C_t center = {0.0f, 0.0f, 0.0f};
+  Vector2C_t center = {0.0f, 0.0f};
   PivotTrajectory_t traj = {};
   ASSERT_EQ(ateam_controls_pivot_traj_new(init, center, 1.0f, params, &traj), ATEAM_CONTROLS_OK);
   EXPECT_NEAR(ateam_controls_pivot_traj_end_time(traj), 0.0f, 1e-6f);
@@ -112,7 +112,7 @@ TEST(PivotTrajBindings, ZeroDisplacementHasZeroEndTime) {
 TEST(PivotTrajBindings, InvalidParamsRejected) {
   PivotParams_t params = test_pivot_params();
   Vector6C_t init = make_state(0, 0, 0, 0, 0, 0);
-  Vector3C_t center = {0.0f, 0.0f, 0.0f};
+  Vector2C_t center = {0.0f, 0.0f};
   PivotTrajectory_t traj = {};
   params.max_vel_angular = 0.0f;
   EXPECT_NE(ateam_controls_pivot_traj_new(init, center, 1.0f, params, &traj), ATEAM_CONTROLS_OK);
