@@ -146,7 +146,8 @@ impl BangBangTraj3D {
 
 // --- 1D helper functions ---
 
-fn eval_1d_accel_at(traj: BangBangTraj1D, t: f32) -> Result<f32, ControlsError> {
+/// Evaluate the bang-bang acceleration at time `t` for a 1D trajectory segment.
+pub(crate) fn eval_1d_accel_at(traj: BangBangTraj1D, t: f32) -> Result<f32, ControlsError> {
     if t >= traj.t4 {
         return Ok(0.0);
     }
@@ -213,7 +214,7 @@ fn compute_brake(s0: f32, sd0: f32, sdd: f32) -> (f32, f32) {
 }
 
 /// Solve one-dimensional bang-bang trajectory to reach target position `s_trg`.
-fn solve_1d_pose(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> Result<BangBangTraj1D, ControlsError> {
+pub(crate) fn solve_1d_pose(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> Result<BangBangTraj1D, ControlsError> {
     if sdd_max <= 0.0 || sd_max <= 0.0 {
         return Err(ControlsError::InvalidInput);
     }
@@ -279,12 +280,12 @@ fn solve_1d_pose(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> Re
         traj.sdd3 = - direction * sdd_max;
         traj.t4 += t3;
     }
-    
+
     Ok(traj)
 }
 
 /// Evaluate one-dimensional trajectory state (position, velocity) at time `t`.
-fn eval_1d_state_at(traj: BangBangTraj1D, s: f32, sd: f32, current_time: f32, t: f32) -> Result<(f32, f32), ControlsError> {
+pub(crate) fn eval_1d_state_at(traj: BangBangTraj1D, s: f32, sd: f32, current_time: f32, t: f32) -> Result<(f32, f32), ControlsError> {
     let mut s = s;
     let mut sd = sd;
     let mut current_time = current_time;
