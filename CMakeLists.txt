@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 
 project(ateam_controls LANGUAGES CXX)
 
-set(RUST_TARGET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/target)
+set(RUST_TARGET_DIR ${CMAKE_CURRENT_SOURCE_DIR}/target CACHE PATH "Where to place 'target' dir when running cargo.")
 
 if((CMAKE_BUILD_TYPE STREQUAL "Release") OR (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
   set(IMPORTED_LIB_PATH ${RUST_TARGET_DIR}/release/libateam_controls_c.a)
@@ -10,10 +10,16 @@ else()
   set(IMPORTED_LIB_PATH ${RUST_TARGET_DIR}/debug/libateam_controls_c.a)
 endif()
 
+file(GLOB RUST_LIB_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/ateam-controls/src/*.rs)
+list(APPEND C_LIB_SOURCES
+  ${CMAKE_CURRENT_SOURCE_DIR}/ateam-controls-c/include/ateam_controls/ateam_controls.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/ateam-controls-c/src/lib.rs
+)
 add_custom_command(
   OUTPUT ${IMPORTED_LIB_PATH}
-  COMMAND cargo build --workspace $<$<CONFIG:Release,RelWithDebInfo>:--release>
+  COMMAND ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${RUST_TARGET_DIR} --unset=MAKEFLAGS --unset=MFLAGS cargo build --workspace $<$<CONFIG:Release,RelWithDebInfo>:--release>
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  DEPENDS ${C_LIB_SOURCES} ${RUST_LIB_SOURCES}
 )
 add_custom_target(
   build_rust_lib ALL
