@@ -162,6 +162,7 @@ class BangBangTraj3D(ctypes.Structure):
         ("x", BangBangTraj1D),
         ("y", BangBangTraj1D),
         ("z", BangBangTraj1D),
+        ("state", Vector6C),
     ]
 
 class PivotParams(ctypes.Structure):
@@ -169,20 +170,20 @@ class PivotParams(ctypes.Structure):
         ("max_vel_angular", ctypes.c_float),
         ("max_accel_angular", ctypes.c_float),
         ("orbit_radius", ctypes.c_float),
-        ("heading_lag", ctypes.c_float),
+        ("inset_angle", ctypes.c_float),
     ]
 
 class PivotTrajectory(ctypes.Structure):
     _fields_ = [
         ("orbit", BangBangTraj1D),
-        ("heading", BangBangTraj1D),
         ("center_x", ctypes.c_float),
         ("center_y", ctypes.c_float),
         ("orbit_radius", ctypes.c_float),
         ("orbit_start", ctypes.c_float),
         ("orbit_start_dot", ctypes.c_float),
         ("orbit_target", ctypes.c_float),
-        ("t_heading_start", ctypes.c_float),
+        ("heading_offset", ctypes.c_float),
+        ("state", Vector6C),
     ]
 
 # ---------------------------------------------------------------------------
@@ -242,7 +243,7 @@ def _setup_signatures(lib):
     lib.ateam_controls_robot_model_torques_to_currents.restype = Vector4C
     lib.ateam_controls_traj_from_target_pose.argtypes = [Vector6C, Vector3C, TrajectoryParams, ctypes.POINTER(BangBangTraj3D)]
     lib.ateam_controls_traj_from_target_pose.restype = ctypes.c_int32
-    lib.ateam_controls_traj_from_target_twist.argtypes = [Vector3C, Vector3C, TrajectoryParams, ctypes.POINTER(BangBangTraj3D)]
+    lib.ateam_controls_traj_from_target_twist.argtypes = [Vector6C, Vector3C, TrajectoryParams, ctypes.POINTER(BangBangTraj3D)]
     lib.ateam_controls_traj_from_target_twist.restype = ctypes.c_int32
     lib.ateam_controls_traj_1d_time_shift.argtypes = [ctypes.POINTER(BangBangTraj1D), ctypes.c_float]
     lib.ateam_controls_traj_1d_time_shift.restype = None
@@ -250,22 +251,22 @@ def _setup_signatures(lib):
     lib.ateam_controls_traj_3d_time_shift.restype = None
     lib.ateam_controls_traj_end_time.argtypes = [BangBangTraj3D]
     lib.ateam_controls_traj_end_time.restype = ctypes.c_float
-    lib.ateam_controls_traj_state_at.argtypes = [BangBangTraj3D, Vector6C, ctypes.c_float, ctypes.c_float, ctypes.POINTER(Vector6C)]
+    lib.ateam_controls_traj_state_at.argtypes = [BangBangTraj3D, ctypes.c_float, ctypes.POINTER(Vector6C)]
     lib.ateam_controls_traj_state_at.restype = ctypes.c_int32
     lib.ateam_controls_traj_accel_at.argtypes = [BangBangTraj3D, ctypes.c_float, ctypes.POINTER(Vector3C)]
     lib.ateam_controls_traj_accel_at.restype = ctypes.c_int32
     # Pivot Trajectory
     lib.ateam_controls_default_pivot_params.argtypes = []
     lib.ateam_controls_default_pivot_params.restype = PivotParams
-    lib.ateam_controls_pivot_traj_new.argtypes = [Vector6C, Vector2C, ctypes.c_float, PivotParams, ctypes.POINTER(PivotTrajectory)]
+    lib.ateam_controls_pivot_traj_new.argtypes = [Vector6C, ctypes.c_float, PivotParams, ctypes.POINTER(PivotTrajectory)]
     lib.ateam_controls_pivot_traj_new.restype = ctypes.c_int32
     lib.ateam_controls_pivot_traj_time_shift.argtypes = [ctypes.POINTER(PivotTrajectory), ctypes.c_float]
     lib.ateam_controls_pivot_traj_time_shift.restype = None
     lib.ateam_controls_pivot_traj_end_time.argtypes = [PivotTrajectory]
     lib.ateam_controls_pivot_traj_end_time.restype = ctypes.c_float
-    lib.ateam_controls_pivot_traj_state_at.argtypes = [PivotTrajectory, Vector6C, ctypes.c_float, ctypes.c_float, ctypes.POINTER(Vector6C)]
+    lib.ateam_controls_pivot_traj_state_at.argtypes = [PivotTrajectory, ctypes.c_float, ctypes.POINTER(Vector6C)]
     lib.ateam_controls_pivot_traj_state_at.restype = ctypes.c_int32
-    lib.ateam_controls_pivot_traj_accel_at.argtypes = [PivotTrajectory, Vector6C, ctypes.c_float, ctypes.c_float, ctypes.POINTER(Vector3C)]
+    lib.ateam_controls_pivot_traj_accel_at.argtypes = [PivotTrajectory, ctypes.c_float, ctypes.POINTER(Vector3C)]
     lib.ateam_controls_pivot_traj_accel_at.restype = ctypes.c_int32
 
 
@@ -332,9 +333,9 @@ def traj_from_target_pose(init_state, target_pose, params):
     _check_rc(_rc, 'ateam_controls_traj_from_target_pose')
     return _out
 
-def traj_from_target_twist(init_twist, target_twist, params):
+def traj_from_target_twist(init_state, target_twist, params):
     _out = BangBangTraj3D()
-    _rc = _lib().ateam_controls_traj_from_target_twist(init_twist, target_twist, params, ctypes.byref(_out))
+    _rc = _lib().ateam_controls_traj_from_target_twist(init_state, target_twist, params, ctypes.byref(_out))
     _check_rc(_rc, 'ateam_controls_traj_from_target_twist')
     return _out
 
@@ -347,9 +348,9 @@ def traj_3d_time_shift(traj, dt):
 def traj_end_time(traj):
     return _lib().ateam_controls_traj_end_time(traj)
 
-def traj_state_at(traj, current_state, current_time, t):
+def traj_state_at(traj, t):
     _out = Vector6C()
-    _rc = _lib().ateam_controls_traj_state_at(traj, current_state, current_time, t, ctypes.byref(_out))
+    _rc = _lib().ateam_controls_traj_state_at(traj, t, ctypes.byref(_out))
     _check_rc(_rc, 'ateam_controls_traj_state_at')
     return _out
 
@@ -362,9 +363,9 @@ def traj_accel_at(traj, t):
 def default_pivot_params():
     return _lib().ateam_controls_default_pivot_params()
 
-def pivot_traj_new(init_state, center_pos, target_heading, params):
+def pivot_traj_new(init_state, target_heading, params):
     _out = PivotTrajectory()
-    _rc = _lib().ateam_controls_pivot_traj_new(init_state, center_pos, ctypes.c_float(target_heading), params, ctypes.byref(_out))
+    _rc = _lib().ateam_controls_pivot_traj_new(init_state, ctypes.c_float(target_heading), params, ctypes.byref(_out))
     _check_rc(_rc, 'ateam_controls_pivot_traj_new')
     return _out
 
@@ -374,14 +375,14 @@ def pivot_traj_time_shift(traj, dt):
 def pivot_traj_end_time(traj):
     return _lib().ateam_controls_pivot_traj_end_time(traj)
 
-def pivot_traj_state_at(traj, current_state, current_time, t):
+def pivot_traj_state_at(traj, t):
     _out = Vector6C()
-    _rc = _lib().ateam_controls_pivot_traj_state_at(traj, current_state, current_time, t, ctypes.byref(_out))
+    _rc = _lib().ateam_controls_pivot_traj_state_at(traj, t, ctypes.byref(_out))
     _check_rc(_rc, 'ateam_controls_pivot_traj_state_at')
     return _out
 
-def pivot_traj_accel_at(traj, current_state, current_time, t):
+def pivot_traj_accel_at(traj, t):
     _out = Vector3C()
-    _rc = _lib().ateam_controls_pivot_traj_accel_at(traj, current_state, current_time, t, ctypes.byref(_out))
+    _rc = _lib().ateam_controls_pivot_traj_accel_at(traj, t, ctypes.byref(_out))
     _check_rc(_rc, 'ateam_controls_pivot_traj_accel_at')
     return _out

@@ -117,6 +117,7 @@ typedef struct BangBangTraj3D {
     BangBangTraj1D_t x;
     BangBangTraj1D_t y;
     BangBangTraj1D_t z;
+    Vector6C_t state;
 } BangBangTraj3D_t;
 
 // ============================================================================
@@ -178,7 +179,7 @@ int32_t ateam_controls_traj_from_target_pose(
     TrajectoryParams_t params,
     BangBangTraj3D_t* out);
 int32_t ateam_controls_traj_from_target_twist(
-    Vector3C_t init_twist,
+    Vector6C_t init_state,
     Vector3C_t target_twist,
     TrajectoryParams_t params,
     BangBangTraj3D_t* out);
@@ -189,8 +190,6 @@ float ateam_controls_traj_end_time(BangBangTraj3D_t traj);
 
 int32_t ateam_controls_traj_state_at(
     BangBangTraj3D_t traj,
-    Vector6C_t current_state,
-    float current_time,
     float t,
     Vector6C_t* out);
 int32_t ateam_controls_traj_accel_at(BangBangTraj3D_t traj, float t, Vector3C_t* out);
@@ -203,26 +202,25 @@ typedef struct PivotParams {
     float max_vel_angular;
     float max_accel_angular;
     float orbit_radius;
-    float heading_lag;
+    float inset_angle;
 } PivotParams_t;
 
 typedef struct PivotTrajectory {
     BangBangTraj1D_t orbit;
-    BangBangTraj1D_t heading;
     float center_x;
     float center_y;
     float orbit_radius;
     float orbit_start;
     float orbit_start_dot;
     float orbit_target;
-    float t_heading_start;
+    float heading_offset;
+    Vector6C_t state;
 } PivotTrajectory_t;
 
 PivotParams_t ateam_controls_default_pivot_params(void);
 
 int32_t ateam_controls_pivot_traj_new(
     Vector6C_t init_state,
-    Vector2C_t center_pos,
     float target_heading,
     PivotParams_t params,
     PivotTrajectory_t* out);
@@ -232,15 +230,11 @@ float ateam_controls_pivot_traj_end_time(PivotTrajectory_t traj);
 
 int32_t ateam_controls_pivot_traj_state_at(
     PivotTrajectory_t traj,
-    Vector6C_t current_state,
-    float current_time,
     float t,
     Vector6C_t* out);
 
 int32_t ateam_controls_pivot_traj_accel_at(
     PivotTrajectory_t traj,
-    Vector6C_t current_state,
-    float current_time,
     float t,
     Vector3C_t* out);
 

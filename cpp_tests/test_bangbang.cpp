@@ -33,11 +33,11 @@ TEST(BangBangBindings, FromTargetPoseRoundTrip) {
 }
 
 TEST(BangBangBindings, FromTargetTwistRoundTrip) {
-  Vector3C_t init_twist = {0.0f, 0.0f, 0.0f};
+  Vector6C_t init = make_state(0, 0, 0, 0, 0, 0);
   Vector3C_t target_twist = {0.3f, 0.0f, 0.0f};
   TrajectoryParams_t params = test_traj_params();
   BangBangTraj3D_t traj = {};
-  ASSERT_EQ(ateam_controls_traj_from_target_twist(init_twist, target_twist, params, &traj), ATEAM_CONTROLS_OK);
+  ASSERT_EQ(ateam_controls_traj_from_target_twist(init, target_twist, params, &traj), ATEAM_CONTROLS_OK);
   float end = ateam_controls_traj_end_time(traj);
   EXPECT_GT(end, 0.0f);
 }
@@ -50,7 +50,7 @@ TEST(BangBangBindings, StateAtRoundTrip) {
   ASSERT_EQ(ateam_controls_traj_from_target_pose(init, target, params, &traj), ATEAM_CONTROLS_OK);
   float end = ateam_controls_traj_end_time(traj);
   Vector6C_t final_state = {};
-  ASSERT_EQ(ateam_controls_traj_state_at(traj, init, 0.0f, end, &final_state), ATEAM_CONTROLS_OK);
+  ASSERT_EQ(ateam_controls_traj_state_at(traj, end, &final_state), ATEAM_CONTROLS_OK);
   EXPECT_NEAR(final_state.data[0], target.x, 1e-3f);
 }
 

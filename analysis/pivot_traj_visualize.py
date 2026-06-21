@@ -40,12 +40,30 @@ def main():
         "--fps", type=float, default=30.0,
         help="Animation playback speed in frames per second",
     )
+    parser.add_argument(
+        "--inset-angle", type=float, default=None,
+        help="Angle (degrees) from the radius line pointing at the orbit center "
+             "to the robot heading, positive toward the direction of travel "
+             "(0 = face center, +90 = tangent forward, -90 = tangent backward), "
+             "held constant for the whole pivot (default: pivot parameter default)",
+    )
+    parser.add_argument(
+        "--orbit-radius", type=float, default=None,
+        help="Orbit radius in meters (default: pivot parameter default)",
+    )
+    parser.add_argument(
+        "--max-angular-vel", type=float, default=None,
+        help="Max orbit angular velocity in rad/s (default: pivot parameter default)",
+    )
+    parser.add_argument(
+        "--max-angular-acc", type=float, default=None,
+        help="Max orbit angular acceleration in rad/s^2 (default: pivot parameter default)",
+    )
     args = parser.parse_args()
 
     compile_controls()
 
     from ateam_controls import (
-        Vector2C,
         Vector6C,
         default_pivot_params,
         pivot_traj_new,
@@ -56,42 +74,47 @@ def main():
     theta_end = np.deg2rad(args.theta_end)
 
     # Build trajectory ---------------------------------------------------
+    # Start from the pivot parameter defaults; only override fields whose CLI
+    # arg was explicitly provided.
     params = default_pivot_params()
+    if args.inset_angle is not None:
+        params.inset_angle = float(np.deg2rad(args.inset_angle))
+    if args.orbit_radius is not None:
+        params.orbit_radius = float(args.orbit_radius)
+    if args.max_angular_vel is not None:
+        params.max_vel_angular = float(args.max_angular_vel)
+    if args.max_angular_acc is not None:
+        params.max_accel_angular = float(args.max_angular_acc)
+
     orbit_radius = params.orbit_radius      # ball_radius + robot_radius
     robot_radius = 0.090                    # display radius of robot body
     ball_radius = 0.0215
 
-    # Robot initially positioned on the orbit at theta_start, ball at origin
-    init_x = float(-orbit_radius * np.cos(theta_start))
-    init_y = float(-orbit_radius * np.sin(theta_start))
+    # Start the robot at the origin with the given start heading.
     init_state_c = Vector6C(
         data=(ctypes.c_float * 6)(
-            init_x, init_y, float(theta_start), 0.0, 0.0, 0.0
+            0.0, 0.0, float(theta_start), 0.0, 0.0, 0.0
         )
     )
-    center_c = Vector2C(x=0.0, y=0.0)
 
-    traj = pivot_traj_new(init_state_c, center_c, float(theta_end), params)
+    traj = pivot_traj_new(init_state_c, float(theta_end), params)
+
+    # Actual orbit center derived by the trajectory (depends on orbit direction).
+    center_x = float(traj.center_x)
+    center_y = float(traj.center_y)
 
     # Sample at exactly fps Hz so each frame = 1/fps seconds of real time ----
     from ateam_controls import pivot_traj_end_time
     duration = float(pivot_traj_end_time(traj))
     n_frames = max(2, round(duration * args.fps) + 1)
-    times, states = sample_pivot_trajectory(traj, init_state_c, n=n_frames)
+    times, states = sample_pivot_trajectory(traj, n=n_frames)
 
-    # Extra static decorations -------------------------------------------
+    # Reference orbit circle drawn at the trajectory's actual orbit center.
     extra_patches = [
-        # Reference orbit circle
         mpatches.Circle(
-            (0.0, 0.0), orbit_radius,
+            (center_x, center_y), orbit_radius,
             fill=False, edgecolor="gray", linewidth=1.0, linestyle=":",
             alpha=0.7, zorder=1, label="orbit",
-        ),
-        # Ball at origin
-        mpatches.Circle(
-            (0.0, 0.0), ball_radius,
-            fill=True, facecolor="orange", edgecolor="darkorange",
-            linewidth=1.0, alpha=0.9, zorder=2, label="ball",
         ),
     ]
 
@@ -107,6 +130,7 @@ def main():
         title=title,
         fps=args.fps,
         extra_patches=extra_patches,
+        front_ball_radius=ball_radius,
     )
 
     plt.tight_layout()
