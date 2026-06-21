@@ -8,6 +8,10 @@ pub const DEFAULT_MAX_VEL_LINEAR: f32 = 3.0;            // m/s
 pub const DEFAULT_MAX_VEL_ANGULAR: f32 = 5.0 * PI;      // rad/s
 pub const DEFAULT_MAX_ACCEL_LINEAR: f32 = 2.0;           // m/s^2
 pub const DEFAULT_MAX_ACCEL_ANGULAR: f32 = 10.0 * PI;     // rad/s^2
+pub const DEFAULT_PIVOT_ORBIT_MAX_VEL_ANGULAR: f32 = 2.0;                 // m
+pub const DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR: f32 = 4.0;                 // m
+pub const DEFAULT_PIVOT_ORBIT_RADIUS: f32 = 0.15;                 // m
+pub const DEFAULT_PIVOT_ORBIT_INSET_ANGLE: f32 = 1.0;                 // m
 
 // Kalman filter noise standard deviations
 pub const DEFAULT_KF_PROCESS_STD_POS_LINEAR: f32 = 0.01;

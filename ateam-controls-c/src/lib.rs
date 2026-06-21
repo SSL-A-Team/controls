@@ -167,12 +167,12 @@ pub unsafe extern "C" fn ateam_controls_traj_from_target_pose(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_traj_from_target_twist(
-    init_twist: Vector3C,
+    init_state: Vector6C,
     target_twist: Vector3C,
     params: TrajectoryParams,
     out: *mut BangBangTraj3D,
 ) -> i32 {
-    match BangBangTraj3D::from_target_twist(init_twist.into(), target_twist.into(), params) {
+    match BangBangTraj3D::from_target_twist(init_state.into(), target_twist.into(), params) {
         Ok(traj) => {
             unsafe { *out = traj; }
             0
@@ -199,12 +199,10 @@ pub extern "C" fn ateam_controls_traj_end_time(traj: BangBangTraj3D) -> f32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_traj_state_at(
     traj: BangBangTraj3D,
-    current_state: Vector6C,
-    current_time: f32,
     t: f32,
     out: *mut Vector6C,
 ) -> i32 {
-    match traj.state_at(current_state.into(), current_time, t) {
+    match traj.state_at(t) {
         Ok(state) => {
             unsafe { *out = state.into(); }
             0
@@ -240,12 +238,11 @@ pub extern "C" fn ateam_controls_default_pivot_params() -> PivotParams {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_pivot_traj_new(
     init_state: Vector6C,
-    center_pos: Vector2C,
     target_heading: f32,
     params: PivotParams,
     out: *mut PivotTrajectory,
 ) -> i32 {
-    match PivotTrajectory::new(init_state.into(), center_pos.into(), target_heading, params) {
+    match PivotTrajectory::new(init_state.into(), target_heading, params) {
         Ok(traj) => {
             unsafe { *out = traj; }
             0
@@ -267,12 +264,10 @@ pub extern "C" fn ateam_controls_pivot_traj_end_time(traj: PivotTrajectory) -> f
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_pivot_traj_state_at(
     traj: PivotTrajectory,
-    current_state: Vector6C,
-    current_time: f32,
     t: f32,
     out: *mut Vector6C,
 ) -> i32 {
-    match traj.state_at(current_state.into(), current_time, t) {
+    match traj.state_at(t) {
         Ok(state) => {
             unsafe { *out = state.into(); }
             0
@@ -284,12 +279,10 @@ pub unsafe extern "C" fn ateam_controls_pivot_traj_state_at(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_pivot_traj_accel_at(
     traj: PivotTrajectory,
-    current_state: Vector6C,
-    current_time: f32,
     t: f32,
     out: *mut Vector3C,
 ) -> i32 {
-    match traj.accel_at(current_state.into(), current_time, t) {
+    match traj.accel_at(t) {
         Ok(accel) => {
             unsafe { *out = accel.into(); }
             0

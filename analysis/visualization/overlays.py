@@ -28,7 +28,7 @@ from .body import local_to_global_xy
 _TRAJ_COLUMNS = ["time", "x", "y", "theta", "xd", "yd", "thetad", "xdd", "ydd", "thetadd"]
 
 
-def _sample_trajectory(traj, state_c, t_start, t_end):
+def _sample_trajectory(traj, t_start, t_end):
     """Sample a bang-bang trajectory at 1 ms resolution."""
     end = traj_end_time(traj)
     sample_start = max(0.0, t_start)
@@ -41,7 +41,7 @@ def _sample_trajectory(traj, state_c, t_start, t_end):
     n = len(times)
     rows = np.empty((n, 10), dtype=np.float32)
     for i, t in enumerate(times):
-        st = traj_state_at(traj, state_c, ctypes.c_float(0.0), ctypes.c_float(t))
+        st = traj_state_at(traj, ctypes.c_float(t))
         ac = traj_accel_at(traj, ctypes.c_float(t))
         rows[i] = [t, st.data[0], st.data[1], st.data[2],
                       st.data[3], st.data[4], st.data[5],
@@ -275,11 +275,10 @@ class TrajectoryOverlay:
                     traj = traj_from_target_pose(state_c, target_c, params)
                 else:
                     tw = self.vel_cmd[self._idx]
-                    init_tw = Vector3C(x=float(init_state[3]), y=float(init_state[4]), z=float(init_state[5]))
                     target_tw = Vector3C(x=float(tw[0]), y=float(tw[1]), z=float(tw[2]))
-                    traj = traj_from_target_twist(init_tw, target_tw, params)
+                    traj = traj_from_target_twist(state_c, target_tw, params)
 
-                traj_data = _sample_trajectory(traj, state_c, t_start, t_end)
+                traj_data = _sample_trajectory(traj, t_start, t_end)
                 traj_t = traj_data["time"].values + t_cursor
                 for (i, j), col in _TRAJ_COLUMN_MAP.items():
                     line = self._traj_lines[(i, j)]

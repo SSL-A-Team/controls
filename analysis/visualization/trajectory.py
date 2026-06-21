@@ -27,15 +27,14 @@ from ateam_controls import (
 # Trajectory sampling
 # ============================================================================
 
-def sample_pivot_trajectory(traj, init_state_c, n=300):
+def sample_pivot_trajectory(traj, n=300):
     """Sample a PivotTrajectory at *n* evenly-spaced time points.
 
     Parameters
     ----------
     traj : PivotTrajectory
-        The pivot trajectory object returned by ``pivot_traj_new``.
-    init_state_c : Vector6C
-        Robot state at trajectory start: ``[x, y, θ, ẋ, ẏ, θ̇]``.
+        The pivot trajectory object returned by ``pivot_traj_new``. It carries
+        its own internal seed state, so no external state is required.
     n : int
         Number of samples (default 300).
 
@@ -52,8 +51,6 @@ def sample_pivot_trajectory(traj, init_state_c, n=300):
     for i, t in enumerate(times):
         st = pivot_traj_state_at(
             traj,
-            init_state_c,
-            ctypes.c_float(0.0),
             ctypes.c_float(float(t)),
         )
         states[i] = [st.data[j] for j in range(6)]
@@ -71,6 +68,7 @@ def animate_robot_trajectory(
     title="Robot Trajectory",
     fps=30.0,
     extra_patches=None,
+    front_ball_radius=None,
 ):
     """Animate a robot moving through X/Y space along a pre-sampled trajectory.
 
@@ -93,6 +91,10 @@ def animate_robot_trajectory(
         Additional static patches (e.g. an orbit circle, a ball dot) to add
         to the axes before the animation starts.  Patches should be created
         with a ``label`` if they should appear in the legend.
+    front_ball_radius : float, optional
+        If given, draw an orange ball of this radius stuck to the front face of
+        the robot (touching the robot body along its heading) and animate it
+        along with the robot.
 
     Returns
     -------
@@ -142,6 +144,19 @@ def animate_robot_trajectory(
         color="navy", linewidth=2.5, zorder=4, label="heading",
     )
 
+    # Optional ball stuck to the front face of the robot (animated)
+    ball_circle = None
+    if front_ball_radius is not None:
+        ball_offset = robot_radius + front_ball_radius
+        bx0 = xs[0] + ball_offset * np.cos(thetas[0])
+        by0 = ys[0] + ball_offset * np.sin(thetas[0])
+        ball_circle = mpatches.Circle(
+            (bx0, by0), front_ball_radius,
+            fill=True, facecolor="orange", edgecolor="darkorange",
+            linewidth=1.0, alpha=0.95, zorder=3.5, label="ball",
+        )
+        ax.add_patch(ball_circle)
+
     # Time readout
     time_text = ax.text(
         0.02, 0.96,
@@ -171,7 +186,15 @@ def animate_robot_trajectory(
             [y, y + robot_radius * np.sin(theta)],
         )
         time_text.set_text(f"t = {times[frame]:.3f} s")
-        return robot_circle, heading_line, time_text
+        artists = [robot_circle, heading_line, time_text]
+        if ball_circle is not None:
+            ball_offset = robot_radius + ball_circle.radius
+            ball_circle.center = (
+                x + ball_offset * np.cos(theta),
+                y + ball_offset * np.sin(theta),
+            )
+            artists.append(ball_circle)
+        return tuple(artists)
 
     interval_ms = 1000.0 / fps
     anim = animation.FuncAnimation(
