@@ -268,22 +268,28 @@ impl RobotModel {
         self.p = self.a * self.p * self.a.transpose() + self.kf_q;
     }
 
-    /// Snap the Kalman filter pose state to the provided global pose.
+    /// Snap the KF position state [x, y, θ] to the provided global pose.
     ///
-    /// Velocity state is left untouched. Position covariance is collapsed to the vision-measurement noise level
+    /// Velocity state [vx, vy, ω] is left untouched. The position block of the
+    /// covariance matrix P is reset: all cross-terms between position and velocity
+    /// are zeroed (decoupling the snapped pose from prior accumulated uncertainty),
+    /// and the position diagonal is set to the vision measurement variance so the
+    /// next predict step grows P from a known baseline.
+    ///
+    /// When snapping after a large position jump (e.g. robot repositioned by hand),
+    /// always follow with `kf_set_vel` so the velocity state is consistent.
     pub fn kf_set_pose(&mut self, pose: Vector3f) {
         self.x[0] = pose.x;
         self.x[1] = pose.y;
         self.x[2] = wrap_angle(pose.z);
 
-        // Zero the position rows/cols of P then set the diagonal to the vision measurement
-        // variance. This decouples the snapped pose from the previously-accumulated covariance.
-        for i in 0..6 {
-            for j in 0..3 {
-                self.p[(i, j)] = 0.0;
-                self.p[(j, i)] = 0.0;
-            }
-        }
+        // Zero all 6 rows of the position columns (cols 0-2), then
+        // zero all 6 columns of the position rows (rows 0-2).
+        // Together these clear the full pos-pos and pos-vel cross blocks.
+        self.p.fixed_view_mut::<6, 3>(0, 0).fill(0.0);
+        self.p.fixed_view_mut::<3, 6>(0, 0).fill(0.0);
+
+        // Set position diagonal to vision measurement variance.
         let var_lin = self.kf_params.measurement_noise_std_vision_pos_linear
             * self.kf_params.measurement_noise_std_vision_pos_linear;
         let var_ang = self.kf_params.measurement_noise_std_vision_pos_angular
@@ -291,6 +297,35 @@ impl RobotModel {
         self.p[(0, 0)] = var_lin;
         self.p[(1, 1)] = var_lin;
         self.p[(2, 2)] = var_ang;
+    }
+
+    /// Snap the KF velocity state [vx, vy, ω] to the provided global-frame twist.
+    ///
+    /// Position state [x, y, θ] is left untouched. The velocity block of the
+    /// covariance matrix P is reset: all cross-terms between velocity and position
+    /// are zeroed, and the velocity diagonal is set to the max-velocity variance
+    /// so the next predict step grows P from a known baseline. The large initial
+    /// variance converges quickly once encoder and gyro measurements resume.
+    ///
+    /// Call this alongside `kf_set_pose` whenever a large position jump is accepted,
+    /// so the velocity state does not reflect motion toward the old position.
+    pub fn kf_set_vel(&mut self, vel: Vector3f) {
+        self.x[3] = vel.x;
+        self.x[4] = vel.y;
+        self.x[5] = vel.z;
+
+        // Zero all 6 rows of the velocity columns (cols 3-5), then
+        // zero all 6 columns of the velocity rows (rows 3-5).
+        // Together these clear the full vel-vel and vel-pos cross blocks.
+        self.p.fixed_view_mut::<6, 3>(0, 3).fill(0.0);
+        self.p.fixed_view_mut::<3, 6>(3, 0).fill(0.0);
+
+        // Set velocity diagonal to max-velocity variance.
+        let var_lin = self.kf_params.max_vel_linear * self.kf_params.max_vel_linear;
+        let var_ang = self.kf_params.max_vel_angular * self.kf_params.max_vel_angular;
+        self.p[(3, 3)] = var_lin;
+        self.p[(4, 4)] = var_lin;
+        self.p[(5, 5)] = var_ang;
     }
 
     pub fn kf_update(&mut self, z: Vector8f, mask_vision: bool, mask_encoder: bool, mask_gyro: bool) -> Result<(), ControlsError> {
