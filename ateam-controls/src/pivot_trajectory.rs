@@ -241,6 +241,7 @@ impl Trajectory for PivotTrajectory {
     }
 
     fn sample(&self) -> (Vector6f, Vector3f) {
+        // accel should always be defined for t=0, but default to zero if something goes wrong
         let accel = self.accel_at(0.0).unwrap_or_default();
         (self.state, accel)
     }

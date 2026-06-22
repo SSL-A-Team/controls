@@ -76,3 +76,40 @@ TEST(BangBangBindings, TimeShift) {
   float shifted_end = ateam_controls_traj_end_time(traj);
   EXPECT_NEAR(shifted_end - initial_end, 2.5f, 1e-6f);
 }
+
+TEST(BangBangBindings, SampleMatchesStateAtZero) {
+  Vector6C_t init = make_state(0, 0, 0, 0, 0, 0);
+  Vector3C_t target = {1.0f, 0.0f, 0.0f};
+  TrajectoryParams_t params = test_traj_params();
+  BangBangTraj3D_t traj = {};
+  ASSERT_EQ(ateam_controls_traj_from_target_pose(init, target, params, &traj), ATEAM_CONTROLS_OK);
+  Vector6C_t state = {};
+  Vector3C_t accel = {};
+  ateam_controls_traj_sample(traj, &state, &accel);
+  Vector6C_t state_ref = {};
+  ASSERT_EQ(ateam_controls_traj_state_at(traj, 0.0f, &state_ref), ATEAM_CONTROLS_OK);
+  Vector3C_t accel_ref = {};
+  ASSERT_EQ(ateam_controls_traj_accel_at(traj, 0.0f, &accel_ref), ATEAM_CONTROLS_OK);
+  for (int i = 0; i < 6; ++i) EXPECT_NEAR(state.data[i], state_ref.data[i], 1e-5f);
+  EXPECT_NEAR(accel.x, accel_ref.x, 1e-5f);
+  EXPECT_NEAR(accel.y, accel_ref.y, 1e-5f);
+  EXPECT_NEAR(accel.z, accel_ref.z, 1e-5f);
+}
+
+TEST(BangBangBindings, TickAdvancesToTarget) {
+  Vector6C_t init = make_state(0, 0, 0, 0, 0, 0);
+  Vector3C_t target = {1.0f, 0.0f, 0.0f};
+  TrajectoryParams_t params = test_traj_params();
+  BangBangTraj3D_t traj = {};
+  ASSERT_EQ(ateam_controls_traj_from_target_pose(init, target, params, &traj), ATEAM_CONTROLS_OK);
+  float end = ateam_controls_traj_end_time(traj);
+  const float dt = 0.001f;
+  int steps = static_cast<int>(end / dt) + 10;
+  for (int i = 0; i < steps; ++i) ateam_controls_traj_tick(&traj, dt);
+  Vector6C_t state = {};
+  Vector3C_t accel = {};
+  ateam_controls_traj_sample(traj, &state, &accel);
+  EXPECT_NEAR(state.data[0], target.x, 1e-2f);
+  // Once the trajectory has fully elapsed, no acceleration should be commanded.
+  EXPECT_NEAR(accel.x, 0.0f, 1e-3f);
+}
