@@ -242,7 +242,7 @@ pub unsafe extern "C" fn ateam_controls_pivot_traj_new(
     params: PivotParams,
     out: *mut PivotTrajectory,
 ) -> i32 {
-    match PivotTrajectory::new(init_state.into(), target_heading, params) {
+    match PivotTrajectory::from_target_heading(init_state.into(), target_heading, params) {
         Ok(traj) => {
             unsafe { *out = traj; }
             0
