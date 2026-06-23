@@ -255,6 +255,10 @@ def _setup_signatures(lib):
     lib.ateam_controls_traj_state_at.restype = ctypes.c_int32
     lib.ateam_controls_traj_accel_at.argtypes = [BangBangTraj3D, ctypes.c_float, ctypes.POINTER(Vector3C)]
     lib.ateam_controls_traj_accel_at.restype = ctypes.c_int32
+    lib.ateam_controls_traj_tick.argtypes = [ctypes.POINTER(BangBangTraj3D), ctypes.c_float]
+    lib.ateam_controls_traj_tick.restype = None
+    lib.ateam_controls_traj_sample.argtypes = [BangBangTraj3D, ctypes.POINTER(Vector6C), ctypes.POINTER(Vector3C)]
+    lib.ateam_controls_traj_sample.restype = None
     # Pivot Trajectory
     lib.ateam_controls_default_pivot_params.argtypes = []
     lib.ateam_controls_default_pivot_params.restype = PivotParams
@@ -268,6 +272,10 @@ def _setup_signatures(lib):
     lib.ateam_controls_pivot_traj_state_at.restype = ctypes.c_int32
     lib.ateam_controls_pivot_traj_accel_at.argtypes = [PivotTrajectory, ctypes.c_float, ctypes.POINTER(Vector3C)]
     lib.ateam_controls_pivot_traj_accel_at.restype = ctypes.c_int32
+    lib.ateam_controls_pivot_traj_tick.argtypes = [ctypes.POINTER(PivotTrajectory), ctypes.c_float]
+    lib.ateam_controls_pivot_traj_tick.restype = None
+    lib.ateam_controls_pivot_traj_sample.argtypes = [PivotTrajectory, ctypes.POINTER(Vector6C), ctypes.POINTER(Vector3C)]
+    lib.ateam_controls_pivot_traj_sample.restype = None
 
 
 # ---------------------------------------------------------------------------
@@ -360,6 +368,15 @@ def traj_accel_at(traj, t):
     _check_rc(_rc, 'ateam_controls_traj_accel_at')
     return _out
 
+def traj_tick(traj, dt):
+    _lib().ateam_controls_traj_tick(ctypes.byref(traj), dt)
+
+def traj_sample(traj):
+    _state = Vector6C()
+    _accel = Vector3C()
+    _lib().ateam_controls_traj_sample(traj, ctypes.byref(_state), ctypes.byref(_accel))
+    return _state, _accel
+
 def default_pivot_params():
     return _lib().ateam_controls_default_pivot_params()
 
@@ -386,3 +403,12 @@ def pivot_traj_accel_at(traj, t):
     _rc = _lib().ateam_controls_pivot_traj_accel_at(traj, t, ctypes.byref(_out))
     _check_rc(_rc, 'ateam_controls_pivot_traj_accel_at')
     return _out
+
+def pivot_traj_tick(traj, dt):
+    _lib().ateam_controls_pivot_traj_tick(ctypes.byref(traj), dt)
+
+def pivot_traj_sample(traj):
+    _state = Vector6C()
+    _accel = Vector3C()
+    _lib().ateam_controls_pivot_traj_sample(traj, ctypes.byref(_state), ctypes.byref(_accel))
+    return _state, _accel

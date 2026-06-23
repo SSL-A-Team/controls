@@ -55,10 +55,14 @@ from ._bindings import (
     traj_end_time,
     traj_state_at,
     traj_accel_at,
+    traj_tick,
+    traj_sample,
     # Pivot trajectory functions
     pivot_traj_new,
     pivot_traj_time_shift,
     pivot_traj_end_time,
     pivot_traj_state_at,
     pivot_traj_accel_at,
+    pivot_traj_tick,
+    pivot_traj_sample,
 )

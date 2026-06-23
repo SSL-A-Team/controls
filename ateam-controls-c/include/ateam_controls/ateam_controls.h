@@ -194,6 +194,9 @@ int32_t ateam_controls_traj_state_at(
     Vector6C_t* out);
 int32_t ateam_controls_traj_accel_at(BangBangTraj3D_t traj, float t, Vector3C_t* out);
 
+void ateam_controls_traj_tick(BangBangTraj3D_t* traj, float dt);
+void ateam_controls_traj_sample(BangBangTraj3D_t traj, Vector6C_t* state_out, Vector3C_t* accel_out);
+
 // ============================================================================
 // Pivot Trajectory
 // ============================================================================
@@ -237,6 +240,9 @@ int32_t ateam_controls_pivot_traj_accel_at(
     PivotTrajectory_t traj,
     float t,
     Vector3C_t* out);
+
+void ateam_controls_pivot_traj_tick(PivotTrajectory_t* traj, float dt);
+void ateam_controls_pivot_traj_sample(PivotTrajectory_t traj, Vector6C_t* state_out, Vector3C_t* accel_out);
 
 #ifdef __cplusplus
 }

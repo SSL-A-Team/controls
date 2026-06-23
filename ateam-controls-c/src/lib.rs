@@ -1,4 +1,5 @@
 use ateam_controls::ctypes::*;
+use ateam_controls::trajectory::*;
 use ateam_controls::bangbang_trajectory::*;
 use ateam_controls::pivot_trajectory::*;
 use ateam_controls::robot_model::*;
@@ -226,6 +227,24 @@ pub unsafe extern "C" fn ateam_controls_traj_accel_at(
     }
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_traj_tick(traj: *mut BangBangTraj3D, dt: f32) {
+    unsafe { (*traj).tick(dt); }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_traj_sample(
+    traj: BangBangTraj3D,
+    state_out: *mut Vector6C,
+    accel_out: *mut Vector3C,
+) {
+    unsafe {
+        let (state, accel) = traj.sample();
+        *state_out = state.into();
+        *accel_out = accel.into();
+    }
+}
+
 // ============================================================================
 // Pivot Trajectory
 // ============================================================================
@@ -288,5 +307,23 @@ pub unsafe extern "C" fn ateam_controls_pivot_traj_accel_at(
             0
         }
         Err(e) => e as i32,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_pivot_traj_tick(traj: *mut PivotTrajectory, dt: f32) {
+    unsafe { (*traj).tick(dt); }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_pivot_traj_sample(
+    traj: PivotTrajectory,
+    state_out: *mut Vector6C,
+    accel_out: *mut Vector3C,
+) {
+    unsafe {
+        let (state, accel) = traj.sample();
+        *state_out = state.into();
+        *accel_out = accel.into();
     }
 }
