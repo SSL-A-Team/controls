@@ -163,63 +163,81 @@ fn directed_displacement(raw: f32, d: f32) -> f32 {
 /// after which the robot's heading aims at `(tx, ty)`.
 ///
 /// The robot rides the orbit circle while its heading stays a constant offset
-/// ahead of the orbit angle, so the "facing error" `heading(φ) − bearing(φ)`
-/// grows by one full revolution per lap. The orbit is scanned in fine steps from
-/// the start in the travel direction and the first sign change of the facing
-/// error is bracketed and bisected. Steps straddling the ±π wrap of the error are
-/// skipped so the wraparound is not mistaken for a crossing. Returns `None` if no
-/// crossing is found within one revolution.
+/// ahead of the orbit angle, so over one lap the heading sweeps a full revolution
+/// and points directly at the target exactly once. That "facing" condition is
+/// `heading × (target − position) = 0` with `heading · (target − position) > 0`
+/// (heading parallel to, and pointing toward, the target).
+///
+/// This is built to be cheap on an FPU-but-no-hardware-trig target (Cortex-M7):
+/// it makes **no** transcendental calls inside the loop. The orbit-angle unit
+/// vector `(cos φ, sin φ)` and the heading unit vector `(cos θ, sin θ)` are
+/// advanced one fixed step at a time by incremental rotation (angle-addition with
+/// a precomputed `(cos Δ, sin Δ)`), so the only `sin`/`cos` calls are the handful
+/// of setup values. The signed cross product is smooth (no angle wrapping), so the
+/// first sign change with a forward-facing endpoint brackets the root. Because the
+/// cross product is very nearly linear across a one-degree bracket, the root is
+/// refined by a single linear interpolation of the two already-computed cross
+/// values (no extra evaluation). Returns `None` if no facing crossing is found
+/// within one revolution.
 fn solve_face_point(seed: &CircleSeed, r: f32, tx: f32, ty: f32) -> Option<f32> {
-    // Facing error at orbit displacement `disp` from the start.
-    let facing_error = |disp: f32| -> f32 {
-        let phi = seed.orbit_start + disp;
-        let px = seed.center_x + r * cosf(phi);
-        let py = seed.center_y + r * sinf(phi);
-        let bearing = atan2f(ty - py, tx - px);
-        wrap_angle(phi + seed.heading_offset - bearing)
+    // Signed cross product and dot product of the heading unit vector with the
+    // vector from the robot position to the target, given the orbit-angle and
+    // heading unit vectors `(cphi, sphi)` and `(ch, sh)`.
+    let cross_dot = |cphi: f32, sphi: f32, ch: f32, sh: f32| -> (f32, f32) {
+        let px = seed.center_x + r * cphi;
+        let py = seed.center_y + r * sphi;
+        let wx = tx - px;
+        let wy = ty - py;
+        (ch * wy - sh * wx, ch * wx + sh * wy)
     };
 
     const SCAN_STEPS: i32 = 720; // 0.5° resolution over one revolution
     const ROOT_TOL: f32 = 1e-6;
-    const BISECT_ITERS: i32 = 40;
 
-    let mut prev_disp = 0.0_f32;
-    let mut prev_f = facing_error(0.0);
-    if fabsf(prev_f) < ROOT_TOL {
+    let step = seed.d * (2.0 * PI / SCAN_STEPS as f32);
+    let cd = cosf(step);
+    let sd = sinf(step);
+
+    // Unit vectors at disp = 0, advanced incrementally through the scan.
+    let mut cphi = cosf(seed.orbit_start);
+    let mut sphi = sinf(seed.orbit_start);
+    let theta0 = seed.orbit_start + seed.heading_offset;
+    let mut ch = cosf(theta0);
+    let mut sh = sinf(theta0);
+
+    let (mut prev_cross, mut prev_dot) = cross_dot(cphi, sphi, ch, sh);
+    if fabsf(prev_cross) < ROOT_TOL && prev_dot > 0.0 {
         return Some(0.0);
     }
 
-    let step = seed.d * (2.0 * PI / SCAN_STEPS as f32);
+    let mut prev_disp = 0.0_f32;
     for i in 1..=SCAN_STEPS {
+        // Rotate both unit vectors by one step (angle addition).
+        let ncphi = cphi * cd - sphi * sd;
+        let nsphi = sphi * cd + cphi * sd;
+        cphi = ncphi;
+        sphi = nsphi;
+        let nch = ch * cd - sh * sd;
+        let nsh = sh * cd + ch * sd;
+        ch = nch;
+        sh = nsh;
+
         let disp = step * i as f32;
-        let cur_f = facing_error(disp);
-        // A genuine root keeps the error small on both sides; a ±π wrap leaves it
-        // large, so guard against treating the wrap as a crossing.
-        let crossing = (prev_f < 0.0) != (cur_f < 0.0)
-            && fabsf(prev_f) < 1.0
-            && fabsf(cur_f) < 1.0;
+        let (cur_cross, cur_dot) = cross_dot(cphi, sphi, ch, sh);
+        // A transversal sign change of the cross product with the heading pointing
+        // toward (not away from) the target on at least one side is the facing root.
+        let crossing = (prev_cross < 0.0) != (cur_cross < 0.0)
+            && (prev_dot > 0.0 || cur_dot > 0.0);
         if crossing {
-            // Bisect the bracket [prev_disp, disp] for the root.
-            let mut lo = prev_disp;
-            let mut hi = disp;
-            let mut f_lo = prev_f;
-            for _ in 0..BISECT_ITERS {
-                let mid = 0.5 * (lo + hi);
-                let f_mid = facing_error(mid);
-                if fabsf(f_mid) < ROOT_TOL {
-                    return Some(mid);
-                }
-                if (f_lo < 0.0) != (f_mid < 0.0) {
-                    hi = mid;
-                } else {
-                    lo = mid;
-                    f_lo = f_mid;
-                }
-            }
-            return Some(0.5 * (lo + hi));
+            // The cross product is ~linear over the narrow bracket, so interpolate
+            // its zero between the two already-computed samples.
+            let denom = prev_cross - cur_cross;
+            let t = if fabsf(denom) > 0.0 { prev_cross / denom } else { 0.5 };
+            return Some(prev_disp + t * (disp - prev_disp));
         }
+        prev_cross = cur_cross;
+        prev_dot = cur_dot;
         prev_disp = disp;
-        prev_f = cur_f;
     }
     None
 }
