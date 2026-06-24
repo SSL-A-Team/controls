@@ -79,7 +79,7 @@ impl Default for PivotParams {
             max_accel_angular: DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR,
             orbit_radius: DEFAULT_PIVOT_ORBIT_RADIUS,
             inset_angle: DEFAULT_PIVOT_ORBIT_INSET_ANGLE,
-            compute_inset_angle: true,
+            compute_inset_angle: false,
             direction: PivotDirection::Forward,
         }
     }
@@ -175,10 +175,18 @@ fn directed_displacement(raw: f32, d: f32) -> f32 {
 /// a precomputed `(cos Δ, sin Δ)`), so the only `sin`/`cos` calls are the handful
 /// of setup values. The signed cross product is smooth (no angle wrapping), so the
 /// first sign change with a forward-facing endpoint brackets the root. Because the
-/// cross product is very nearly linear across a one-degree bracket, the root is
-/// refined by a single linear interpolation of the two already-computed cross
-/// values (no extra evaluation). Returns `None` if no facing crossing is found
-/// within one revolution.
+/// cross product is very nearly linear across the bracket, the root is refined by a
+/// single linear interpolation of the two already-computed cross values (no extra
+/// evaluation). Returns `None` if no facing crossing is found within one
+/// revolution.
+///
+/// `SCAN_STEPS` is the dominant cost (the loop is pure arithmetic, so execution
+/// time is roughly linear in it). Bracketing is robust at any practical
+/// resolution — the single toward-facing crossing is always found — so this knob
+/// trades only the refine accuracy, which degrades as `step²` (worst facing error
+/// ≈ `(2π/SCAN_STEPS)² / 8`). At 120 steps (3°) that is ~0.005° (≈0.4 mm at 1 m),
+/// far below vision/mechanical noise; raise it for more precision or lower it for
+/// less compute.
 fn solve_face_point(seed: &CircleSeed, r: f32, tx: f32, ty: f32) -> Option<f32> {
     // Signed cross product and dot product of the heading unit vector with the
     // vector from the robot position to the target, given the orbit-angle and
@@ -191,7 +199,7 @@ fn solve_face_point(seed: &CircleSeed, r: f32, tx: f32, ty: f32) -> Option<f32> 
         (ch * wy - sh * wx, ch * wx + sh * wy)
     };
 
-    const SCAN_STEPS: i32 = 720; // 0.5° resolution over one revolution
+    const SCAN_STEPS: i32 = 120; // 3° resolution over one revolution (~0.005° refine error)
     const ROOT_TOL: f32 = 1e-6;
 
     let step = seed.d * (2.0 * PI / SCAN_STEPS as f32);
