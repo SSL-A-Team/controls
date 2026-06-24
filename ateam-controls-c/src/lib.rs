@@ -255,13 +255,30 @@ pub extern "C" fn ateam_controls_default_pivot_params() -> PivotParams {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_pivot_traj_new(
+pub unsafe extern "C" fn ateam_controls_pivot_traj_from_target_heading(
     init_state: Vector6C,
     target_heading: f32,
     params: PivotParams,
     out: *mut PivotTrajectory,
 ) -> i32 {
-    match PivotTrajectory::new(init_state.into(), target_heading, params) {
+    match PivotTrajectory::from_target_heading(init_state.into(), target_heading, params) {
+        Ok(traj) => {
+            unsafe { *out = traj; }
+            0
+        }
+        Err(e) => e as i32,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_pivot_traj_from_target_point(
+    init_state: Vector6C,
+    target_x: f32,
+    target_y: f32,
+    params: PivotParams,
+    out: *mut PivotTrajectory,
+) -> i32 {
+    match PivotTrajectory::from_target_point(init_state.into(), target_x, target_y, params) {
         Ok(traj) => {
             unsafe { *out = traj; }
             0

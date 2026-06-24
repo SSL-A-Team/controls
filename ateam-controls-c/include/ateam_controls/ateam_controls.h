@@ -201,11 +201,26 @@ void ateam_controls_traj_sample(BangBangTraj3D_t traj, Vector6C_t* state_out, Ve
 // Pivot Trajectory
 // ============================================================================
 
+typedef enum PivotDirection {
+    // Velocity is acute with the heading (robot drives forward).
+    PIVOT_DIRECTION_FORWARD = 0,
+    // Velocity is obtuse with the heading (robot drives backward).
+    PIVOT_DIRECTION_BACKWARD = 1,
+} PivotDirection_t;
+
 typedef struct PivotParams {
     float max_vel_angular;
     float max_accel_angular;
     float orbit_radius;
+    // Angle (rad) between the orbit tangent vector and the heading, measured
+    // toward the orbit center; absolute-valued on use. Ignored when
+    // compute_inset_angle is true.
     float inset_angle;
+    // When true, inset_angle is ignored and the inset is derived from a linear
+    // model of max_vel_angular (clamped to [0, pi/2]).
+    bool compute_inset_angle;
+    // Whether the robot drives forward or backward around the orbit.
+    PivotDirection_t direction;
 } PivotParams_t;
 
 typedef struct PivotTrajectory {
@@ -222,9 +237,21 @@ typedef struct PivotTrajectory {
 
 PivotParams_t ateam_controls_default_pivot_params(void);
 
-int32_t ateam_controls_pivot_traj_new(
+// Construct a pivot that drives the robot to a target heading. The least-distance
+// of the two candidate orbit circles is chosen (180 deg ties go to CCW).
+int32_t ateam_controls_pivot_traj_from_target_heading(
     Vector6C_t init_state,
     float target_heading,
+    PivotParams_t params,
+    PivotTrajectory_t* out);
+
+// Construct a pivot that leaves the robot facing (target_x, target_y) after the
+// orbit, accounting for the translation during the pivot. Returns
+// ATEAM_CONTROLS_INVALID_INPUT if the point lies inside either candidate orbit.
+int32_t ateam_controls_pivot_traj_from_target_point(
+    Vector6C_t init_state,
+    float target_x,
+    float target_y,
     PivotParams_t params,
     PivotTrajectory_t* out);
 

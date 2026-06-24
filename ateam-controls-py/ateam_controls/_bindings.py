@@ -165,12 +165,18 @@ class BangBangTraj3D(ctypes.Structure):
         ("state", Vector6C),
     ]
 
+# PivotDirection: how the robot's velocity relates to its heading.
+PIVOT_DIRECTION_FORWARD  = 0  # velocity acute with heading (drives forward)
+PIVOT_DIRECTION_BACKWARD = 1  # velocity obtuse with heading (drives backward)
+
 class PivotParams(ctypes.Structure):
     _fields_ = [
         ("max_vel_angular", ctypes.c_float),
         ("max_accel_angular", ctypes.c_float),
         ("orbit_radius", ctypes.c_float),
         ("inset_angle", ctypes.c_float),
+        ("compute_inset_angle", ctypes.c_bool),
+        ("direction", ctypes.c_int32),
     ]
 
 class PivotTrajectory(ctypes.Structure):
@@ -262,8 +268,10 @@ def _setup_signatures(lib):
     # Pivot Trajectory
     lib.ateam_controls_default_pivot_params.argtypes = []
     lib.ateam_controls_default_pivot_params.restype = PivotParams
-    lib.ateam_controls_pivot_traj_new.argtypes = [Vector6C, ctypes.c_float, PivotParams, ctypes.POINTER(PivotTrajectory)]
-    lib.ateam_controls_pivot_traj_new.restype = ctypes.c_int32
+    lib.ateam_controls_pivot_traj_from_target_heading.argtypes = [Vector6C, ctypes.c_float, PivotParams, ctypes.POINTER(PivotTrajectory)]
+    lib.ateam_controls_pivot_traj_from_target_heading.restype = ctypes.c_int32
+    lib.ateam_controls_pivot_traj_from_target_point.argtypes = [Vector6C, ctypes.c_float, ctypes.c_float, PivotParams, ctypes.POINTER(PivotTrajectory)]
+    lib.ateam_controls_pivot_traj_from_target_point.restype = ctypes.c_int32
     lib.ateam_controls_pivot_traj_time_shift.argtypes = [ctypes.POINTER(PivotTrajectory), ctypes.c_float]
     lib.ateam_controls_pivot_traj_time_shift.restype = None
     lib.ateam_controls_pivot_traj_end_time.argtypes = [PivotTrajectory]
@@ -380,10 +388,16 @@ def traj_sample(traj):
 def default_pivot_params():
     return _lib().ateam_controls_default_pivot_params()
 
-def pivot_traj_new(init_state, target_heading, params):
+def pivot_traj_from_target_heading(init_state, target_heading, params):
     _out = PivotTrajectory()
-    _rc = _lib().ateam_controls_pivot_traj_new(init_state, ctypes.c_float(target_heading), params, ctypes.byref(_out))
-    _check_rc(_rc, 'ateam_controls_pivot_traj_new')
+    _rc = _lib().ateam_controls_pivot_traj_from_target_heading(init_state, ctypes.c_float(target_heading), params, ctypes.byref(_out))
+    _check_rc(_rc, 'ateam_controls_pivot_traj_from_target_heading')
+    return _out
+
+def pivot_traj_from_target_point(init_state, target_x, target_y, params):
+    _out = PivotTrajectory()
+    _rc = _lib().ateam_controls_pivot_traj_from_target_point(init_state, ctypes.c_float(target_x), ctypes.c_float(target_y), params, ctypes.byref(_out))
+    _check_rc(_rc, 'ateam_controls_pivot_traj_from_target_point')
     return _out
 
 def pivot_traj_time_shift(traj, dt):
