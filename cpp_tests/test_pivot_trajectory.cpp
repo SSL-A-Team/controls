@@ -124,6 +124,40 @@ TEST(PivotTrajBindings, InsetAngleMaintained) {
   }
 }
 
+TEST(PivotTrajBindings, SampleMatchesStateAtZero) {
+  PivotParams_t params = test_pivot_params();
+  Vector6C_t init = init_state_at(1.0f, 0.5f, 0.3f);
+  PivotTrajectory_t traj = {};
+  ASSERT_EQ(ateam_controls_pivot_traj_new(init, 0.3f + PI / 2.0f, params, &traj), ATEAM_CONTROLS_OK);
+  Vector6C_t state = {};
+  Vector3C_t accel = {};
+  ateam_controls_pivot_traj_sample(traj, &state, &accel);
+  Vector6C_t state_ref = {};
+  ASSERT_EQ(ateam_controls_pivot_traj_state_at(traj, 0.0f, &state_ref), ATEAM_CONTROLS_OK);
+  Vector3C_t accel_ref = {};
+  ASSERT_EQ(ateam_controls_pivot_traj_accel_at(traj, 0.0f, &accel_ref), ATEAM_CONTROLS_OK);
+  for (int i = 0; i < 6; ++i) EXPECT_NEAR(state.data[i], state_ref.data[i], 1e-5f);
+  EXPECT_NEAR(accel.x, accel_ref.x, 1e-5f);
+  EXPECT_NEAR(accel.y, accel_ref.y, 1e-5f);
+  EXPECT_NEAR(accel.z, accel_ref.z, 1e-5f);
+}
+
+TEST(PivotTrajBindings, TickAdvancesToTarget) {
+  PivotParams_t params = test_pivot_params();
+  Vector6C_t init = init_state_at(0.0f, 0.0f, 0.0f);
+  float target = PI / 2.0f;
+  PivotTrajectory_t traj = {};
+  ASSERT_EQ(ateam_controls_pivot_traj_new(init, target, params, &traj), ATEAM_CONTROLS_OK);
+  float end = ateam_controls_pivot_traj_end_time(traj);
+  const float dt = 0.001f;
+  int steps = static_cast<int>(end / dt) + 10;
+  for (int i = 0; i < steps; ++i) ateam_controls_pivot_traj_tick(&traj, dt);
+  Vector6C_t state = {};
+  Vector3C_t accel = {};
+  ateam_controls_pivot_traj_sample(traj, &state, &accel);
+  EXPECT_NEAR(state.data[2], target, 1e-2f);
+}
+
 TEST(PivotTrajBindings, InvalidParamsRejected) {
   PivotParams_t params = test_pivot_params();
   Vector6C_t init = make_state(0, 0, 0, 0, 0, 0);
