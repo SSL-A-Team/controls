@@ -184,9 +184,9 @@ fn directed_displacement(raw: f32, d: f32) -> f32 {
 /// time is roughly linear in it). Bracketing is robust at any practical
 /// resolution — the single toward-facing crossing is always found — so this knob
 /// trades only the refine accuracy, which degrades as `step²` (worst facing error
-/// ≈ `(2π/SCAN_STEPS)² / 8`). At 90 steps (4°) that is ~0.009° (≈0.16 mm at 1 m),
-/// far below vision/mechanical noise; raise it for more precision or lower it for
-/// less compute.
+/// ≈ `(2π/SCAN_STEPS)² / 8`). At 50 steps (7.2°) that is ~0.11° (≈2 mm at 1 m),
+/// still far below vision/mechanical noise; raise it for more precision or lower
+/// it for less compute.
 fn solve_face_point(seed: &CircleSeed, r: f32, tx: f32, ty: f32) -> Option<f32> {
     // Signed cross product and dot product of the heading unit vector with the
     // vector from the robot position to the target, given the orbit-angle and
@@ -199,7 +199,7 @@ fn solve_face_point(seed: &CircleSeed, r: f32, tx: f32, ty: f32) -> Option<f32> 
         (ch * wy - sh * wx, ch * wx + sh * wy)
     };
 
-    const SCAN_STEPS: i32 = 90; // 4° resolution over one revolution (~0.009° refine error)
+    const SCAN_STEPS: i32 = 50; // 7.2° resolution over one revolution (~0.11° refine error)
     const ROOT_TOL: f32 = 1e-6;
 
     let step = seed.d * (2.0 * PI / SCAN_STEPS as f32);
