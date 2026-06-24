@@ -28,6 +28,8 @@ from ._bindings import (
     BangBangTraj3D,
     PivotParams,
     PivotTrajectory,
+    PIVOT_DIRECTION_FORWARD,
+    PIVOT_DIRECTION_BACKWARD,
     # Default parameter constructors
     default_kf_params,
     default_phys_params,
@@ -58,7 +60,8 @@ from ._bindings import (
     traj_tick,
     traj_sample,
     # Pivot trajectory functions
-    pivot_traj_new,
+    pivot_traj_from_target_heading,
+    pivot_traj_from_target_point,
     pivot_traj_time_shift,
     pivot_traj_end_time,
     pivot_traj_state_at,

@@ -33,7 +33,7 @@ def sample_pivot_trajectory(traj, n=300):
     Parameters
     ----------
     traj : PivotTrajectory
-        The pivot trajectory object returned by ``pivot_traj_new``. It carries
+        The pivot trajectory object returned by ``pivot_traj_from_target_heading``. It carries
         its own internal seed state, so no external state is required.
     n : int
         Number of samples (default 300).

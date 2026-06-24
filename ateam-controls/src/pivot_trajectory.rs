@@ -79,7 +79,7 @@ impl Default for PivotParams {
             max_accel_angular: DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR,
             orbit_radius: DEFAULT_PIVOT_ORBIT_RADIUS,
             inset_angle: DEFAULT_PIVOT_ORBIT_INSET_ANGLE,
-            compute_inset_angle: false,
+            compute_inset_angle: true,
             direction: PivotDirection::Forward,
         }
     }

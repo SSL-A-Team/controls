@@ -42,10 +42,21 @@ def main():
     )
     parser.add_argument(
         "--inset-angle", type=float, default=None,
-        help="Angle (degrees) from the radius line pointing at the orbit center "
-             "to the robot heading, positive toward the direction of travel "
-             "(0 = face center, +90 = tangent forward, -90 = tangent backward), "
-             "held constant for the whole pivot (default: pivot parameter default)",
+        help="Angle (degrees) between the orbit tangent vector and the robot "
+             "heading, measured toward the orbit center and held constant for "
+             "the whole pivot (0 = tangent/aligned with travel, 90 = face "
+             "center). Absolute-valued. Ignored with --compute-inset. "
+             "(default: pivot parameter default)",
+    )
+    parser.add_argument(
+        "--compute-inset", action="store_true",
+        help="Ignore --inset-angle and derive the inset from a linear model of "
+             "the peak angular velocity (centrifugal lean).",
+    )
+    parser.add_argument(
+        "--backward", action="store_true",
+        help="Drive backward around the orbit (velocity obtuse with heading) "
+             "instead of forward.",
     )
     parser.add_argument(
         "--orbit-radius", type=float, default=None,
@@ -66,7 +77,9 @@ def main():
     from ateam_controls import (
         Vector6C,
         default_pivot_params,
-        pivot_traj_new,
+        pivot_traj_from_target_heading,
+        PIVOT_DIRECTION_FORWARD,
+        PIVOT_DIRECTION_BACKWARD,
     )
     from visualization.trajectory import sample_pivot_trajectory, animate_robot_trajectory
 
@@ -85,6 +98,10 @@ def main():
         params.max_vel_angular = float(args.max_angular_vel)
     if args.max_angular_acc is not None:
         params.max_accel_angular = float(args.max_angular_acc)
+    params.compute_inset_angle = bool(args.compute_inset)
+    params.direction = (
+        PIVOT_DIRECTION_BACKWARD if args.backward else PIVOT_DIRECTION_FORWARD
+    )
 
     orbit_radius = params.orbit_radius      # ball_radius + robot_radius
     robot_radius = 0.090                    # display radius of robot body
@@ -97,7 +114,7 @@ def main():
         )
     )
 
-    traj = pivot_traj_new(init_state_c, float(theta_end), params)
+    traj = pivot_traj_from_target_heading(init_state_c, float(theta_end), params)
 
     # Actual orbit center derived by the trajectory (depends on orbit direction).
     center_x = float(traj.center_x)
