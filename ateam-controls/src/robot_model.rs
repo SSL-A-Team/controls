@@ -1,4 +1,4 @@
-use libm::{sinf, cosf};
+use libm::{sinf, cosf, sqrtf};
 use nalgebra::matrix;
 use crate::{ControlsError, Matrix3f, Matrix3x4f, Matrix4x3f, Matrix6f, Matrix6x3f, Matrix8f, Matrix8x6f, Vector3f, Vector4f, Vector6f, Vector8f};
 use crate::{z_rotation_mat, wrap_angle};
@@ -330,15 +330,54 @@ impl RobotModel {
 
     pub fn kf_update(&mut self, z: Vector8f, mask_vision: bool, mask_encoder: bool, mask_gyro: bool) -> Result<(), ControlsError> {
         self.update_h_transform(self.x[2], mask_vision, mask_encoder, mask_gyro);
+        // Velocity-schedule the vision measurement noise: vision lag makes a frame
+        // increasingly stale (and thus less trustworthy) as the robot moves faster,
+        // while at rest vision is accurate to a few mm. Inflate the vision R diagonal
+        // from a small zero-velocity floor up to the configured value based on the
+        // current estimated speed. Cheap: a few FLOPs, only on vision-bearing updates.
+        let mut r = self.kf_r;
+        if mask_vision {
+            let (var_lin, var_ang) = self.scheduled_vision_variance();
+            r[(0, 0)] = var_lin;
+            r[(1, 1)] = var_lin;
+            r[(2, 2)] = var_ang;
+        }
         let h_x = self.h * self.x;
         let mut y = z - h_x;
         // Wrap the angular residual for vision heading to [-pi, pi]
         y[2] = wrap_angle(y[2]);
-        let k = self.p * self.h.transpose() * (self.h * self.p * self.h.transpose() + self.kf_r).try_inverse().ok_or(ControlsError::SingularMatrix)?;
+        let k = self.p * self.h.transpose() * (self.h * self.p * self.h.transpose() + r).try_inverse().ok_or(ControlsError::SingularMatrix)?;
         self.x = self.x + k * y;
         self.x[2] = wrap_angle(self.x[2]);
         self.p = (Matrix6f::identity() - k * self.h) * self.p;
         Ok(())
+    }
+
+    /// Compute the velocity-scheduled vision measurement variances (linear, angular).
+    ///
+    /// The std is linearly interpolated from a zero-velocity floor up to the
+    /// configured `measurement_noise_std_vision_pos_*` value (reached at the
+    /// reference speed) using the current estimated speed, then squared. Returns
+    /// `(var_linear, var_angular)`.
+    fn scheduled_vision_variance(&self) -> (f32, f32) {
+        use crate::defaults::{
+            DEFAULT_KF_VISION_SCHED_STD_ANGULAR_ZERO, DEFAULT_KF_VISION_SCHED_STD_LINEAR_ZERO,
+            DEFAULT_KF_VISION_SCHED_VEL_REF_ANGULAR, DEFAULT_KF_VISION_SCHED_VEL_REF_LINEAR,
+        };
+
+        let speed_lin = sqrtf(self.x[3] * self.x[3] + self.x[4] * self.x[4]);
+        let speed_ang = if self.x[5] < 0.0 { -self.x[5] } else { self.x[5] };
+
+        let std_lin = DEFAULT_KF_VISION_SCHED_STD_LINEAR_ZERO
+            + (self.kf_params.measurement_noise_std_vision_pos_linear
+                - DEFAULT_KF_VISION_SCHED_STD_LINEAR_ZERO)
+                * (speed_lin / DEFAULT_KF_VISION_SCHED_VEL_REF_LINEAR);
+        let std_ang = DEFAULT_KF_VISION_SCHED_STD_ANGULAR_ZERO
+            + (self.kf_params.measurement_noise_std_vision_pos_angular
+                - DEFAULT_KF_VISION_SCHED_STD_ANGULAR_ZERO)
+                * (speed_ang / DEFAULT_KF_VISION_SCHED_VEL_REF_ANGULAR);
+
+        (std_lin * std_lin, std_ang * std_ang)
     }
 
     pub fn update_h_transform(&mut self, theta: f32, mask_vision: bool, mask_encoder: bool, mask_gyro: bool) {
@@ -613,6 +652,43 @@ mod tests {
         meas[0] = 1.0; // vision x
         model.kf_update(meas, false, true, true).unwrap();
         assert!(model.x[0] > 0.0);
+    }
+
+    #[test]
+    fn scheduled_vision_variance_endpoints() {
+        use crate::defaults::{
+            DEFAULT_KF_VISION_SCHED_STD_ANGULAR_ZERO, DEFAULT_KF_VISION_SCHED_STD_LINEAR_ZERO,
+            DEFAULT_KF_VISION_SCHED_VEL_REF_ANGULAR, DEFAULT_KF_VISION_SCHED_VEL_REF_LINEAR,
+        };
+        let mut model = test_model(0.01);
+
+        // At rest the vision std collapses to the zero-velocity floor.
+        model.x = Vector6f::zeros();
+        let (var_lin, var_ang) = model.scheduled_vision_variance();
+        assert!((var_lin.sqrt() - DEFAULT_KF_VISION_SCHED_STD_LINEAR_ZERO).abs() < 1e-6);
+        assert!((var_ang.sqrt() - DEFAULT_KF_VISION_SCHED_STD_ANGULAR_ZERO).abs() < 1e-6);
+
+        // At the reference speeds the std equals the configured measurement std.
+        model.x[3] = DEFAULT_KF_VISION_SCHED_VEL_REF_LINEAR; // vx == 1 m/s
+        model.x[5] = DEFAULT_KF_VISION_SCHED_VEL_REF_ANGULAR; // ω == 2π rad/s
+        let (var_lin, var_ang) = model.scheduled_vision_variance();
+        assert!(
+            (var_lin.sqrt() - model.kf_params.measurement_noise_std_vision_pos_linear).abs() < 1e-6
+        );
+        assert!(
+            (var_ang.sqrt() - model.kf_params.measurement_noise_std_vision_pos_angular).abs() < 1e-6
+        );
+
+        // Speed uses the linear-velocity magnitude, so a diagonal twist interpolates
+        // partway: at ‖v‖ = ref the std again equals the configured value.
+        let c = DEFAULT_KF_VISION_SCHED_VEL_REF_LINEAR / core::f32::consts::SQRT_2;
+        model.x[3] = c;
+        model.x[4] = c; // ‖(vx, vy)‖ == ref
+        model.x[5] = 0.0;
+        let (var_lin, _) = model.scheduled_vision_variance();
+        assert!(
+            (var_lin.sqrt() - model.kf_params.measurement_noise_std_vision_pos_linear).abs() < 1e-6
+        );
     }
 
     #[test]

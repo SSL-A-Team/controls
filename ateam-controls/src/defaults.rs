@@ -27,6 +27,22 @@ pub const DEFAULT_KF_MEASUREMENT_STD_VISION_POS_ANGULAR: f32 = 0.75;
 pub const DEFAULT_KF_MEASUREMENT_STD_ENCODER_VEL_ANGULAR: f32 = 50.0;
 pub const DEFAULT_KF_MEASUREMENT_STD_GYRO_VEL_ANGULAR: f32 = 0.015;
 
+// Velocity-scheduled vision measurement noise.
+//
+// Vision is laggy: at high speed a frame's pose is stale, so its effective error
+// grows with speed; at rest vision is accurate to a few mm. The vision measurement
+// std is therefore linearly interpolated from a small zero-velocity floor up to the
+// configured `measurement_noise_std_vision_pos_*` value (reached at the reference
+// speed below) using the current estimated speed:
+//
+//   std(s) = std_zero + (std_ref - std_zero) * (s / vel_ref)
+//
+// where `s` is the estimated linear speed ‖(vx, vy)‖ (linear) or |ω| (angular).
+pub const DEFAULT_KF_VISION_SCHED_STD_LINEAR_ZERO: f32 = 0.005;     // m, vision std at 0 m/s
+pub const DEFAULT_KF_VISION_SCHED_STD_ANGULAR_ZERO: f32 = 0.1;      // rad, vision std at 0 rad/s
+pub const DEFAULT_KF_VISION_SCHED_VEL_REF_LINEAR: f32 = 1.0;        // m/s, speed at which linear std == configured value
+pub const DEFAULT_KF_VISION_SCHED_VEL_REF_ANGULAR: f32 = 2.0 * PI;  // rad/s, speed at which angular std == configured value
+
 // Kalman filter max state values (for covariance initialization)
 pub const DEFAULT_KF_MAX_POS_LINEAR: f32 = 64.0;         // m (half-field)
 pub const DEFAULT_KF_MAX_POS_ANGULAR: f32 = 3.14;        // rad
