@@ -17,7 +17,7 @@ list(APPEND C_LIB_SOURCES
 )
 add_custom_command(
   OUTPUT ${IMPORTED_LIB_PATH}
-  COMMAND ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${RUST_TARGET_DIR} --unset=MAKEFLAGS --unset=MFLAGS cargo build --workspace $<$<CONFIG:Release,RelWithDebInfo>:--release>
+  COMMAND ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${RUST_TARGET_DIR} $<$<CONFIG:RelWithDebInfo,Debug>:RUSTFLAGS=-g> --unset=MAKEFLAGS --unset=MFLAGS cargo build --workspace $<$<CONFIG:Release,RelWithDebInfo>:--release>
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   DEPENDS ${C_LIB_SOURCES} ${RUST_LIB_SOURCES}
 )
