@@ -192,6 +192,10 @@ class PivotTrajectory(ctypes.Structure):
         ("state", Vector6C),
     ]
 
+# LinearHeadingMode: how the heading axis is driven.
+LINEAR_HEADING_MODE_FIXED = 0       # fixed bang-bang to a target heading (from_line)
+LINEAR_HEADING_MODE_FACE_POINT = 1  # servo continuously faces a point (from_point)
+
 class LinearParams(ctypes.Structure):
     _fields_ = [
         ("max_vel_colinear", ctypes.c_float),
@@ -210,6 +214,11 @@ class LinearTrajectory(ctypes.Structure):
         ("traj_colinear_accel", BangBangTraj1D),
         ("traj_theta", BangBangTraj1D),
         ("colinear_accel_start_time", ctypes.c_float),
+        ("heading_mode", ctypes.c_int32),
+        ("target_point", Vector2C),
+        ("heading_max_vel", ctypes.c_float),
+        ("heading_max_accel", ctypes.c_float),
+        ("heading_end_time", ctypes.c_float),
         ("start_point", Vector2C),
         ("line_dir", Vector2C),
         ("state", Vector6C),
@@ -312,6 +321,8 @@ def _setup_signatures(lib):
     lib.ateam_controls_default_linear_params.restype = LinearParams
     lib.ateam_controls_linear_traj_from_line.argtypes = [Vector6C, ctypes.c_float, Vector2C, Vector2C, ctypes.c_float, LinearParams, ctypes.POINTER(LinearTrajectory)]
     lib.ateam_controls_linear_traj_from_line.restype = ctypes.c_int32
+    lib.ateam_controls_linear_traj_from_point.argtypes = [Vector6C, ctypes.c_float, ctypes.c_float, Vector2C, Vector2C, ctypes.c_float, LinearParams, ctypes.POINTER(LinearTrajectory)]
+    lib.ateam_controls_linear_traj_from_point.restype = ctypes.c_int32
     lib.ateam_controls_linear_traj_time_shift.argtypes = [ctypes.POINTER(LinearTrajectory), ctypes.c_float]
     lib.ateam_controls_linear_traj_time_shift.restype = None
     lib.ateam_controls_linear_traj_end_time.argtypes = [LinearTrajectory]
@@ -475,6 +486,13 @@ def linear_traj_from_line(init_state, target_theta, start_point, line_dir, line_
     _rc = _lib().ateam_controls_linear_traj_from_line(
         init_state, ctypes.c_float(target_theta), start_point, line_dir, ctypes.c_float(line_vel), params, ctypes.byref(_out))
     _check_rc(_rc, 'ateam_controls_linear_traj_from_line')
+    return _out
+
+def linear_traj_from_point(init_state, target_x, target_y, start_point, line_dir, line_vel, params):
+    _out = LinearTrajectory()
+    _rc = _lib().ateam_controls_linear_traj_from_point(
+        init_state, ctypes.c_float(target_x), ctypes.c_float(target_y), start_point, line_dir, ctypes.c_float(line_vel), params, ctypes.byref(_out))
+    _check_rc(_rc, 'ateam_controls_linear_traj_from_point')
     return _out
 
 def linear_traj_time_shift(traj, dt):

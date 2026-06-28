@@ -130,3 +130,70 @@ TEST(LinearTrajBindings, TickAdvancesState) {
     EXPECT_NEAR(sampled.data[i], predicted.data[i], 1e-4f);
   }
 }
+
+// ----------------------------------------------------------------------------
+// from_point (face a global point) binding smoke tests
+// ----------------------------------------------------------------------------
+
+TEST(LinearTrajBindings, FromPointSucceeds) {
+  LinearParams_t params = test_linear_params();
+  Vector6C_t init = make_state(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+  LinearTrajectory_t traj = {};
+  ASSERT_EQ(
+      ateam_controls_linear_traj_from_point(
+          init, 2.0f, 2.0f, make_vec2(0.0f, 0.0f), make_vec2(1.0f, 0.0f), 1.5f, params, &traj),
+      ATEAM_CONTROLS_OK);
+  EXPECT_EQ(traj.heading_mode, LINEAR_HEADING_MODE_FACE_POINT);
+  EXPECT_GT(ateam_controls_linear_traj_end_time(traj), 0.0f);
+}
+
+TEST(LinearTrajBindings, FromPointRejectsStartOnPoint) {
+  LinearParams_t params = test_linear_params();
+  Vector6C_t init = make_state(1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+  LinearTrajectory_t traj = {};
+  EXPECT_EQ(
+      ateam_controls_linear_traj_from_point(
+          init, 1.0f, 1.0f, make_vec2(0.0f, 0.0f), make_vec2(1.0f, 0.0f), 1.0f, params, &traj),
+      ATEAM_CONTROLS_INVALID_INPUT);
+}
+
+TEST(LinearTrajBindings, FromPointFacesPointInSteadyState) {
+  LinearParams_t params = test_linear_params();
+  Vector2C_t start = make_vec2(0.0f, 0.0f);
+  float dx = 1.0f, dy = 0.0f;
+  float px = 5.0f, py = 3.0f;
+  float line_vel = 1.0f;
+  Vector6C_t init = make_state(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+  LinearTrajectory_t traj = {};
+  ASSERT_EQ(
+      ateam_controls_linear_traj_from_point(
+          init, px, py, start, make_vec2(dx, dy), line_vel, params, &traj),
+      ATEAM_CONTROLS_OK);
+
+  float end = ateam_controls_linear_traj_end_time(traj);
+  Vector6C_t st = {};
+  ASSERT_EQ(ateam_controls_linear_traj_state_at(traj, end + 1.0f, &st), ATEAM_CONTROLS_OK);
+  // On the line and at target colinear speed.
+  EXPECT_NEAR(perp_dist(st, start, dx, dy), 0.0f, 1e-2f);
+  EXPECT_NEAR(colinear_vel(st, dx, dy), line_vel, 1e-2f);
+  // Heading points at the target point.
+  float los = std::atan2(py - st.data[1], px - st.data[0]);
+  float err = std::atan2(std::sin(st.data[2] - los), std::cos(st.data[2] - los));
+  EXPECT_NEAR(err, 0.0f, 3e-2f);
+}
+
+TEST(LinearTrajBindings, FromPointAccelAndSampleDefined) {
+  LinearParams_t params = test_linear_params();
+  Vector6C_t init = make_state(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+  LinearTrajectory_t traj = {};
+  ASSERT_EQ(
+      ateam_controls_linear_traj_from_point(
+          init, 2.0f, 2.0f, make_vec2(0.0f, 0.0f), make_vec2(1.0f, 0.0f), 1.5f, params, &traj),
+      ATEAM_CONTROLS_OK);
+  Vector3C_t accel = {};
+  ASSERT_EQ(ateam_controls_linear_traj_accel_at(traj, 0.0f, &accel), ATEAM_CONTROLS_OK);
+  Vector6C_t state = {};
+  Vector3C_t sample_accel = {};
+  ateam_controls_linear_traj_sample(traj, &state, &sample_accel);
+  EXPECT_FLOAT_EQ(state.data[1], 1.0f);
+}

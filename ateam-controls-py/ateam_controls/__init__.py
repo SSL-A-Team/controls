@@ -32,6 +32,8 @@ from ._bindings import (
     PIVOT_DIRECTION_BACKWARD,
     LinearParams,
     LinearTrajectory,
+    LINEAR_HEADING_MODE_FIXED,
+    LINEAR_HEADING_MODE_FACE_POINT,
     # Default parameter constructors
     default_kf_params,
     default_phys_params,
@@ -73,6 +75,7 @@ from ._bindings import (
     pivot_traj_sample,
     # Linear trajectory functions
     linear_traj_from_line,
+    linear_traj_from_point,
     linear_traj_time_shift,
     linear_traj_end_time,
     linear_traj_state_at,

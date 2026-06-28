@@ -48,6 +48,11 @@ class Scenario:
         Direction of the line ``[dx, dy]`` (normalized internally).
     line_vel : float
         Target velocity along ``line_dir`` once on the line (m/s).
+    target_point : list[float] or None
+        If set to ``[px, py]``, the robot continuously faces this global point
+        (``from_point`` / face-point heading mode) and ``target_theta_deg`` is
+        ignored. If ``None`` (default), the robot holds the fixed heading
+        ``target_theta_deg`` (``from_line``).
     param_overrides : dict
         Optional ``LinearParams`` field overrides, e.g.
         ``{"colinear_start_thresh_linear": 0.3, "max_accel_colinear": 1.0}``.
@@ -59,6 +64,7 @@ class Scenario:
     start_point: list
     line_dir: list
     line_vel: float
+    target_point: list = None
     param_overrides: dict = field(default_factory=dict)
 
 
@@ -207,6 +213,71 @@ def main():
     # )
 
     # =====================================================================
+    # FACE-POINT scenarios (from_point): set target_point=[px, py]. The robot
+    # continuously faces the point; its heading changes as it moves down the
+    # line. target_theta_deg is ignored in these. Uncomment exactly ONE.
+    # =====================================================================
+
+    # # 11) Face a point off to the side while following a line along +x.
+    # scenario = Scenario(
+    #     name="face point (side)",
+    #     init_state=[0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+    #     target_theta_deg=0.0,           # ignored
+    #     start_point=[0.0, 0.0],
+    #     line_dir=[1.0, 0.0],
+    #     line_vel=1.0,
+    #     target_point=[2.5, 2.5],
+    # )
+
+    # # 12) Start facing the wrong way → visible bounded-rate acquisition before
+    # #     the heading locks onto the point.
+    # scenario = Scenario(
+    #     name="face point (acquire from behind)",
+    #     init_state=[0.0, 1.0, np.pi, 0.0, 0.0, 0.0],
+    #     target_theta_deg=0.0,           # ignored
+    #     start_point=[0.0, 0.0],
+    #     line_dir=[1.0, 0.0],
+    #     line_vel=1.2,
+    #     target_point=[3.0, -1.0],
+    # )
+
+    # # 13) Line passes close to the point → the line-of-sight sweeps quickly and
+    # #     the heading swings as the robot passes the point (rate-limited).
+    # scenario = Scenario(
+    #     name="face point (close pass, fast LOS)",
+    #     init_state=[-2.0, 0.3, 0.0, 0.0, 0.0, 0.0],
+    #     target_theta_deg=0.0,           # ignored
+    #     start_point=[0.0, 0.0],
+    #     line_dir=[1.0, 0.0],
+    #     line_vel=2.0,
+    #     target_point=[1.0, 0.4],
+    # )
+
+    # # 14) Point behind the start; robot drives away from it along the line so the
+    # #     heading trails backward toward the point.
+    # scenario = Scenario(
+    #     name="face point (behind start)",
+    #     init_state=[0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+    #     target_theta_deg=0.0,           # ignored
+    #     start_point=[0.0, 0.0],
+    #     line_dir=[1.0, 0.0],
+    #     line_vel=1.5,
+    #     target_point=[-2.0, 0.5],
+    # )
+
+    # # 15) Diagonal line while facing a fixed point; combines a turning approach
+    # #     with continuous point tracking.
+    # scenario = Scenario(
+    #     name="face point (diagonal line)",
+    #     init_state=[-1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+    #     target_theta_deg=0.0,           # ignored
+    #     start_point=[0.5, -0.5],
+    #     line_dir=[0.8660254, 0.5],      # 30°
+    #     line_vel=1.0,
+    #     target_point=[2.0, 2.0],
+    # )
+
+    # =====================================================================
 
     compile_controls()
 
@@ -215,6 +286,7 @@ def main():
         Vector6C,
         default_linear_params,
         linear_traj_from_line,
+        linear_traj_from_point,
         linear_traj_end_time,
         linear_traj_state_at,
     )
@@ -241,14 +313,26 @@ def main():
     )
     target_theta = float(np.deg2rad(scenario.target_theta_deg))
 
-    traj = linear_traj_from_line(
-        init_state_c,
-        target_theta,
-        start_point_c,
-        line_dir_c,
-        float(scenario.line_vel),
-        params,
-    )
+    face_point = scenario.target_point is not None
+    if face_point:
+        traj = linear_traj_from_point(
+            init_state_c,
+            float(scenario.target_point[0]),
+            float(scenario.target_point[1]),
+            start_point_c,
+            line_dir_c,
+            float(scenario.line_vel),
+            params,
+        )
+    else:
+        traj = linear_traj_from_line(
+            init_state_c,
+            target_theta,
+            start_point_c,
+            line_dir_c,
+            float(scenario.line_vel),
+            params,
+        )
 
     end_time = float(linear_traj_end_time(traj))
     duration = end_time + max(0.0, args.coast_time)
@@ -269,9 +353,13 @@ def main():
     engage_c = linear_traj_state_at(traj, ctypes.c_float(t_start))
     engage_xy = (float(engage_c.data[0]), float(engage_c.data[1]))
 
+    if face_point:
+        heading_desc = f"face ({scenario.target_point[0]:.1f}, {scenario.target_point[1]:.1f})"
+    else:
+        heading_desc = f"target {scenario.target_theta_deg:.0f}°"
     title = (
         f"Linear trajectory — {scenario.name}\n"
-        f"target {scenario.target_theta_deg:.0f}°, "
+        f"{heading_desc}, "
         f"v={scenario.line_vel:.2f} m/s, "
         f"engage @ t={t_start:.2f}s, T={end_time:.2f}s"
     )
@@ -323,6 +411,20 @@ def main():
         [engage_xy[0]], [engage_xy[1]],
         marker="*", color="red", markersize=14, zorder=6, label="engage",
     )
+
+    # Face-point target marker + a static line-of-sight ray from the start pose.
+    # (The animated heading indicator already shows the robot facing the point.)
+    if face_point:
+        px, py = float(scenario.target_point[0]), float(scenario.target_point[1])
+        ax.plot(
+            [px], [py],
+            marker="X", color="purple", markersize=12, zorder=6, label="face point",
+        )
+        ax.plot(
+            [scenario.init_state[0], px], [scenario.init_state[1], py],
+            color="purple", linewidth=0.8, linestyle="--", alpha=0.45, zorder=2,
+            label="line of sight (t=0)",
+        )
 
     ax.relim()
     ax.autoscale_view()

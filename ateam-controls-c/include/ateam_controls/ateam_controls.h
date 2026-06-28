@@ -275,6 +275,14 @@ void ateam_controls_pivot_traj_sample(PivotTrajectory_t traj, Vector6C_t* state_
 // Linear (line-following) Trajectory
 // ============================================================================
 
+typedef enum LinearHeadingMode {
+    // Heading follows a fixed bang-bang to a constant target heading (from_line).
+    LINEAR_HEADING_MODE_FIXED = 0,
+    // Heading continuously faces a fixed global point via a bounded-rate angular
+    // servo that acquires then tracks the line-of-sight lag-free (from_point).
+    LINEAR_HEADING_MODE_FACE_POINT = 1,
+} LinearHeadingMode_t;
+
 typedef struct LinearParams {
     float max_vel_colinear;
     float max_vel_perp;
@@ -293,6 +301,11 @@ typedef struct LinearTrajectory {
     BangBangTraj1D_t traj_colinear_accel;
     BangBangTraj1D_t traj_theta;
     float colinear_accel_start_time;
+    LinearHeadingMode_t heading_mode;
+    Vector2C_t target_point;
+    float heading_max_vel;
+    float heading_max_accel;
+    float heading_end_time;
     Vector2C_t start_point;
     Vector2C_t line_dir;
     Vector6C_t state;
@@ -307,6 +320,21 @@ LinearParams_t ateam_controls_default_linear_params(void);
 int32_t ateam_controls_linear_traj_from_line(
     Vector6C_t init_state,
     float target_theta,
+    Vector2C_t start_point,
+    Vector2C_t line_dir,
+    float line_vel,
+    LinearParams_t params,
+    LinearTrajectory_t* out);
+
+// Like from_line, but the robot continuously faces the global point
+// (target_x, target_y): a bounded-rate angular servo acquires the line-of-sight
+// then tracks it lag-free as the robot moves. Returns
+// ATEAM_CONTROLS_INVALID_INPUT for bad limits/direction or if the robot starts
+// exactly on the point.
+int32_t ateam_controls_linear_traj_from_point(
+    Vector6C_t init_state,
+    float target_x,
+    float target_y,
     Vector2C_t start_point,
     Vector2C_t line_dir,
     float line_vel,

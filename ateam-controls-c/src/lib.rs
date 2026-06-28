@@ -382,6 +382,34 @@ pub unsafe extern "C" fn ateam_controls_linear_traj_from_line(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_linear_traj_from_point(
+    init_state: Vector6C,
+    target_x: f32,
+    target_y: f32,
+    start_point: Vector2C,
+    line_dir: Vector2C,
+    line_vel: f32,
+    params: LinearParams,
+    out: *mut LinearTrajectory,
+) -> i32 {
+    match LinearTrajectory::from_point(
+        init_state.into(),
+        target_x,
+        target_y,
+        start_point.into(),
+        line_dir.into(),
+        line_vel,
+        params,
+    ) {
+        Ok(traj) => {
+            unsafe { *out = traj; }
+            0
+        }
+        Err(e) => e as i32,
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_linear_traj_time_shift(traj: *mut LinearTrajectory, dt: f32) {
     unsafe { (*traj).time_shift(dt); }
 }
