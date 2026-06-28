@@ -6,6 +6,7 @@ add_executable(
   test_bangbang.cpp
   test_robot_model.cpp
   test_pivot_trajectory.cpp
+  test_linear_trajectory.cpp
 )
 target_link_libraries(
   cpp_tests

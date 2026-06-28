@@ -240,6 +240,22 @@ fn compute_brake(s0: f32, sd0: f32, sdd: f32) -> (f32, f32) {
     (time_to_rest, sf)
 }
 
+/// Solve a one-dimensional constant-acceleration bang-bang that brings the
+/// velocity from `sd0` to `sd_target`. Position is unconstrained (velocity-only
+/// target); the profile is a single acceleration segment at `±sdd_max`.
+pub(crate) fn solve_1d_twist(sd0: f32, sd_target: f32, sdd_max: f32) -> Result<BangBangTraj1D, ControlsError> {
+    if sdd_max <= 0.0 {
+        return Err(ControlsError::InvalidInput);
+    }
+    let diff = sd_target - sd0;
+    if diff.abs() < 1e-9 {
+        return Ok(BangBangTraj1D::default());
+    }
+    let sdd = sdd_max * diff.signum();
+    let t = diff / sdd;  // always positive since sdd shares diff's sign
+    Ok(BangBangTraj1D { sdd1: sdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: t, t3: t, t4: t })
+}
+
 /// Solve one-dimensional bang-bang trajectory to reach target position `s_trg`.
 pub(crate) fn solve_1d_pose(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> Result<BangBangTraj1D, ControlsError> {
     if sdd_max <= 0.0 || sd_max <= 0.0 {

@@ -192,6 +192,29 @@ class PivotTrajectory(ctypes.Structure):
         ("state", Vector6C),
     ]
 
+class LinearParams(ctypes.Structure):
+    _fields_ = [
+        ("max_vel_colinear", ctypes.c_float),
+        ("max_vel_perp", ctypes.c_float),
+        ("max_vel_angular", ctypes.c_float),
+        ("max_accel_perp", ctypes.c_float),
+        ("max_accel_colinear", ctypes.c_float),
+        ("max_accel_angular", ctypes.c_float),
+        ("colinear_start_thresh_linear", ctypes.c_float),
+    ]
+
+class LinearTrajectory(ctypes.Structure):
+    _fields_ = [
+        ("traj_perp", BangBangTraj1D),
+        ("traj_colinear", BangBangTraj1D),
+        ("traj_colinear_accel", BangBangTraj1D),
+        ("traj_theta", BangBangTraj1D),
+        ("colinear_accel_start_time", ctypes.c_float),
+        ("start_point", Vector2C),
+        ("line_dir", Vector2C),
+        ("state", Vector6C),
+    ]
+
 # ---------------------------------------------------------------------------
 # Library loading
 # ---------------------------------------------------------------------------
@@ -284,6 +307,23 @@ def _setup_signatures(lib):
     lib.ateam_controls_pivot_traj_tick.restype = None
     lib.ateam_controls_pivot_traj_sample.argtypes = [PivotTrajectory, ctypes.POINTER(Vector6C), ctypes.POINTER(Vector3C)]
     lib.ateam_controls_pivot_traj_sample.restype = None
+    # Linear Trajectory
+    lib.ateam_controls_default_linear_params.argtypes = []
+    lib.ateam_controls_default_linear_params.restype = LinearParams
+    lib.ateam_controls_linear_traj_from_line.argtypes = [Vector6C, ctypes.c_float, Vector2C, Vector2C, ctypes.c_float, LinearParams, ctypes.POINTER(LinearTrajectory)]
+    lib.ateam_controls_linear_traj_from_line.restype = ctypes.c_int32
+    lib.ateam_controls_linear_traj_time_shift.argtypes = [ctypes.POINTER(LinearTrajectory), ctypes.c_float]
+    lib.ateam_controls_linear_traj_time_shift.restype = None
+    lib.ateam_controls_linear_traj_end_time.argtypes = [LinearTrajectory]
+    lib.ateam_controls_linear_traj_end_time.restype = ctypes.c_float
+    lib.ateam_controls_linear_traj_state_at.argtypes = [LinearTrajectory, ctypes.c_float, ctypes.POINTER(Vector6C)]
+    lib.ateam_controls_linear_traj_state_at.restype = ctypes.c_int32
+    lib.ateam_controls_linear_traj_accel_at.argtypes = [LinearTrajectory, ctypes.c_float, ctypes.POINTER(Vector3C)]
+    lib.ateam_controls_linear_traj_accel_at.restype = ctypes.c_int32
+    lib.ateam_controls_linear_traj_tick.argtypes = [ctypes.POINTER(LinearTrajectory), ctypes.c_float]
+    lib.ateam_controls_linear_traj_tick.restype = None
+    lib.ateam_controls_linear_traj_sample.argtypes = [LinearTrajectory, ctypes.POINTER(Vector6C), ctypes.POINTER(Vector3C)]
+    lib.ateam_controls_linear_traj_sample.restype = None
 
 
 # ---------------------------------------------------------------------------
@@ -425,4 +465,41 @@ def pivot_traj_sample(traj):
     _state = Vector6C()
     _accel = Vector3C()
     _lib().ateam_controls_pivot_traj_sample(traj, ctypes.byref(_state), ctypes.byref(_accel))
+    return _state, _accel
+
+def default_linear_params():
+    return _lib().ateam_controls_default_linear_params()
+
+def linear_traj_from_line(init_state, target_theta, start_point, line_dir, line_vel, params):
+    _out = LinearTrajectory()
+    _rc = _lib().ateam_controls_linear_traj_from_line(
+        init_state, ctypes.c_float(target_theta), start_point, line_dir, ctypes.c_float(line_vel), params, ctypes.byref(_out))
+    _check_rc(_rc, 'ateam_controls_linear_traj_from_line')
+    return _out
+
+def linear_traj_time_shift(traj, dt):
+    _lib().ateam_controls_linear_traj_time_shift(ctypes.byref(traj), dt)
+
+def linear_traj_end_time(traj):
+    return _lib().ateam_controls_linear_traj_end_time(traj)
+
+def linear_traj_state_at(traj, t):
+    _out = Vector6C()
+    _rc = _lib().ateam_controls_linear_traj_state_at(traj, t, ctypes.byref(_out))
+    _check_rc(_rc, 'ateam_controls_linear_traj_state_at')
+    return _out
+
+def linear_traj_accel_at(traj, t):
+    _out = Vector3C()
+    _rc = _lib().ateam_controls_linear_traj_accel_at(traj, t, ctypes.byref(_out))
+    _check_rc(_rc, 'ateam_controls_linear_traj_accel_at')
+    return _out
+
+def linear_traj_tick(traj, dt):
+    _lib().ateam_controls_linear_traj_tick(ctypes.byref(traj), dt)
+
+def linear_traj_sample(traj):
+    _state = Vector6C()
+    _accel = Vector3C()
+    _lib().ateam_controls_linear_traj_sample(traj, ctypes.byref(_state), ctypes.byref(_accel))
     return _state, _accel

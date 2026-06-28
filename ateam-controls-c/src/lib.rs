@@ -2,6 +2,7 @@ use ateam_controls::ctypes::*;
 use ateam_controls::trajectory::*;
 use ateam_controls::bangbang_trajectory::*;
 use ateam_controls::pivot_trajectory::*;
+use ateam_controls::linear_trajectory::*;
 use ateam_controls::robot_model::*;
 
 // ============================================================================
@@ -335,6 +336,99 @@ pub unsafe extern "C" fn ateam_controls_pivot_traj_tick(traj: *mut PivotTrajecto
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_pivot_traj_sample(
     traj: PivotTrajectory,
+    state_out: *mut Vector6C,
+    accel_out: *mut Vector3C,
+) {
+    unsafe {
+        let (state, accel) = traj.sample();
+        *state_out = state.into();
+        *accel_out = accel.into();
+    }
+}
+
+// ============================================================================
+// Linear (line-following) Trajectory
+// ============================================================================
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ateam_controls_default_linear_params() -> LinearParams {
+    LinearParams::default()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_linear_traj_from_line(
+    init_state: Vector6C,
+    target_theta: f32,
+    start_point: Vector2C,
+    line_dir: Vector2C,
+    line_vel: f32,
+    params: LinearParams,
+    out: *mut LinearTrajectory,
+) -> i32 {
+    match LinearTrajectory::from_line(
+        init_state.into(),
+        target_theta,
+        start_point.into(),
+        line_dir.into(),
+        line_vel,
+        params,
+    ) {
+        Ok(traj) => {
+            unsafe { *out = traj; }
+            0
+        }
+        Err(e) => e as i32,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_linear_traj_time_shift(traj: *mut LinearTrajectory, dt: f32) {
+    unsafe { (*traj).time_shift(dt); }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ateam_controls_linear_traj_end_time(traj: LinearTrajectory) -> f32 {
+    traj.end_time()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_linear_traj_state_at(
+    traj: LinearTrajectory,
+    t: f32,
+    out: *mut Vector6C,
+) -> i32 {
+    match traj.state_at(t) {
+        Ok(state) => {
+            unsafe { *out = state.into(); }
+            0
+        }
+        Err(e) => e as i32,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_linear_traj_accel_at(
+    traj: LinearTrajectory,
+    t: f32,
+    out: *mut Vector3C,
+) -> i32 {
+    match traj.accel_at(t) {
+        Ok(accel) => {
+            unsafe { *out = accel.into(); }
+            0
+        }
+        Err(e) => e as i32,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_linear_traj_tick(traj: *mut LinearTrajectory, dt: f32) {
+    unsafe { (*traj).tick(dt); }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_linear_traj_sample(
+    traj: LinearTrajectory,
     state_out: *mut Vector6C,
     accel_out: *mut Vector3C,
 ) {

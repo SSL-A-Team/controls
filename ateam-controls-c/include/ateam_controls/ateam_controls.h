@@ -271,6 +271,64 @@ int32_t ateam_controls_pivot_traj_accel_at(
 void ateam_controls_pivot_traj_tick(PivotTrajectory_t* traj, float dt);
 void ateam_controls_pivot_traj_sample(PivotTrajectory_t traj, Vector6C_t* state_out, Vector3C_t* accel_out);
 
+// ============================================================================
+// Linear (line-following) Trajectory
+// ============================================================================
+
+typedef struct LinearParams {
+    float max_vel_colinear;
+    float max_vel_perp;
+    float max_vel_angular;
+    float max_accel_perp;
+    float max_accel_colinear;
+    float max_accel_angular;
+    // Perpendicular distance from the line (m) below which the robot begins
+    // accelerating along the line toward the target colinear velocity.
+    float colinear_start_thresh_linear;
+} LinearParams_t;
+
+typedef struct LinearTrajectory {
+    BangBangTraj1D_t traj_perp;
+    BangBangTraj1D_t traj_colinear;
+    BangBangTraj1D_t traj_colinear_accel;
+    BangBangTraj1D_t traj_theta;
+    float colinear_accel_start_time;
+    Vector2C_t start_point;
+    Vector2C_t line_dir;
+    Vector6C_t state;
+} LinearTrajectory_t;
+
+LinearParams_t ateam_controls_default_linear_params(void);
+
+// Construct a trajectory that drives the robot onto the line (start_point plus
+// unit line_dir), holds target_theta, and accelerates along the line to line_vel
+// once within the perpendicular threshold. Returns ATEAM_CONTROLS_INVALID_INPUT
+// for non-positive limits or a degenerate line direction.
+int32_t ateam_controls_linear_traj_from_line(
+    Vector6C_t init_state,
+    float target_theta,
+    Vector2C_t start_point,
+    Vector2C_t line_dir,
+    float line_vel,
+    LinearParams_t params,
+    LinearTrajectory_t* out);
+
+void ateam_controls_linear_traj_time_shift(LinearTrajectory_t* traj, float dt);
+float ateam_controls_linear_traj_end_time(LinearTrajectory_t traj);
+
+int32_t ateam_controls_linear_traj_state_at(
+    LinearTrajectory_t traj,
+    float t,
+    Vector6C_t* out);
+
+int32_t ateam_controls_linear_traj_accel_at(
+    LinearTrajectory_t traj,
+    float t,
+    Vector3C_t* out);
+
+void ateam_controls_linear_traj_tick(LinearTrajectory_t* traj, float dt);
+void ateam_controls_linear_traj_sample(LinearTrajectory_t traj, Vector6C_t* state_out, Vector3C_t* accel_out);
+
 #ifdef __cplusplus
 }
 #endif
