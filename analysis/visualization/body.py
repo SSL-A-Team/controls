@@ -12,6 +12,15 @@ from ateam_controls import (
 from params import load_robot_model
 
 
+# body_control_mode values — must match software-communication basic_control.h
+# BodyControlMode (telemetry reports these raw enum values).
+_BCM_GLOBAL_POS = 10
+_BCM_GLOBAL_VEL = 11
+_BCM_LOCAL_VEL = 12
+_BCM_GLOBAL_ACC = 13
+_BCM_LOCAL_ACC = 14
+
+
 state_measurement_labels = [
     [["vision_x_meas"],              ["vision_y_meas"],            ["vision_theta_meas"]],
     [["encoder_xd_meas"],            ["encoder_yd_meas"],          ["encoder_thetad_meas", "gyro_thetad_meas"]],
@@ -158,11 +167,11 @@ def plot_telem(telemetry, param_json=None):
     for j in range(3):
         ax = axs[i, j]
         dim_name = ["x", "y", "theta"][j]
-        mask = (bcm == 1)
+        mask = (bcm == _BCM_GLOBAL_POS)
         if any(mask):
             ax.plot(t[mask], telemetry[f"body_control_telemetry/maneuver_global_pos/cmd_echo/global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
     i = 1
-    local_vel_mask = bcm == 3
+    local_vel_mask = bcm == _BCM_LOCAL_VEL
     if any(local_vel_mask):
         local_vx = telemetry["body_control_telemetry/maneuver_local_vel/cmd_echo/local_xd"]
         local_vy = telemetry["body_control_telemetry/maneuver_local_vel/cmd_echo/local_yd"]
@@ -171,14 +180,14 @@ def plot_telem(telemetry, param_json=None):
     for j in range(3):
         ax = axs[i, j]
         dim_name = ["xd", "yd", "omega"][j]
-        mask = bcm == 2
+        mask = bcm == _BCM_GLOBAL_VEL
         if any(mask):
             ax.plot(t[mask], telemetry[f"body_control_telemetry/maneuver_global_vel/cmd_echo/global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
         if any(local_vel_mask):
             local_vel_global = [global_vx, global_vy, local_omega][j]
             ax.plot(t[local_vel_mask], local_vel_global[local_vel_mask], label='software_cmd (local→global)', color='purple', alpha=alpha)
     i = 2
-    local_acc_mask = bcm == 5
+    local_acc_mask = bcm == _BCM_LOCAL_ACC
     if any(local_acc_mask):
         local_ax = telemetry["body_control_telemetry/maneuver_local_acc/cmd_echo/local_xdd"]
         local_ay = telemetry["body_control_telemetry/maneuver_local_acc/cmd_echo/local_ydd"]
@@ -187,7 +196,7 @@ def plot_telem(telemetry, param_json=None):
     for j in range(3):
         ax = axs[i, j]
         dim_name = ["xdd", "ydd", "alpha"][j]
-        mask = bcm == 4
+        mask = bcm == _BCM_GLOBAL_ACC
         if any(mask):
             ax.plot(t[mask], telemetry[f"body_control_telemetry/maneuver_global_acc/cmd_echo/global_{dim_name}"][mask], label='software_cmd', color='purple', alpha=alpha)
         if any(local_acc_mask):
