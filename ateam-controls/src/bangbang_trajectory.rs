@@ -37,6 +37,11 @@ pub struct BangBangTraj1D {
     pub t2: f32,
     pub t3: f32,
     pub t4: f32,
+    /// Exact intended velocity at and after `t4`. Stored explicitly (rather than
+    /// relying on the accumulated integration value) so that sampling/coasting
+    /// past `t4` uses the precise terminal velocity instead of a float-error
+    /// residual, which would otherwise integrate into unbounded position drift.
+    pub sd_final: f32,
 }
 
 impl BangBangTraj1D {
@@ -120,9 +125,9 @@ impl BangBangTraj3D {
             (zdd, diff.z / zdd)
         };
         Ok(BangBangTraj3D {
-            x: BangBangTraj1D { sdd1: xdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: x_time, t3: x_time, t4: x_time },
-            y: BangBangTraj1D { sdd1: ydd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: y_time, t3: y_time, t4: y_time },
-            z: BangBangTraj1D { sdd1: zdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: z_time, t3: z_time, t4: z_time },
+            x: BangBangTraj1D { sdd1: xdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: x_time, t3: x_time, t4: x_time, sd_final: target_twist.x },
+            y: BangBangTraj1D { sdd1: ydd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: y_time, t3: y_time, t4: y_time, sd_final: target_twist.y },
+            z: BangBangTraj1D { sdd1: zdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: z_time, t3: z_time, t4: z_time, sd_final: target_twist.z },
             state: init_state,
         })
     }
@@ -249,11 +254,12 @@ pub(crate) fn solve_1d_twist(sd0: f32, sd_target: f32, sdd_max: f32) -> Result<B
     }
     let diff = sd_target - sd0;
     if diff.abs() < 1e-9 {
-        return Ok(BangBangTraj1D::default());
+        // Already at the target velocity: coast there exactly.
+        return Ok(BangBangTraj1D { sd_final: sd_target, ..Default::default() });
     }
     let sdd = sdd_max * diff.signum();
     let t = diff / sdd;  // always positive since sdd shares diff's sign
-    Ok(BangBangTraj1D { sdd1: sdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: t, t3: t, t4: t })
+    Ok(BangBangTraj1D { sdd1: sdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: t, t3: t, t4: t, sd_final: sd_target })
 }
 
 /// Solve one-dimensional bang-bang trajectory to reach target position `s_trg`.
@@ -357,7 +363,10 @@ pub(crate) fn eval_1d_state_at(traj: BangBangTraj1D, s: f32, sd: f32, current_ti
             }
         }
     }
-    // Coast at final velocity for any remaining time past the trajectory end
+    // Coast at the exact intended terminal velocity for any remaining time past
+    // the trajectory end. Using `traj.sd_final` (rather than the accumulated `sd`)
+    // avoids integrating a float-error velocity residual into position drift.
+    sd = traj.sd_final;
     s += sd * (t - current_time);
     Ok((s, sd))
 }
@@ -528,6 +537,44 @@ mod tests {
         let twist = Vector3f::new(0.2, 0.0, 0.0);
         let traj = BangBangTraj3D::from_target_twist(init_state, twist, test_params()).unwrap();
         assert!(traj.end_time().abs() < 1e-6);
+    }
+
+    #[test]
+    fn pose_no_drift_when_ticked_past_end() {
+        // Regression: ticking a pose trajectory far past its end must not let a
+        // float-error velocity residual integrate into position drift.
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(1.3, 0.7, 1.1);
+        let mut traj = BangBangTraj3D::from_target_pose(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        let dt = 0.001;
+        let n = ((end + 3.0) / dt) as usize;
+        for _ in 0..n {
+            traj.tick(dt);
+        }
+        let (st, _) = traj.sample();
+        // Position holds the target exactly (no growing drift) and velocity is 0.
+        assert!((st[0] - 1.3).abs() < 1e-3, "x drifted: {}", st[0]);
+        assert!((st[1] - 0.7).abs() < 1e-3, "y drifted: {}", st[1]);
+        assert!((st[2] - 1.1).abs() < 1e-3, "theta drifted: {}", st[2]);
+        assert!(st[3].abs() < 1e-6 && st[4].abs() < 1e-6 && st[5].abs() < 1e-6, "residual velocity");
+    }
+
+    #[test]
+    fn twist_coasts_at_exact_target_past_end() {
+        // A twist trajectory must coast at exactly the target velocity past its
+        // end, so position advances at the intended rate without residual error.
+        let init = Vector6f::zeros();
+        let target = Vector3f::new(0.6, 0.0, 0.0);
+        let traj = BangBangTraj3D::from_target_twist(init, target, test_params()).unwrap();
+        let end = traj.end_time();
+        let a = traj.state_at(end + 1.0).unwrap();
+        let b = traj.state_at(end + 2.0).unwrap();
+        // Velocity is exactly the target at both samples.
+        assert_eq!(a[3], 0.6);
+        assert_eq!(b[3], 0.6);
+        // Position advances by exactly target * 1s between the two samples.
+        assert!(((b[0] - a[0]) - 0.6).abs() < 1e-5, "delta {}", b[0] - a[0]);
     }
 
     #[test]

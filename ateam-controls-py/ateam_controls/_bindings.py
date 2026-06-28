@@ -155,6 +155,7 @@ class BangBangTraj1D(ctypes.Structure):
         ("t2", ctypes.c_float),
         ("t3", ctypes.c_float),
         ("t4", ctypes.c_float),
+        ("sd_final", ctypes.c_float),
     ]
 
 class BangBangTraj3D(ctypes.Structure):

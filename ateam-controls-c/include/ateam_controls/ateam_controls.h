@@ -111,6 +111,9 @@ typedef struct BangBangTraj1D {
     float t2;
     float t3;
     float t4;
+    // Exact intended velocity at and after t4; used when coasting past the end so
+    // a float-error velocity residual does not integrate into position drift.
+    float sd_final;
 } BangBangTraj1D_t;
 
 typedef struct BangBangTraj3D {
