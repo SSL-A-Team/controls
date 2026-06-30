@@ -10,6 +10,7 @@ from ateam_controls import (
     robot_model_free,
 )
 from params import load_robot_model
+from visualization.timeline import compute_timeline, draw_reboot_lines
 
 
 # body_control_mode values — must match software-communication basic_control.h
@@ -89,7 +90,7 @@ def plot_telem(telemetry, param_json=None):
         telemetry['body_control_telemetry/imu_gyro'][:,2],
     ], axis=1)
 
-    t = telemetry['timestamp_us'] * 1e-6
+    t, reboot_times = compute_timeline(telemetry)
 
     state_pred = np.append(
         telemetry['body_control_telemetry/kf_body_pos_prediction'],
@@ -133,7 +134,7 @@ def plot_telem(telemetry, param_json=None):
             for meas_label in state_measurement_labels[i][j]:
                 if "vision" in meas_label:
                     mask = telemetry["body_control_telemetry/vision_update"].astype(bool)
-                    t_meas = telemetry['timestamp_us'][mask] * 1e-6
+                    t_meas = t[mask]
                     m_meas = state_meas[meas_label][mask]
                     ax.plot(t_meas, m_meas, label=f'{meas_label}', color='lime', alpha=alpha)
                 elif "gyro" in meas_label:
@@ -202,6 +203,8 @@ def plot_telem(telemetry, param_json=None):
         if any(local_acc_mask):
             local_acc_global = [global_ax, global_ay, local_alpha][j]
             ax.plot(t[local_acc_mask], local_acc_global[local_acc_mask], label='software_cmd (local→global)', color='purple', alpha=alpha)
+
+    draw_reboot_lines(axs, reboot_times)
 
     for ax in axs.flat:
         ax.tick_params(labelbottom=True)
