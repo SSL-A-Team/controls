@@ -31,20 +31,20 @@ def main():
     # Body state visualization (3×3 grid)
     fig, axs, t, state_est = plot_telem(telemetry, param_json=args.param_json)
 
-    try:
-        overlay = TrajectoryOverlay(fig, axs, t, state_est, telemetry, param_json=args.param_json)
-        vel_overlay = VelocityOverlay(fig, axs, t, telemetry, window=args.velocity_window)
+    # try:
+    #     overlay = TrajectoryOverlay(fig, axs, t, state_est, telemetry, param_json=args.param_json)
+    #     vel_overlay = VelocityOverlay(fig, axs, t, telemetry, window=args.velocity_window)
 
-        def _toggle_overlays(event):
-            if event.key == " ":
-                overlay.toggle()
-                vel_overlay.toggle()
+    #     def _toggle_overlays(event):
+    #         if event.key == " ":
+    #             overlay.toggle()
+    #             vel_overlay.toggle()
 
-        fig.canvas.mpl_connect("key_press_event", _toggle_overlays)
-        print("[telem-visualize] Press Space to toggle trajectory & velocity overlay.")
-        print(f"[telem-visualize] Velocity window: {args.velocity_window:.2f}s  (adjust with [ / ])")
-    except Exception as exc:
-        print(f"Failed to set up trajectory overlay: {exc}")
+    #     fig.canvas.mpl_connect("key_press_event", _toggle_overlays)
+    #     print("[telem-visualize] Press Space to toggle trajectory & velocity overlay.")
+    #     print(f"[telem-visualize] Velocity window: {args.velocity_window:.2f}s  (adjust with [ / ])")
+    # except Exception as exc:
+    #     print(f"Failed to set up trajectory overlay: {exc}")
 
     # Wheel visualizations
     plot_wheel_current(telemetry)
