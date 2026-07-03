@@ -8,8 +8,10 @@ pub const DEFAULT_MAX_VEL_LINEAR: f32 = 3.0;            // m/s
 pub const DEFAULT_MAX_VEL_ANGULAR: f32 = 5.0 * PI;      // rad/s
 pub const DEFAULT_MAX_ACCEL_LINEAR: f32 = 2.0;           // m/s^2
 pub const DEFAULT_MAX_ACCEL_ANGULAR: f32 = 10.0 * PI;     // rad/s^2
-pub const DEFAULT_PIVOT_ORBIT_MAX_VEL_ANGULAR: f32 = 3.0;                 // m
-pub const DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR: f32 = 6.0;                 // m
+
+// Pivot Params
+pub const DEFAULT_PIVOT_ORBIT_MAX_VEL_ANGULAR: f32 = 10.0;                 // rad/s
+pub const DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR: f32 = 7.0;                 // rad/s^2
 pub const DEFAULT_PIVOT_ORBIT_RADIUS: f32 = 0.12;                 // m
 pub const DEFAULT_PIVOT_ORBIT_INSET_ANGLE: f32 = 1.1;                 // rad
 /// Slope of the linear map from the orbit's peak angular velocity (rad/s) to the
@@ -20,7 +22,7 @@ pub const DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL: f32 = 0.35;       // rad / 
 // Linear (line-following) trajectory limits
 /// Perpendicular distance from the line (m) below which the robot begins
 /// accelerating along the line toward the target colinear velocity.
-pub const DEFAULT_LINEAR_COLINEAR_START_THRESH: f32 = 0.1;             // m
+pub const DEFAULT_LINEAR_COLINEAR_START_THRESH: f32 = 0.01;             // m
 
 // Kalman filter noise standard deviations
 pub const DEFAULT_KF_PROCESS_STD_POS_LINEAR: f32 = 0.01;
