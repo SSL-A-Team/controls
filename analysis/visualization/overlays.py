@@ -66,9 +66,10 @@ _TRAJ_COLUMN_MAP = {
 }
 
 # body_control_mode → skill name
-_BCM_GLOBAL_POS = 1
-_BCM_GLOBAL_VEL = 2
-_BCM_LOCAL_VEL = 3
+# Values must match software-communication basic_control.h BodyControlMode.
+_BCM_GLOBAL_POS = 10
+_BCM_GLOBAL_VEL = 11
+_BCM_LOCAL_VEL = 12
 _BCM_TRAJ_MODES = {_BCM_GLOBAL_POS, _BCM_GLOBAL_VEL, _BCM_LOCAL_VEL}
 
 
@@ -94,7 +95,7 @@ def _extract_vel_cmd(telemetry, theta):
     global_vy = np.zeros(len(bcm), dtype=np.float32)
     global_omega = np.zeros(len(bcm), dtype=np.float32)
 
-    # Global vel (mode 2)
+    # Global vel (mode 11)
     mask_gv = bcm == _BCM_GLOBAL_VEL
     if np.any(mask_gv):
         prefix = "body_control_telemetry/skill_global_vel/cmd_echo/"
@@ -102,7 +103,7 @@ def _extract_vel_cmd(telemetry, theta):
         global_vy[mask_gv] = telemetry[prefix + "global_yd"][mask_gv]
         global_omega[mask_gv] = telemetry[prefix + "global_omega"][mask_gv]
 
-    # Local vel (mode 3) — rotate to global
+    # Local vel (mode 12) — rotate to global
     mask_lv = bcm == _BCM_LOCAL_VEL
     if np.any(mask_lv):
         prefix = "body_control_telemetry/skill_local_vel/cmd_echo/"

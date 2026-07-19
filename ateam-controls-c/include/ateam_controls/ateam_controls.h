@@ -111,6 +111,9 @@ typedef struct BangBangTraj1D {
     float t2;
     float t3;
     float t4;
+    // Exact intended velocity at and after t4; used when coasting past the end so
+    // a float-error velocity residual does not integrate into position drift.
+    float sd_final;
 } BangBangTraj1D_t;
 
 typedef struct BangBangTraj3D {
@@ -270,6 +273,92 @@ int32_t ateam_controls_pivot_traj_accel_at(
 
 void ateam_controls_pivot_traj_tick(PivotTrajectory_t* traj, float dt);
 void ateam_controls_pivot_traj_sample(PivotTrajectory_t traj, Vector6C_t* state_out, Vector3C_t* accel_out);
+
+// ============================================================================
+// Linear (line-following) Trajectory
+// ============================================================================
+
+typedef enum LinearHeadingMode {
+    // Heading follows a fixed bang-bang to a constant target heading (from_line).
+    LINEAR_HEADING_MODE_FIXED = 0,
+    // Heading continuously faces a fixed global point via a bounded-rate angular
+    // servo that acquires then tracks the line-of-sight lag-free (from_point).
+    LINEAR_HEADING_MODE_FACE_POINT = 1,
+} LinearHeadingMode_t;
+
+typedef struct LinearParams {
+    float max_vel_colinear;
+    float max_vel_perp;
+    float max_vel_angular;
+    float max_accel_perp;
+    float max_accel_colinear;
+    float max_accel_angular;
+    // Perpendicular distance from the line (m) below which the robot begins
+    // accelerating along the line toward the target colinear velocity.
+    float colinear_start_thresh_linear;
+} LinearParams_t;
+
+typedef struct LinearTrajectory {
+    BangBangTraj1D_t traj_perp;
+    BangBangTraj1D_t traj_colinear;
+    BangBangTraj1D_t traj_colinear_accel;
+    BangBangTraj1D_t traj_theta;
+    float colinear_accel_start_time;
+    LinearHeadingMode_t heading_mode;
+    Vector2C_t target_point;
+    float heading_max_vel;
+    float heading_max_accel;
+    float heading_end_time;
+    Vector2C_t start_point;
+    Vector2C_t line_dir;
+    Vector6C_t state;
+} LinearTrajectory_t;
+
+LinearParams_t ateam_controls_default_linear_params(void);
+
+// Construct a trajectory that drives the robot onto the line (start_point plus
+// unit line_dir), holds target_theta, and accelerates along the line to line_vel
+// once within the perpendicular threshold. Returns ATEAM_CONTROLS_INVALID_INPUT
+// for non-positive limits or a degenerate line direction.
+int32_t ateam_controls_linear_traj_from_line(
+    Vector6C_t init_state,
+    float target_theta,
+    Vector2C_t start_point,
+    Vector2C_t line_dir,
+    float line_vel,
+    LinearParams_t params,
+    LinearTrajectory_t* out);
+
+// Like from_line, but the robot continuously faces the global point
+// (target_x, target_y): a bounded-rate angular servo acquires the line-of-sight
+// then tracks it lag-free as the robot moves. Returns
+// ATEAM_CONTROLS_INVALID_INPUT for bad limits/direction or if the robot starts
+// exactly on the point.
+int32_t ateam_controls_linear_traj_from_point(
+    Vector6C_t init_state,
+    float target_x,
+    float target_y,
+    Vector2C_t start_point,
+    Vector2C_t line_dir,
+    float line_vel,
+    LinearParams_t params,
+    LinearTrajectory_t* out);
+
+void ateam_controls_linear_traj_time_shift(LinearTrajectory_t* traj, float dt);
+float ateam_controls_linear_traj_end_time(LinearTrajectory_t traj);
+
+int32_t ateam_controls_linear_traj_state_at(
+    LinearTrajectory_t traj,
+    float t,
+    Vector6C_t* out);
+
+int32_t ateam_controls_linear_traj_accel_at(
+    LinearTrajectory_t traj,
+    float t,
+    Vector3C_t* out);
+
+void ateam_controls_linear_traj_tick(LinearTrajectory_t* traj, float dt);
+void ateam_controls_linear_traj_sample(LinearTrajectory_t traj, Vector6C_t* state_out, Vector3C_t* accel_out);
 
 #ifdef __cplusplus
 }

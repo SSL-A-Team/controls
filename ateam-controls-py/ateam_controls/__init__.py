@@ -30,11 +30,16 @@ from ._bindings import (
     PivotTrajectory,
     PIVOT_DIRECTION_FORWARD,
     PIVOT_DIRECTION_BACKWARD,
+    LinearParams,
+    LinearTrajectory,
+    LINEAR_HEADING_MODE_FIXED,
+    LINEAR_HEADING_MODE_FACE_POINT,
     # Default parameter constructors
     default_kf_params,
     default_phys_params,
     default_traj_params,
     default_pivot_params,
+    default_linear_params,
     # RobotModel functions
     robot_model_new,
     robot_model_free,
@@ -68,4 +73,13 @@ from ._bindings import (
     pivot_traj_accel_at,
     pivot_traj_tick,
     pivot_traj_sample,
+    # Linear trajectory functions
+    linear_traj_from_line,
+    linear_traj_from_point,
+    linear_traj_time_shift,
+    linear_traj_end_time,
+    linear_traj_state_at,
+    linear_traj_accel_at,
+    linear_traj_tick,
+    linear_traj_sample,
 )

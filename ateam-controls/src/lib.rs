@@ -6,6 +6,7 @@ pub mod ctypes;
 pub mod bangbang_trajectory;
 pub mod defaults;
 pub mod pivot_trajectory;
+pub mod linear_trajectory;
 pub mod robot_model;
 pub mod trajectory;
 

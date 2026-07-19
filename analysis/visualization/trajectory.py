@@ -5,6 +5,9 @@ Functions
 sample_pivot_trajectory(traj, init_state_c, n) → (times, states)
     Sample a PivotTrajectory via FFI at evenly-spaced time points.
 
+sample_linear_trajectory(traj, n, extra_time) → (times, states)
+    Sample a LinearTrajectory via FFI, including coast time past end_time.
+
 animate_robot_trajectory(times, states, ...) → (fig, anim)
     Create a matplotlib animation of a circular robot (with heading indicator)
     moving through the X/Y plane along pre-sampled trajectory states.
@@ -20,6 +23,8 @@ from ateam_controls import (
     Vector6C,
     pivot_traj_end_time,
     pivot_traj_state_at,
+    linear_traj_end_time,
+    linear_traj_state_at,
 )
 
 
@@ -53,6 +58,40 @@ def sample_pivot_trajectory(traj, n=300):
             traj,
             ctypes.c_float(float(t)),
         )
+        states[i] = [st.data[j] for j in range(6)]
+    return times, states
+
+
+def sample_linear_trajectory(traj, n=300, extra_time=2.0):
+    """Sample a LinearTrajectory at *n* evenly-spaced time points.
+
+    The trajectory "ends" once it stops commanding acceleration, after which the
+    robot coasts along the line at the target speed forever. ``extra_time`` adds
+    that many seconds of coast past ``end_time`` so the steady-state line
+    following is visible.
+
+    Parameters
+    ----------
+    traj : LinearTrajectory
+        Trajectory returned by ``linear_traj_from_line``; carries its own seed
+        state, so no external state is required.
+    n : int
+        Number of samples (default 300).
+    extra_time : float
+        Seconds of coast to append past ``end_time`` (default 2.0).
+
+    Returns
+    -------
+    times : np.ndarray, shape (n,)
+        Time values in seconds.
+    states : np.ndarray, shape (n, 6)
+        Robot state ``[x, y, θ, ẋ, ẏ, θ̇]`` at each sample.
+    """
+    end = float(linear_traj_end_time(traj)) + max(0.0, float(extra_time))
+    times = np.linspace(0.0, end, n)
+    states = np.empty((n, 6), dtype=np.float64)
+    for i, t in enumerate(times):
+        st = linear_traj_state_at(traj, ctypes.c_float(float(t)))
         states[i] = [st.data[j] for j in range(6)]
     return times, states
 

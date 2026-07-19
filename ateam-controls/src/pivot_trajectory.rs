@@ -79,13 +79,15 @@ impl Default for PivotParams {
             max_accel_angular: DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR,
             orbit_radius: DEFAULT_PIVOT_ORBIT_RADIUS,
             inset_angle: DEFAULT_PIVOT_ORBIT_INSET_ANGLE,
-            compute_inset_angle: false,
+            compute_inset_angle: true,
             direction: PivotDirection::Forward,
         }
     }
 }
 
 impl PivotParams {
+    /// NOTE: Hacked compute inset angle will just set a known good default for now
+    ///
     /// Resolve the absolute inset angle (rad) to use, honoring `compute_inset_angle`.
     ///
     /// When `compute_inset_angle` is set, the inset is a linear function of the
@@ -93,8 +95,9 @@ impl PivotParams {
     /// otherwise it is `|inset_angle|`.
     fn resolved_inset(&self) -> f32 {
         if self.compute_inset_angle {
-            let psi = DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL * self.max_vel_angular;
-            psi.clamp(0.0, PI / 2.0)
+            // let psi = DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL * self.max_vel_angular;
+            // psi.clamp(0.0, PI / 2.0)
+            DEFAULT_PIVOT_ORBIT_INSET_ANGLE
         } else {
             fabsf(self.inset_angle)
         }
