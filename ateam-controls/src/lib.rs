@@ -5,10 +5,11 @@ use nalgebra;
 pub mod ctypes;
 pub mod bangbang_trajectory;
 pub mod defaults;
+pub mod robot_model;
+pub mod state_estimation;
+pub mod trajectory;
 pub mod pivot_trajectory;
 pub mod linear_trajectory;
-pub mod robot_model;
-pub mod trajectory;
 
 pub type Vector1f = nalgebra::Vector1<f32>;
 pub type Vector2f = nalgebra::Vector2<f32>;
