@@ -1,4 +1,5 @@
-use libm::{cosf, sinf};
+use libm::{cosf, fabsf, sinf};
+use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector};
 
 
@@ -21,7 +22,9 @@ struct StateFrame {
     /// Vision measurement
     z: SVector<f32, MEAS_LEN>,
     /// Indicates if this frame contains a valid vision measurement
-    vision_update: bool,
+    z_update: bool,
+    /// Number of turns that the robot has made since start of state tracking
+    turn_ct: i32,
 }
 
 impl Default for StateFrame {
@@ -32,7 +35,8 @@ impl Default for StateFrame {
             x_reck: SMatrix::zeros(),
             u: SMatrix::zeros(),
             z: SMatrix::zeros(),
-            vision_update: false,
+            z_update: false,
+            turn_ct: 0,
         }
     }
 }
@@ -50,6 +54,8 @@ struct BufferedEKF<const L: usize> {
     r: SMatrix<f32, MEAS_LEN, MEAS_LEN>,
     /// Process covariance Q
     q: SMatrix<f32, STATE_LEN, STATE_LEN>,
+    /// Observation jacobian H
+    h: SMatrix<f32, MEAS_LEN, STATE_LEN>
 }
 
 #[allow(unused)]
@@ -64,6 +70,7 @@ impl<const L: usize> BufferedEKF<L> {
         if ekf_delay_frames >= L {
             panic!("Unable to create EKF buffer, buffer is too small for the provided EKF delay")
         }
+        let h = SMatrix::<f32, MEAS_LEN, STATE_LEN>::identity();
         BufferedEKF {
             buff: [StateFrame::default(); L],
             idx_ekf: 0,
@@ -73,6 +80,7 @@ impl<const L: usize> BufferedEKF<L> {
             dt_s: (dt_us as f32) * 1e-6,
             r,
             q,
+            h,
         }
     }
 
@@ -113,7 +121,7 @@ impl<const L: usize> BufferedEKF<L> {
         let vision_idx = Self::move_idx(self.idx_reck, frames_past, false);
         // Update that frame with the measurement
         self.buff[vision_idx].z.copy_from(&z);
-        self.buff[vision_idx].vision_update = true;
+        self.buff[vision_idx].z_update = true;
     }
 
     fn reckon_predict(
@@ -153,9 +161,59 @@ impl<const L: usize> BufferedEKF<L> {
     fn ekf_update(
         &mut self,
     ) {
-        if !self.buff[self.idx_ekf].vision_update {
+        if !self.buff[self.idx_ekf].z_update {
             return
         }
+        let frame = &mut self.buff[self.idx_ekf];
+        let mut z = frame.z;
+        // Unwrap measurement theta
+        z[(2, 0)] = Self::unwrap_turns(z[(2, 0)], frame.x_ekf[(2, 0)], frame.turn_ct);
+        // Calculate residual
+        let y = z - frame.x_ekf.xyz();
+        // Calculate residual covariance
+        let s = self.h * frame.p_ekf * self.h.transpose() + self.r;
+
+        // S inversion can fail
+        match s.try_inverse() {
+            Some(s_inv) => {
+                // Calculate kalman gain
+                let k = frame.p_ekf * self.h.transpose() * s_inv;
+                // Update EKF state
+                frame.x_ekf = frame.x_ekf + k * y;
+                frame.p_ekf = (SMatrix::<f32, STATE_LEN, STATE_LEN>::identity() - k * self.h) * frame.p_ekf;
+            },
+            None => {
+                todo!()
+            },
+        }
+    }
+
+    fn unwrap_turns(
+        pw_wrapped: f32,  // Theta to be unwrapped
+        pw: f32,  // Current state theta
+        turn_ct: i32,  // Current state turns
+    ) -> f32 {
+        let mut pw_bound_dist = pw % (2. * PI);
+        if pw.is_sign_positive() {
+            pw_bound_dist -= PI;
+        } else {
+            pw_bound_dist += PI;
+        }
+        let turns = match (
+            pw_bound_dist.is_sign_positive(), 
+            pw_wrapped.is_sign_positive()
+        ) {
+            (true, true) => { turn_ct - 1 },
+            (true, false) => { turn_ct },
+            (false, true) => { turn_ct },
+            (false, false) => { turn_ct + 1 },
+        };
+        pw_wrapped + (turns as f32) * 2. * PI
+    }
+
+    #[inline(always)]
+    fn count_turns (pw: f32) -> f32 {
+        pw.signum() * ((fabsf(pw) + PI) / (2. * PI)).trunc()
     }
 
     #[inline(always)]
