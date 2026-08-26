@@ -12,23 +12,29 @@ const MEAS_ROWS: usize = 3;
 #[allow(unused)]
 #[derive(Clone, Copy)]
 struct StateFrame {
-    ekf_state: SMatrix<f32, STATE_ROWS, 1>,
-    ekf_variance: SMatrix<f32, STATE_ROWS, STATE_ROWS>,
-    reck_state: SMatrix<f32, STATE_ROWS, 1>,
-    vision_meas: SMatrix<f32, MEAS_ROWS, 1>,
+    /// EKF state
+    x_ekf: SMatrix<f32, STATE_ROWS, 1>,
+    /// EKF covariance
+    p_ekf: SMatrix<f32, STATE_ROWS, STATE_ROWS>,
+    /// Reckoning state
+    x_reck: SMatrix<f32, STATE_ROWS, 1>,
+    /// Gyro control input
+    u: SMatrix<f32, INPUT_ROWS, 1>,
+    /// Vision measurement
+    z: SMatrix<f32, MEAS_ROWS, 1>,
+    /// Indicates if this frame contains a valid vision measurement
     vision_update: bool,
-    imu_input: SMatrix<f32, INPUT_ROWS, 1>,
 }
 
 impl Default for StateFrame {
     fn default() -> Self {
         StateFrame {
-            ekf_state: SMatrix::zeros(),
-            ekf_variance: SMatrix::zeros(),
-            reck_state: SMatrix::zeros(),
-            vision_meas: SMatrix::zeros(),
+            x_ekf: SMatrix::zeros(),
+            p_ekf: SMatrix::zeros(),
+            x_reck: SMatrix::zeros(),
+            u: SMatrix::zeros(),
+            z: SMatrix::zeros(),
             vision_update: false,
-            imu_input: SMatrix::zeros(),
         }
     }
 }
@@ -36,43 +42,92 @@ impl Default for StateFrame {
 
 #[allow(unused)]
 struct BufferedKalmanFilter<const L: usize> {
-    buffer: [StateFrame; L],
-    ekf_buffer_idx: usize,
-    reckon_buffer_idx: usize,
-    /// Absolute time of the latest frame in the buffer
-    buffer_time_us: u64,
-    /// Buffer time delta in seconds
-    dt: f32,
-    obs_var_r: SMatrix<f32, MEAS_ROWS, MEAS_ROWS>,
-    proc_var_q: SMatrix<f32, STATE_ROWS, STATE_ROWS>,
+    buff: [StateFrame; L],
+    idx_ekf: usize,
+    idx_reck: usize,
+    ekf_delay_frames: usize,
+    dt_us: u32,
+    dt_s: f32,
+    /// Observation covariance R
+    r: SMatrix<f32, MEAS_ROWS, MEAS_ROWS>,
+    /// Process covariance Q
+    q: SMatrix<f32, STATE_ROWS, STATE_ROWS>,
 }
 
 #[allow(unused)]
 impl<const L: usize> BufferedKalmanFilter<L> {
+    fn new(
+        ekf_delay_us: u32,
+        dt_us: u32,
+        r: SMatrix<f32, MEAS_ROWS, MEAS_ROWS>,
+        q: SMatrix<f32, STATE_ROWS, STATE_ROWS>,
+    ) -> Self {
+        let ekf_delay_frames = (ekf_delay_us / dt_us) as usize;
+        BufferedKalmanFilter {
+            buff: [StateFrame::default(); L],
+            idx_ekf: 0,
+            idx_reck: ekf_delay_frames,
+            ekf_delay_frames,
+            dt_us,
+            dt_s: (dt_us as f32) * 1e-6,
+            r,
+            q,
+        }
+    }
+
     fn tick(
         &mut self,
-        gyro_meas: SMatrix<f32, INPUT_ROWS, 1>,
-        vision_meas: Option<SMatrix<f32, MEAS_ROWS, 1>>,
-        vision_toc_us: u64,
+        u: SMatrix<f32, INPUT_ROWS, 1>,
+        z: Option<SMatrix<f32, MEAS_ROWS, 1>>,
+        z_delay_us: u32,  // Microseconds elapsed since the frame that provided this measurement was taken
     ) {
-        self.ekf_buffer_idx += 1;
-        self.reckon_buffer_idx += 1;
-        self.buffer_time_us += Instant::now();
+        self.idx_ekf = Self::move_idx(self.idx_ekf, 1, true);
+        self.idx_reck = Self::move_idx(self.idx_ekf, 1, true);
 
-        if let Some(vision) = vision_meas {
-            self.insert_vision(vision, vision_toc_us);
+        if let Some(vision) = z {
+            self.insert_vision(vision, z_delay_us);
         }
-        self.reckon_predict(gyro_meas);
-        self.ekf_predict(gyro_meas);
+        self.reckon_predict(u);
+        self.ekf_predict(u);
         self.ekf_update();
         self.reckon_correct();
     }
 
+    /// Insert the vision measurement at the correct frame in the past
+    fn insert_vision(
+        &mut self,
+        z: SMatrix<f32, MEAS_ROWS, 1>,
+        z_delay_us: u32,
+    ) {
+        // How many frames have past since the time-of-capture
+        let frames_past = (z_delay_us / self.dt_us) as usize;
+        // If it's further in the past than the EKF delay, throw it out
+        if frames_past > self.ekf_delay_frames {
+            return;
+        }
+        // Get the index in the buffer
+        let vision_idx = Self::move_idx(self.idx_reck, frames_past, false);
+        // Update that frame with the measurement
+        self.buff[vision_idx].z.copy_from(&z);
+        self.buff[vision_idx].vision_update = true;
+    }
+
     fn reckon_predict(
         &mut self,
-        gyro_meas: SMatrix<f32, INPUT_ROWS, 1>
+        u: SMatrix<f32, INPUT_ROWS, 1>
     ) {
-        todo!()
+        let idx_prev = Self::move_idx(self.idx_reck, 1, false);
+        let x = self.buff[idx_prev].x_reck;
+        let x1 = Self::f_xu(
+            x, 
+            u, 
+            self.dt_s,
+            None,
+        );
+
+        self.buff[self.idx_reck]
+            .x_reck
+            .copy_from(&x1);
     }
 
     fn reckon_correct(
@@ -82,31 +137,58 @@ impl<const L: usize> BufferedKalmanFilter<L> {
 
     fn ekf_predict(
         &mut self,
-        gyro_meas: SMatrix<f32, INPUT_ROWS, 1>
+        u: SMatrix<f32, INPUT_ROWS, 1>
     ) {
+        let idx_prev = Self::move_idx(self.idx_ekf, 1, false);
+        let x = self.buff[idx_prev].x_ekf;
+        let p = self.buff[idx_prev].p_ekf;
+        // F (jacobian evaluated at x, u)
+        let mut f = SMatrix::<f32, STATE_ROWS, STATE_ROWS>::zeros();
 
+        // Run state prediction and jacobian evaluation
+        let x1 = Self::f_xu(
+            x, 
+            u, 
+            self.dt_s,
+            Some(&mut f),
+        );
+        // Update the state covariance
+        let p1 = f * p * f.transpose() + self.q;
+
+        self.buff[self.idx_ekf]
+            .x_ekf
+            .copy_from(&x1);
+        self.buff[self.idx_ekf]
+            .p_ekf
+            .copy_from(&p1);
     }
 
     fn ekf_update(
         &mut self,
     ) {
-        if !self.buffer[self.ekf_buffer_idx % L].vision_update {
+        if !self.buff[self.idx_ekf % L].vision_update {
             return
         }
     }
 
-    fn insert_vision(
-        &mut self,
-        vision_meas: SMatrix<f32, MEAS_ROWS, 1>,
-        vision_toc_us: u64,
-    ) {
-
+    #[inline(always)]
+    fn move_idx(
+        i: usize,  // base index
+        di: usize,  // change in index
+        forward: bool,  // move forward in the buffer (+time)
+    ) -> usize {
+        if forward {
+            (i + di) % L
+        } else {
+            (i + L - di) % L
+        }
     }
 
-    fn state_predict(
+    fn f_xu(
         x: SMatrix<f32, STATE_ROWS, 1>,
         u: SMatrix<f32, INPUT_ROWS, 1>,
         dt: f32,
+        jacobian_out: Option<&mut SMatrix<f32, STATE_ROWS, STATE_ROWS>>,
     ) -> SMatrix<f32, STATE_ROWS, 1> {
         // State vars
         let px = x[(0, 0)];  // global x
@@ -125,21 +207,39 @@ impl<const L: usize> BufferedKalmanFilter<L> {
         let ax = acc_ax + vy * vw;  // account for coriolis/transport term for the rotating local frame
         let ay = acc_ay - vx * vw;  // account for coriolis/transport term for the rotating local frame
 
-        // Prepare for state update calculation
-        let a = pw + 0.5 * self.dt * vw;  // use midpoint theta between current and next frame
+        // Prepare subexpressions
+        let a = pw + 0.5 * dt * vw;  // use midpoint theta between current and next frame
         let cosa = cosf(a);
         let sina = sinf(a);
+        let dt2 = dt * dt;
 
-        let x_next = SMatrix::<f32, STATE_ROWS, 1>::zeros();
+        // Compute the jacobian at provided x, u
+        if let Some(jac) = jacobian_out {
+            let mut f = SMatrix::<f32, STATE_ROWS, STATE_ROWS>::identity();
+
+            f[(0, 2)] = -ay * cosa * 0.5 * dt2 - vx * sina * dt - vy * cosa * dt - ax * sina * 0.5 * dt2;
+            f[(0, 3)] = cosa * dt + vw * sina * 0.5 * dt2;
+            f[(0, 4)] = vw * cosa * 0.5 * dt2 - sina * dt;
+
+            f[(1, 2)] = vx * cosa * dt - ay * sina * 0.5 * dt2 - vy * sina * dt + ax * cosa * 0.5 * dt2;
+            f[(1, 3)] = sina * dt - vw * cosa * 0.5 * dt2;
+            f[(1, 4)] = cosa * dt + vw * sina * 0.5 * dt2;
+
+            f[(3, 4)] = vw * dt;
+
+            f[(4, 3)] = -vw * dt;
+
+            (*jac).copy_from(&f);
+        }
 
         // State update integration
-        x_next[(0, 0)] = px + (cosa * vx - sina * vy) * dt + 0.5 * (cosa * ax - sina * ay) * dt * dt;  // local vel and acc are rotated
-        x_next[(1, 0)] = py + (sina * vx + cosa * vy) * dt + 0.5 * (sina * ax + cosa * ay) * dt * dt;  // local vel and acc are rotated
-        x_next[(2, 0)] = pw + dt * vw;
-        x_next[(3, 0)] = vx + dt * ax;
-        x_next[(4, 0)] = vy + dt * ay;
-
-        x_next
+        SMatrix::<f32, STATE_ROWS, 1>::from_column_slice(&[
+            px + (cosa * vx - sina * vy) * dt + 0.5 * (cosa * ax - sina * ay) * dt2,  // local vel and acc are rotated
+            py + (sina * vx + cosa * vy) * dt + 0.5 * (sina * ax + cosa * ay) * dt2,  // local vel and acc are rotated
+            pw + dt * vw,
+            vx + dt * ax,
+            vy + dt * ay,
+        ])
     }
 }
 
