@@ -39,7 +39,7 @@ impl Default for StateFrame {
 
 
 #[allow(unused)]
-struct BufferedKalmanFilter<const L: usize> {
+struct BufferedEKF<const L: usize> {
     buff: [StateFrame; L],
     idx_ekf: usize,
     idx_reck: usize,
@@ -53,7 +53,7 @@ struct BufferedKalmanFilter<const L: usize> {
 }
 
 #[allow(unused)]
-impl<const L: usize> BufferedKalmanFilter<L> {
+impl<const L: usize> BufferedEKF<L> {
     fn new(
         ekf_delay_us: u32,
         dt_us: u32,
@@ -61,7 +61,10 @@ impl<const L: usize> BufferedKalmanFilter<L> {
         q: SMatrix<f32, STATE_LEN, STATE_LEN>,
     ) -> Self {
         let ekf_delay_frames = (ekf_delay_us / dt_us) as usize;
-        BufferedKalmanFilter {
+        if ekf_delay_frames >= L {
+            panic!("Unable to create EKF buffer, buffer is too small for the provided EKF delay")
+        }
+        BufferedEKF {
             buff: [StateFrame::default(); L],
             idx_ekf: 0,
             idx_reck: ekf_delay_frames,
@@ -79,14 +82,17 @@ impl<const L: usize> BufferedKalmanFilter<L> {
         z: Option<SVector<f32, MEAS_LEN>>,
         z_delay_us: u32,  // Microseconds elapsed since the frame that provided this measurement was taken
     ) {
+        // Progress buffer indices
         self.idx_ekf = Self::move_idx(self.idx_ekf, 1, true);
-        self.idx_reck = Self::move_idx(self.idx_ekf, 1, true);
+        self.idx_reck = Self::move_idx(self.idx_reck, 1, true);
+        // Reset the new frame
+        self.buff[self.idx_reck] = StateFrame::default();
 
         if let Some(vision) = z {
             self.insert_vision(vision, z_delay_us);
         }
         self.reckon_predict(u);
-        self.ekf_predict(u);
+        self.ekf_predict();
         self.ekf_update();
         self.reckon_correct();
     }
@@ -98,7 +104,7 @@ impl<const L: usize> BufferedKalmanFilter<L> {
         z_delay_us: u32,
     ) {
         // How many frames have past since the time-of-capture
-        let frames_past = (z_delay_us / self.dt_us) as usize;
+        let frames_past = ((z_delay_us + self.dt_us / 2) / self.dt_us) as usize;  // Delay gets rounded to nearest frame
         // If it's further in the past than the EKF delay, throw it out
         if frames_past > self.ekf_delay_frames {
             return;
@@ -119,6 +125,7 @@ impl<const L: usize> BufferedKalmanFilter<L> {
         let x1 = Self::f_xu(x, u, self.dt_s, None);
 
         self.buff[self.idx_reck].x_reck.copy_from(&x1);
+        self.buff[self.idx_reck].u.copy_from(&u);
     }
 
     fn reckon_correct(
@@ -126,13 +133,11 @@ impl<const L: usize> BufferedKalmanFilter<L> {
     ) {
     }
 
-    fn ekf_predict(
-        &mut self,
-        u: SVector<f32, INPUT_LEN>
-    ) {
+    fn ekf_predict(&mut self) {
         let idx_prev = Self::move_idx(self.idx_ekf, 1, false);
         let x = self.buff[idx_prev].x_ekf;
         let p = self.buff[idx_prev].p_ekf;
+        let u = self.buff[self.idx_ekf].u;
         // F (jacobian evaluated at x, u)
         let mut f = SMatrix::<f32, STATE_LEN, STATE_LEN>::zeros();
 
@@ -148,7 +153,7 @@ impl<const L: usize> BufferedKalmanFilter<L> {
     fn ekf_update(
         &mut self,
     ) {
-        if !self.buff[self.idx_ekf % L].vision_update {
+        if !self.buff[self.idx_ekf].vision_update {
             return
         }
     }
