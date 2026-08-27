@@ -1,4 +1,4 @@
-use libm::{cosf, fabsf, sinf};
+use libm::{cosf, fabsf, roundf, sinf};
 use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector};
 
@@ -13,7 +13,7 @@ const MEAS_LEN: usize = 3;
 struct StateFrame {
     /// EKF state
     x_ekf: SVector<f32, STATE_LEN>,
-    /// EKF covariance
+    /// EKF state estimate covariance
     p_ekf: SMatrix<f32, STATE_LEN, STATE_LEN>,
     /// Reckoning state
     x_reck: SVector<f32, STATE_LEN>,
@@ -23,8 +23,6 @@ struct StateFrame {
     z: SVector<f32, MEAS_LEN>,
     /// Indicates if this frame contains a valid vision measurement
     z_update: bool,
-    /// Number of turns that the robot has made since start of state tracking
-    turn_ct: i32,
 }
 
 impl Default for StateFrame {
@@ -36,7 +34,6 @@ impl Default for StateFrame {
             u: SMatrix::zeros(),
             z: SMatrix::zeros(),
             z_update: false,
-            turn_ct: 0,
         }
     }
 }
@@ -55,33 +52,82 @@ struct BufferedEKF<const L: usize> {
     /// Process covariance Q
     q: SMatrix<f32, STATE_LEN, STATE_LEN>,
     /// Observation jacobian H
-    h: SMatrix<f32, MEAS_LEN, STATE_LEN>
+    h: SMatrix<f32, MEAS_LEN, STATE_LEN>,
+    /// Gain for dead reckoning error correction
+    corr_gain: f32
 }
 
 #[allow(unused)]
 impl<const L: usize> BufferedEKF<L> {
+    /// Creates a new buffered EKF with a delayed-measurement fusion horizon.
+    ///
+    /// The EKF runs `ekf_delay_us` in the past so that delayed vision
+    /// measurements can be applied at their true time of capture, while a
+    /// dead-reckoning estimate is tracked forward to the present.
+    ///
+    /// # Arguments
+    ///
+    /// * `dt_us` - Update period in microseconds. [`tick`](Self::tick) must be
+    ///   called at this interval.
+    /// * `ekf_delay_us` - How far in the past to run the EKF, in microseconds.
+    ///   Must be a whole multiple of `dt_us`.
+    /// * `r` - EKF observation (measurement) covariance matrix `R`.
+    /// * `q` - EKF process covariance matrix `Q`.
+    /// * `corr_coef` - Sets the dead-reckoning correction time constant as a
+    ///   multiple of `ekf_delay_us` (`tau = corr_coef * ekf_delay_us`):
+    ///   * `1` - time constant equals the full EKF delay; the dead-reckoned
+    ///     state is ~63% corrected after one delay period, and effectively
+    ///     fully corrected after ~3 time constants.
+    ///   * `> 1` - longer time constant: slower correction, smoother
+    ///     dead reckoning.
+    ///   * `< 1` - shorter time constant: faster correction, snappier
+    ///     convergence.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ekf_delay_us` is not a whole multiple of `dt_us`, if the
+    /// resulting delay in frames does not fit in the buffer (`>= L`), or if
+    /// `corr_coef` is not greater than `0`.
     fn new(
-        ekf_delay_us: u32,
         dt_us: u32,
+        ekf_delay_us: u32,
         r: SMatrix<f32, MEAS_LEN, MEAS_LEN>,
         q: SMatrix<f32, STATE_LEN, STATE_LEN>,
+        corr_coef: f32,
     ) -> Self {
+        assert!(ekf_delay_us % dt_us == 0, "EKF delay in microseconds must be a multiple of update period in microseconds");
+        assert!(corr_coef > 0., "Correction coefficient must be greater than 0");
         let ekf_delay_frames = (ekf_delay_us / dt_us) as usize;
-        if ekf_delay_frames >= L {
-            panic!("Unable to create EKF buffer, buffer is too small for the provided EKF delay")
-        }
+        assert!(ekf_delay_frames < L, "EKF delay is too large for buffer size");
+        let dt_s = (dt_us as f32) * 1e-6;
         let h = SMatrix::<f32, MEAS_LEN, STATE_LEN>::identity();
-        BufferedEKF {
+        let corr_gain = (dt_us as f32) / ((ekf_delay_us as f32) * corr_coef);
+        let mut estimator = BufferedEKF {
             buff: [StateFrame::default(); L],
             idx_ekf: 0,
-            idx_reck: ekf_delay_frames,
+            idx_reck: 0,
             ekf_delay_frames,
             dt_us,
-            dt_s: (dt_us as f32) * 1e-6,
+            dt_s,
             r,
             q,
             h,
-        }
+            corr_gain,
+        };
+        estimator.init();
+        
+        estimator
+    }
+
+    fn init(&mut self) {
+        self.buff = unsafe{ core::mem::zeroed() };  // reset all bytes in the buffer to 0's
+        self.idx_ekf = 0;
+        self.idx_reck = self.ekf_delay_frames;
+        self.buff[self.idx_ekf].p_ekf = SMatrix::<f32, STATE_LEN, STATE_LEN>::from_diagonal(
+            &SVector::<f32, STATE_LEN>::from(
+                [1000., 1000., PI*PI, 25., 25.]
+            )
+        );
     }
 
     fn tick(
@@ -89,7 +135,7 @@ impl<const L: usize> BufferedEKF<L> {
         u: SVector<f32, INPUT_LEN>,
         z: Option<SVector<f32, MEAS_LEN>>,
         z_delay_us: u32,  // Microseconds elapsed since the frame that provided this measurement was taken
-    ) {
+    ) -> Result<(), ()> {
         // Progress buffer indices
         self.idx_ekf = Self::move_idx(self.idx_ekf, 1, true);
         self.idx_reck = Self::move_idx(self.idx_reck, 1, true);
@@ -101,8 +147,9 @@ impl<const L: usize> BufferedEKF<L> {
         }
         self.reckon_predict(u);
         self.ekf_predict();
-        self.ekf_update();
+        self.ekf_update()?;
         self.reckon_correct();
+        Ok(())
     }
 
     /// Insert the vision measurement at the correct frame in the past
@@ -139,6 +186,14 @@ impl<const L: usize> BufferedEKF<L> {
     fn reckon_correct(
         &mut self
     ) {
+        // Calculate the error between the EKF frame and the reckon frame in the past
+        let err = self.buff[self.idx_ekf].x_reck - self.buff[self.idx_ekf].x_ekf;
+        // Calculate the correction to apply via the correction gain
+        let corr = - self.corr_gain * err;
+        // Apply to all frames from now to the EKF frame, working backwards in time
+        for i in 0..self.ekf_delay_frames {
+            self.buff[Self::move_idx(self.idx_reck, i, false)].x_reck += corr;
+        }
     }
 
     fn ekf_predict(&mut self) {
@@ -160,73 +215,27 @@ impl<const L: usize> BufferedEKF<L> {
 
     fn ekf_update(
         &mut self,
-    ) {
+    ) -> Result<(), ()> {
         if !self.buff[self.idx_ekf].z_update {
-            return
+            return Ok(());
         }
         let frame = &mut self.buff[self.idx_ekf];
         let mut z = frame.z;
         // Unwrap measurement theta
-        z[(2, 0)] = Self::unwrap_turns(z[(2, 0)], frame.x_ekf[(2, 0)], frame.turn_ct);
+        z[(2, 0)] = Self::unwrap_turns(z[(2, 0)], frame.x_ekf[(2, 0)]);
         // Calculate residual
         let y = z - frame.x_ekf.xyz();
         // Calculate residual covariance
         let s = self.h * frame.p_ekf * self.h.transpose() + self.r;
+        // Invert the residual covariance
+        let s_inv = s.try_inverse().ok_or_else(|| ())?;
+        // Calculate kalman gain
+        let k = frame.p_ekf * self.h.transpose() * s_inv;
+        // Update EKF state
+        frame.x_ekf = frame.x_ekf + k * y;
+        frame.p_ekf = (SMatrix::<f32, STATE_LEN, STATE_LEN>::identity() - k * self.h) * frame.p_ekf;
 
-        // S inversion can fail
-        match s.try_inverse() {
-            Some(s_inv) => {
-                // Calculate kalman gain
-                let k = frame.p_ekf * self.h.transpose() * s_inv;
-                // Update EKF state
-                frame.x_ekf = frame.x_ekf + k * y;
-                frame.p_ekf = (SMatrix::<f32, STATE_LEN, STATE_LEN>::identity() - k * self.h) * frame.p_ekf;
-            },
-            None => {
-                todo!()
-            },
-        }
-    }
-
-    fn unwrap_turns(
-        pw_wrapped: f32,  // Theta to be unwrapped
-        pw: f32,  // Current state theta
-        turn_ct: i32,  // Current state turns
-    ) -> f32 {
-        let mut pw_bound_dist = pw % (2. * PI);
-        if pw.is_sign_positive() {
-            pw_bound_dist -= PI;
-        } else {
-            pw_bound_dist += PI;
-        }
-        let turns = match (
-            pw_bound_dist.is_sign_positive(), 
-            pw_wrapped.is_sign_positive()
-        ) {
-            (true, true) => { turn_ct - 1 },
-            (true, false) => { turn_ct },
-            (false, true) => { turn_ct },
-            (false, false) => { turn_ct + 1 },
-        };
-        pw_wrapped + (turns as f32) * 2. * PI
-    }
-
-    #[inline(always)]
-    fn count_turns (pw: f32) -> f32 {
-        pw.signum() * ((fabsf(pw) + PI) / (2. * PI)).trunc()
-    }
-
-    #[inline(always)]
-    fn move_idx(
-        i: usize,  // base index
-        di: usize,  // change in index
-        forward: bool,  // move forward in the buffer (+time)
-    ) -> usize {
-        if forward {
-            (i + di) % L
-        } else {
-            (i + L - di) % L
-        }
+        Ok(())
     }
 
     fn f_xu(
@@ -285,6 +294,38 @@ impl<const L: usize> BufferedEKF<L> {
             vx + dt * ax,
             vy + dt * ay,
         ])
+    }
+
+    #[inline(always)]
+    fn unwrap_turns(
+        a: f32,  // Angle to be unwrapped
+        a_ref: f32,  // Reference angle to wrap closest to
+    ) -> f32 {
+        a + roundf((a_ref - a) / (2. * PI)) * 2. * PI
+    }
+
+    #[inline(always)]
+    fn wrap_turns(
+        a: f32,
+    ) -> f32 {
+        let mut a_wrap = (a + PI) % (2. * PI);
+        if a_wrap.is_sign_negative() {
+            a_wrap += 2. * PI;
+        }
+        a_wrap - PI
+    }
+
+    #[inline(always)]
+    fn move_idx(
+        i: usize,  // base index
+        di: usize,  // change in index
+        forward: bool,  // move forward in the buffer (+time)
+    ) -> usize {
+        if forward {
+            (i + di) % L
+        } else {
+            (i + L - di) % L
+        }
     }
 }
 
