@@ -1,11 +1,11 @@
-use libm::{cosf, fabsf, roundf, sinf};
+use libm::{cosf, roundf, sinf};
 use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector};
 
 
-const STATE_LEN: usize = 5;
-const INPUT_LEN: usize = 3;
-const MEAS_LEN: usize = 3;
+pub const STATE_LEN: usize = 5;
+pub const INPUT_LEN: usize = 3;
+pub const MEAS_LEN: usize = 3;
 
 
 #[allow(unused)]
@@ -40,7 +40,7 @@ impl Default for StateFrame {
 
 
 #[allow(unused)]
-struct BufferedEKF<const L: usize> {
+pub struct BufferedEKF<const L: usize> {
     buff: [StateFrame; L],
     idx_ekf: usize,
     idx_reck: usize,
@@ -88,12 +88,13 @@ impl<const L: usize> BufferedEKF<L> {
     /// Panics if `ekf_delay_us` is not a whole multiple of `dt_us`, if the
     /// resulting delay in frames does not fit in the buffer (`>= L`), or if
     /// `corr_coef` is not greater than `0`.
-    fn new(
+    pub fn new(
         dt_us: u32,
         ekf_delay_us: u32,
         r: SMatrix<f32, MEAS_LEN, MEAS_LEN>,
         q: SMatrix<f32, STATE_LEN, STATE_LEN>,
         corr_coef: f32,
+        init_pos: SVector<f32, 3>,
     ) -> Self {
         assert!(ekf_delay_us % dt_us == 0, "EKF delay in microseconds must be a multiple of update period in microseconds");
         assert!(corr_coef > 0., "Correction coefficient must be greater than 0");
@@ -114,12 +115,16 @@ impl<const L: usize> BufferedEKF<L> {
             h,
             corr_gain,
         };
-        estimator.init();
+        estimator.init(init_pos);
         
         estimator
     }
 
-    fn init(&mut self) {
+    pub fn init(
+        &mut self,
+        init_pos: SVector<f32, 3>,
+        init_vel: SVector<f32, 2>,
+    ) {
         self.buff = unsafe{ core::mem::zeroed() };  // reset all bytes in the buffer to 0's
         self.idx_ekf = 0;
         self.idx_reck = self.ekf_delay_frames;
@@ -128,9 +133,10 @@ impl<const L: usize> BufferedEKF<L> {
                 [1000., 1000., PI*PI, 25., 25.]
             )
         );
+        self.buff[self.idx_ekf].x_ekf.fixed_rows_mut::<3>(0).copy_from(&init_pos);
     }
 
-    fn tick(
+    pub fn tick(
         &mut self,
         u: SVector<f32, INPUT_LEN>,
         z: Option<SVector<f32, MEAS_LEN>>,
@@ -150,6 +156,10 @@ impl<const L: usize> BufferedEKF<L> {
         self.ekf_update()?;
         self.reckon_correct();
         Ok(())
+    }
+
+    pub fn get_state(&self) -> SVector<f32, STATE_LEN> {
+        self.buff[self.idx_reck].x_reck
     }
 
     /// Insert the vision measurement at the correct frame in the past
