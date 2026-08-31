@@ -17,7 +17,7 @@ struct StateFrame {
     p_ekf: SMatrix<f32, STATE_LEN, STATE_LEN>,
     /// Reckoning state
     x_reck: SVector<f32, STATE_LEN>,
-    /// Gyro control input
+    /// IMU control input
     u: SVector<f32, INPUT_LEN>,
     /// Vision measurement
     z: SVector<f32, MEAS_LEN>,
@@ -95,6 +95,7 @@ impl<const L: usize> BufferedEKF<L> {
         q: SMatrix<f32, STATE_LEN, STATE_LEN>,
         corr_coef: f32,
         init_pos: SVector<f32, 3>,
+        init_vel: SVector<f32, 3>,
     ) -> Self {
         assert!(ekf_delay_us % dt_us == 0, "EKF delay in microseconds must be a multiple of update period in microseconds");
         assert!(corr_coef > 0., "Correction coefficient must be greater than 0");
@@ -115,7 +116,7 @@ impl<const L: usize> BufferedEKF<L> {
             h,
             corr_gain,
         };
-        estimator.init(init_pos);
+        estimator.init(init_pos, init_vel);
         
         estimator
     }
@@ -123,17 +124,30 @@ impl<const L: usize> BufferedEKF<L> {
     pub fn init(
         &mut self,
         init_pos: SVector<f32, 3>,
-        init_vel: SVector<f32, 2>,
+        init_vel: SVector<f32, 3>,
     ) {
+        // Set the entire buffer to 0
         self.buff = unsafe{ core::mem::zeroed() };  // reset all bytes in the buffer to 0's
+        // Initialize buffer indices
         self.idx_ekf = 0;
         self.idx_reck = self.ekf_delay_frames;
+        // Initialize the state estimate covariance
         self.buff[self.idx_ekf].p_ekf = SMatrix::<f32, STATE_LEN, STATE_LEN>::from_diagonal(
             &SVector::<f32, STATE_LEN>::from(
                 [1000., 1000., PI*PI, 25., 25.]
             )
         );
-        self.buff[self.idx_ekf].x_ekf.fixed_rows_mut::<3>(0).copy_from(&init_pos);
+        // Initialize position and velocity in the current buffer window
+        for i in self.idx_ekf..(self.idx_reck + 1) {
+            // update ekf state
+            self.buff[i].x_ekf.fixed_rows_mut::<3>(0).copy_from(&init_pos);  // px, py, pw
+            self.buff[i].x_ekf.fixed_rows_mut::<2>(3).copy_from(&init_vel.fixed_rows::<2>(0));  // vx, vy
+            // update dead reckon state
+            self.buff[i].x_reck.fixed_rows_mut::<3>(0).copy_from(&init_pos);  // px, py, pw
+            self.buff[i].x_reck.fixed_rows_mut::<2>(3).copy_from(&init_vel.fixed_rows::<2>(0));  // vx, vy
+            // update input
+            self.buff[i].u.fixed_rows_mut::<1>(2).copy_from(&init_vel.fixed_rows::<1>(2));  // vw goes into KF input u
+        }
     }
 
     pub fn tick(
@@ -158,8 +172,44 @@ impl<const L: usize> BufferedEKF<L> {
         Ok(())
     }
 
-    pub fn get_state(&self) -> SVector<f32, STATE_LEN> {
-        self.buff[self.idx_reck].x_reck
+    pub fn get_pos(&self) -> SVector<f32, 3> {
+        // px, py, pw come from dead reckoned state
+        let mut pos: SVector<f32, 3> = self.buff[self.idx_reck].x_reck.fixed_rows::<3>(0).into();
+        pos[2] = Self::wrap_turns(pos[2]);
+
+        pos
+    }
+
+    pub fn get_vel(&self) -> SVector<f32, 3> {
+        let frame_reck = &self.buff[self.idx_reck];
+        let mut vel = SVector::<f32, 3>::zeros();
+        // vx, vy come from dead reckoned state
+        vel[0] = frame_reck.x_reck[0];
+        vel[1] = frame_reck.x_reck[1];
+        // vw comes from input
+        vel[2] = frame_reck.u[2];
+
+        vel
+    }
+
+    pub fn get_ekf_pos(&self) -> SVector<f32, 3> {
+        // px, py, pw come from dead reckoned state
+        let mut pos: SVector<f32, 3> = self.buff[self.idx_ekf].x_ekf.fixed_rows::<3>(0).into();
+        pos[2] = Self::wrap_turns(pos[2]);
+
+        pos
+    }
+
+    pub fn get_ekf_vel(&self) -> SVector<f32, 3> {
+        let frame_ekf = &self.buff[self.idx_ekf];
+        let mut vel = SVector::<f32, 3>::zeros();
+        // vx, vy come from dead reckoned state
+        vel[0] = frame_ekf.x_ekf[0];
+        vel[1] = frame_ekf.x_ekf[1];
+        // vw comes from input
+        vel[2] = frame_ekf.u[2];
+
+        vel
     }
 
     /// Insert the vision measurement at the correct frame in the past
