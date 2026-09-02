@@ -183,9 +183,10 @@ impl<const L: usize> BufferedEKF<L> {
     pub fn get_vel(&self) -> SVector<f32, 3> {
         let frame_reck = &self.buff[self.idx_reck];
         let mut vel = SVector::<f32, 3>::zeros();
-        // vx, vy come from dead reckoned state
-        vel[0] = frame_reck.x_reck[0];
-        vel[1] = frame_reck.x_reck[1];
+        // vx, vy come from dead reckoned state, rotate local to global
+        vel.fixed_rows_mut::<2>(0).copy_from(
+            &Self::rotate_xy(frame_reck.x_reck.xy(), frame_reck.x_reck.z)
+        );
         // vw comes from input
         vel[2] = frame_reck.u[2];
 
@@ -203,9 +204,10 @@ impl<const L: usize> BufferedEKF<L> {
     pub fn get_ekf_vel(&self) -> SVector<f32, 3> {
         let frame_ekf = &self.buff[self.idx_ekf];
         let mut vel = SVector::<f32, 3>::zeros();
-        // vx, vy come from dead reckoned state
-        vel[0] = frame_ekf.x_ekf[0];
-        vel[1] = frame_ekf.x_ekf[1];
+        // vx, vy come from dead reckoned state, rotate local to global
+        vel.fixed_rows_mut::<2>(0).copy_from(
+            &Self::rotate_xy(frame_ekf.x_ekf.xy(), frame_ekf.x_ekf.z)
+        );
         // vw comes from input
         vel[2] = frame_ekf.u[2];
 
@@ -312,9 +314,9 @@ impl<const L: usize> BufferedEKF<L> {
         let vy = x[(4, 0)];  // local y vel
 
         // Input vars
-        let gyr_vw = u[(0, 0)];
-        let acc_ax = u[(1, 0)];
-        let acc_ay = u[(2, 0)];
+        let acc_ax = u[(0, 0)];
+        let acc_ay = u[(1, 0)];
+        let gyr_vw = u[(2, 0)];
 
         // Prepare input measurements
         let vw = gyr_vw;  // theta velocity taken directly from gyro
@@ -386,6 +388,19 @@ impl<const L: usize> BufferedEKF<L> {
         } else {
             (i + L - di) % L
         }
+    }
+
+    #[inline(always)]
+    fn rotate_xy(
+        xy: SVector<f32, 2>,
+        a: f32,
+    ) -> SVector<f32, 2> {
+        let cosa = cosf(a);
+        let sina = sinf(a);
+        SVector::<f32, 2>::new(
+            xy.x * cosa - xy.y * sina,
+            xy.x * sina + xy.y * cosa,
+        )
     }
 }
 
