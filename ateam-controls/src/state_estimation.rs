@@ -185,7 +185,7 @@ impl<const L: usize> BufferedEKF<L> {
         let mut vel = SVector::<f32, 3>::zeros();
         // vx, vy come from dead reckoned state, rotate local to global
         vel.fixed_rows_mut::<2>(0).copy_from(
-            &Self::rotate_xy(frame_reck.x_reck.xy(), frame_reck.x_reck.z)
+            &Self::rotate_xy(&frame_reck.x_reck.fixed_rows::<2>(3).into(), frame_reck.x_reck.z)
         );
         // vw comes from input
         vel[2] = frame_reck.u[2];
@@ -206,7 +206,7 @@ impl<const L: usize> BufferedEKF<L> {
         let mut vel = SVector::<f32, 3>::zeros();
         // vx, vy come from dead reckoned state, rotate local to global
         vel.fixed_rows_mut::<2>(0).copy_from(
-            &Self::rotate_xy(frame_ekf.x_ekf.xy(), frame_ekf.x_ekf.z)
+            &Self::rotate_xy(&frame_ekf.x_ekf.fixed_rows::<2>(3).into(), frame_ekf.x_ekf.z)
         );
         // vw comes from input
         vel[2] = frame_ekf.u[2];
@@ -392,7 +392,7 @@ impl<const L: usize> BufferedEKF<L> {
 
     #[inline(always)]
     fn rotate_xy(
-        xy: SVector<f32, 2>,
+        xy: &SVector<f32, 2>,
         a: f32,
     ) -> SVector<f32, 2> {
         let cosa = cosf(a);
