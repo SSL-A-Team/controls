@@ -3,18 +3,21 @@ use libm::{cosf, roundf, sinf};
 use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector};
 
+use crate::defaults::{DEFAULT_VISION_INACTIVE_THRESHOLD_US, DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US, DEFAULT_VISION_MAX_AGE_TIME_SYNC_US, DEFAULT_VISION_MAX_AGE_VARIANCE_US, DEFAULT_VISION_MIN_LATENCY_US, DEFAULT_VISION_MIN_SAMPLES_TIME_SYNC, DEFAULT_VISION_MIN_SAMPLES_VARIANCE};
+
 
 pub const STATE_LEN: usize = 5;
 pub const INPUT_LEN: usize = 3;
 pub const MEAS_LEN: usize = 3;
 
 
+#[derive(Clone, Copy)]
 pub struct VisionSample {
     x_m: f32,
     y_m: f32,
     w_rad: f32,
     t_capture_us: u128,
-    t_rx_us: u128,
+    t_rx_us: u64,
 }
 
 pub struct ImuSample {
@@ -28,6 +31,18 @@ pub struct EncoderSample {
     bl_radps: f32,
     br_radps: f32,
     fr_radps: f32,
+}
+
+impl Default for VisionSample {
+    fn default() -> Self {
+        Self { 
+            x_m: 0.,
+            y_m: 0.,
+            w_rad: 0.,
+            t_capture_us: 0,
+            t_rx_us: 0
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -440,10 +455,10 @@ enum VisionSampleAction {
 }
 
 struct VisionFilter<const L: usize> {
-    buff: [VisionSample; L],
-    head_idx: usize,
-    tail_idx: usize,
-    min_process_latency_us: u32,
+    buff: [Option<VisionSample>; L],
+    buff_idx: usize,
+    /// Estimated minimum possible latency from camera capture time to robot vision packet receive time
+    min_latency_us: u32,
     /// Minimum number of samples to compute variance before accepting measurements
     min_samples_variance: usize,
     /// Maximum age of samples to compute variance before accepting measurements
@@ -453,7 +468,7 @@ struct VisionFilter<const L: usize> {
     /// Maximum age of samples to compute robot time offset with vision source
     max_age_time_sync_us: u32,
     /// Maximum age of a sample for measurement acceptance
-    max_age_acceptance: u32,
+    max_age_acceptance_us: u32,
     /// Duration until vision signal is considered inactive
     inactive_threshold_us: u32,
     /// Last sample accept absolute time in microseconds
@@ -461,26 +476,115 @@ struct VisionFilter<const L: usize> {
     signal_active: bool,
 }
 
+impl<const L: usize> Default for VisionFilter<L> {
+    fn default() -> Self {
+        Self::new(
+            DEFAULT_VISION_MIN_LATENCY_US,
+            DEFAULT_VISION_MIN_SAMPLES_VARIANCE,
+            DEFAULT_VISION_MAX_AGE_VARIANCE_US,
+            DEFAULT_VISION_MIN_SAMPLES_TIME_SYNC,
+            DEFAULT_VISION_MAX_AGE_TIME_SYNC_US,
+            DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US,
+            DEFAULT_VISION_INACTIVE_THRESHOLD_US,
+        )
+    }
+}
+
 impl<const L: usize> VisionFilter<L> {
     fn new(
-        min_process_latency_us: u32,
+        min_latency_us: u32,
+        min_samples_variance: usize,
+        max_age_variance_us: u32,
+        min_samples_time_sync: usize,
+        max_age_time_sync_us: u32,
+        max_age_acceptance_us: u32,
+        inactive_threshold_us: u32,
     ) -> VisionFilter<L> {
         // Check that min samples is less than max_age * 30hz vision for variance and time sync (sample count is achievable in the time window, accounting for dropped packets)
         // Check that max age for time sync is greater than max age for variance (we can drop samples after time sync max age)
         // Check that max_age_time_sync_us / inactive_threshold_us > min_samples_time_sync (as long as signal is active, we have enough time sync samples)
-        todo!()
+        VisionFilter {
+            buff: [None; L],
+            buff_idx: 0,
+            min_latency_us,
+            min_samples_variance,
+            max_age_variance_us,
+            min_samples_time_sync,
+            max_age_time_sync_us,
+            max_age_acceptance_us,
+            inactive_threshold_us,
+            last_sample_accept_us: 0,
+            signal_active: false,
+        }
     }
 
+    /// # Arguments
+    /// * `t_us` - current absolute robot time in microseconds
+    /// * `pos_est` - current position estimate
+    /// * `sample` - optional vision sample to feed into the vision filter
     pub fn tick(
         &mut self,
-        sample: Option<&VisionSample>,
+        t_us: u64,
         pos_est: SVector<f32, 3>,
+        sample: Option<&VisionSample>,
     ) -> VisionSampleAction {
-        // ensure this sample is the latest, otherwise throw it away
+        let mut action = VisionSampleAction::None;
 
-        // evict tail(s) if too old, or if buffer is full and sample is Some
+        if let Some(new_sample) = sample {
+            if let Some(head_sample) = self.buff[self.buff_idx] {
+                // ensure this sample is the latest, otherwise throw it away
+                if new_sample.t_capture_us > head_sample.t_capture_us {
+                    // insert into buffer at the head
+                    self.buff_idx = Self::move_idx(self.buff_idx, 1, true);
+                    self.buff[self.buff_idx] = Some(*new_sample);
+                } else {
+                    // this is older than the current buffer head
+                    action = VisionSampleAction::Reject(VisionSampleReject::OutOfOrder);
+                }
+            }
+        }
 
-        // insert into buffer at the head
+        // if (t_us - tail_sample.t_rx_us) > self.max_age_time_sync_us
+
+        // Loop through buffer to get required metrics
+        let mut idx = self.buff_idx;
+        let mut meas_sum = SVector::<f32, MEAS_LEN>::zeros();
+        let mut meas_sq_sum = SVector::<f32, MEAS_LEN>::zeros();
+        let mut variance_samples = 0;
+        let mut min_t_diff = u128::MAX;
+        let mut time_sync_samples = 0;
+        while let Some(sample) = self.buff[idx] {
+            // Metrics for variance check before measurement acceptance
+            if sample.t_rx_us > (t_us - self.max_age_variance_us as u64) {
+                let meas_vec: SVector<f32, MEAS_LEN> = SVector::<f32, MEAS_LEN>::new(
+                    sample.x_m,
+                    sample.y_m,
+                    sample.w_rad,
+                );
+                meas_sum += meas_vec;
+                meas_sq_sum += meas_vec.component_mul(&meas_vec);
+                variance_samples += 1;
+            }
+
+            // Metrics for time sync with vision clock
+            if sample.t_rx_us > (t_us - self.max_age_time_sync_us as u64) {
+                let t_diff = (t_us as u128) - sample.t_capture_us;
+                if t_diff < min_t_diff {
+                    min_t_diff = t_diff;
+                }
+                time_sync_samples += 1;
+            } else {
+                // exhausted the buffer for samples that are within the time sync age (variance age is smaller)
+                break;
+            }
+
+            // move backward in the buffer
+            idx = Self::move_idx(self.buff_idx, 1, false);
+            if idx == self.buff_idx {
+                // exhausted the entire buffer
+                break;
+            }
+        }
 
         // Check for state transition to active signal
         if !self.signal_active() {
@@ -567,6 +671,7 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
 
     pub fn tick(
         &mut self,
+        t_us: u64,
         imu: &ImuSample,
         encoder: &EncoderSample,
         vision: Option<&VisionSample>,
@@ -576,8 +681,9 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
         let mut z_age_us = 0;
 
         match self.vision_filter.tick(
+            t_us,
+            self.ekf.get_pos(),
             vision,
-            self.ekf.get_pos()
         ) {
             VisionSampleAction::Accept(accept_action, meas, meas_age_us) => {
                 z = Some(meas);
