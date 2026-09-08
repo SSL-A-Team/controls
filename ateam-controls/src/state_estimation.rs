@@ -1,3 +1,4 @@
+#![allow(unused)]
 use libm::{cosf, roundf, sinf};
 use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector};
@@ -8,21 +9,39 @@ pub const INPUT_LEN: usize = 3;
 pub const MEAS_LEN: usize = 3;
 
 
-#[allow(unused)]
+pub struct VisionSample {
+    x_m: f32,
+    y_m: f32,
+    w_rad: f32,
+    t_capture_us: u128,
+    t_rx_us: u128,
+}
+
+pub struct ImuSample {
+    x_acc_mps2: f32,
+    y_acc_mps2: f32,
+    w_gyro_radps: f32,
+}
+
+pub struct EncoderSample {
+    fl_radps: f32,
+    bl_radps: f32,
+    br_radps: f32,
+    fr_radps: f32,
+}
+
 #[derive(Clone, Copy)]
 struct StateFrame {
     /// EKF state
     x_ekf: SVector<f32, STATE_LEN>,
     /// EKF state estimate covariance
     p_ekf: SMatrix<f32, STATE_LEN, STATE_LEN>,
-    /// Reckoning state
+    /// Dead reckoned state
     x_reck: SVector<f32, STATE_LEN>,
     /// IMU control input
     u: SVector<f32, INPUT_LEN>,
     /// Vision measurement
-    z: SVector<f32, MEAS_LEN>,
-    /// Indicates if this frame contains a valid vision measurement
-    z_update: bool,
+    z: Option<SVector<f32, MEAS_LEN>>,
 }
 
 impl Default for StateFrame {
@@ -32,14 +51,11 @@ impl Default for StateFrame {
             p_ekf: SMatrix::zeros(),
             x_reck: SMatrix::zeros(),
             u: SMatrix::zeros(),
-            z: SMatrix::zeros(),
-            z_update: false,
+            z: None,
         }
     }
 }
 
-
-#[allow(unused)]
 pub struct BufferedEKF<const L: usize> {
     buff: [StateFrame; L],
     idx_ekf: usize,
@@ -57,7 +73,6 @@ pub struct BufferedEKF<const L: usize> {
     corr_gain: f32
 }
 
-#[allow(unused)]
 impl<const L: usize> BufferedEKF<L> {
     /// Creates a new buffered EKF with a delayed-measurement fusion horizon.
     ///
@@ -162,8 +177,8 @@ impl<const L: usize> BufferedEKF<L> {
         // Reset the new frame
         self.buff[self.idx_reck] = StateFrame::default();
 
-        if let Some(vision) = z {
-            self.insert_vision(vision, z_delay_us);
+        if let Some(meas) = z {
+            self.insert_meas(meas, z_delay_us);
         }
         self.reckon_predict(u);
         self.ekf_predict();
@@ -215,7 +230,7 @@ impl<const L: usize> BufferedEKF<L> {
     }
 
     /// Insert the vision measurement at the correct frame in the past
-    fn insert_vision(
+    fn insert_meas(
         &mut self,
         z: SVector<f32, MEAS_LEN>,
         z_delay_us: u32,
@@ -229,8 +244,7 @@ impl<const L: usize> BufferedEKF<L> {
         // Get the index in the buffer
         let vision_idx = Self::move_idx(self.idx_reck, frames_past, false);
         // Update that frame with the measurement
-        self.buff[vision_idx].z.copy_from(&z);
-        self.buff[vision_idx].z_update = true;
+        self.buff[vision_idx].z = Some(z);
     }
 
     fn reckon_predict(
@@ -278,24 +292,22 @@ impl<const L: usize> BufferedEKF<L> {
     fn ekf_update(
         &mut self,
     ) -> Result<(), ()> {
-        if !self.buff[self.idx_ekf].z_update {
-            return Ok(());
-        }
         let frame = &mut self.buff[self.idx_ekf];
-        let mut z = frame.z;
-        // Unwrap measurement theta
-        z[(2, 0)] = Self::unwrap_turns(z[(2, 0)], frame.x_ekf[(2, 0)]);
-        // Calculate residual
-        let y = z - frame.x_ekf.xyz();
-        // Calculate residual covariance
-        let s = self.h * frame.p_ekf * self.h.transpose() + self.r;
-        // Invert the residual covariance
-        let s_inv = s.try_inverse().ok_or_else(|| ())?;
-        // Calculate kalman gain
-        let k = frame.p_ekf * self.h.transpose() * s_inv;
-        // Update EKF state
-        frame.x_ekf = frame.x_ekf + k * y;
-        frame.p_ekf = (SMatrix::<f32, STATE_LEN, STATE_LEN>::identity() - k * self.h) * frame.p_ekf;
+        if let Some(mut z) = frame.z {
+            // Unwrap measurement theta
+            z[(2, 0)] = Self::unwrap_turns(z[(2, 0)], frame.x_ekf[(2, 0)]);
+            // Calculate residual
+            let y = z - frame.x_ekf.xyz();
+            // Calculate residual covariance
+            let s = self.h * frame.p_ekf * self.h.transpose() + self.r;
+            // Invert the residual covariance
+            let s_inv = s.try_inverse().ok_or_else(|| ())?;
+            // Calculate kalman gain
+            let k = frame.p_ekf * self.h.transpose() * s_inv;
+            // Update EKF state
+            frame.x_ekf = frame.x_ekf + k * y;
+            frame.p_ekf = (SMatrix::<f32, STATE_LEN, STATE_LEN>::identity() - k * self.h) * frame.p_ekf;
+        }
 
         Ok(())
     }
@@ -404,44 +416,233 @@ impl<const L: usize> BufferedEKF<L> {
     }
 }
 
-
-
-
-#[allow(unused)]
-struct VisionTimeSync {
-    sync_toc_us: u64,
-    sync_seq_num: usize,
-    max_seq_num: usize,
-    cap_period_us: f32,
-    min_process_latency_us: u64,
-    active: bool,
-    seed_count_thresh: u32,
-    seed_count: u32,
+enum VisionSampleReject {
+    Seeding,
+    DistanceThreshold,
+    VarianceThreshold,
+    OutOfOrder,
+    TooOld,
 }
 
-#[allow(unused)]
-impl VisionTimeSync {
+enum VisionSampleAccept {
+    SnapState,
+    UpdateState,
+}
+
+enum VisionSampleAction {
+    None,
+    Reject(VisionSampleReject),
+    Accept(
+        VisionSampleAccept,
+        SVector<f32, MEAS_LEN>,
+        u64,
+    ),
+}
+
+struct VisionFilter<const L: usize> {
+    buff: [VisionSample; L],
+    head_idx: usize,
+    tail_idx: usize,
+    min_process_latency_us: u32,
+    /// Minimum number of samples to compute variance before accepting measurements
+    min_samples_variance: usize,
+    /// Maximum age of samples to compute variance before accepting measurements
+    max_age_variance_us: u32,
+    /// Minimum number of samples to compute robot time offset with vision source
+    min_samples_time_sync: usize,
+    /// Maximum age of samples to compute robot time offset with vision source
+    max_age_time_sync_us: u32,
+    /// Maximum age of a sample for measurement acceptance
+    max_age_acceptance: u32,
+    /// Duration until vision signal is considered inactive
+    inactive_threshold_us: u32,
+    /// Last sample accept absolute time in microseconds
+    last_sample_accept_us: u64,
+    signal_active: bool,
+}
+
+impl<const L: usize> VisionFilter<L> {
     fn new(
-        min_process_latency_us: u64,
-        capture_hz: f32,
-    ) -> VisionTimeSync {
+        min_process_latency_us: u32,
+    ) -> VisionFilter<L> {
+        // Check that min samples is less than max_age * 30hz vision for variance and time sync (sample count is achievable in the time window, accounting for dropped packets)
+        // Check that max age for time sync is greater than max age for variance (we can drop samples after time sync max age)
+        // Check that max_age_time_sync_us / inactive_threshold_us > min_samples_time_sync (as long as signal is active, we have enough time sync samples)
         todo!()
     }
 
-    /// When a new vision measurement comes in, update the time sync. Needs the packet RX time on the robot and the sequence number.
-    /// - Wrap the sequence number if less than current sync seq num
-    /// - Calculate the estimated time-of-capture robot tick for this seq num from the current sync tick
-    /// - Calculate latency for this packet (rx_tick_us - estimated_toc_tick)
-    /// - If it's lower than the min_process_latency_us, move the sync period forward in time (sync_toc_us = rx_tick_us - min_process_latency_us) and update latency to min
-    /// - If it's higher than the min_process_latency_us, use the estimated toc tick to update the sync
-    /// - Increment seed count, set to active once the threshold is reached
-    /// 
-    /// Returns: estimated time-of-capture robot tick for this vision measurment
-    fn update(
-        seq_num: u32,
-        rx_tick_us: u64,
-    ) -> u64 {
+    pub fn tick(
+        &mut self,
+        sample: Option<&VisionSample>,
+        pos_est: SVector<f32, 3>,
+    ) -> VisionSampleAction {
+        // ensure this sample is the latest, otherwise throw it away
+
+        // evict tail(s) if too old, or if buffer is full and sample is Some
+
+        // insert into buffer at the head
+
+        // Check for state transition to active signal
+        if !self.signal_active() {
+            // check if seeding is complete
+
+            // check if within expanding radius and signal variance is acceptable
+
+            // set accept action to snap
+
+            // expand search radius
+        };
+
+        if self.signal_active() {
+            // check if within radius of pos_est if not snapped and accept
+
+            // check if signal has stopped
+
+            // update time sync min
+
+            // calculate age of sample
+
+        }
+
         todo!()
+    }
+
+    pub fn signal_active(&self) -> bool {
+        self.signal_active
+    }
+
+    #[inline(always)]
+    fn move_idx(
+        i: usize,  // base index
+        di: usize,  // change in index
+        forward: bool,  // move forward in the buffer (+time)
+    ) -> usize {
+        if forward {
+            (i + di) % L
+        } else {
+            (i + L - di) % L
+        }
+    }
+}
+
+struct Odometer {
+}
+
+impl Odometer {
+    pub fn start(
+        &self,
+        start_pos: SVector<f32, 3>,
+    ) {
+        todo!()
+    }
+
+    pub fn tick(
+        &self,
+        enc: &EncoderSample,
+    ) {
+        todo!()
+    }
+
+    pub fn get_pos(&self) -> SVector<f32, MEAS_LEN> {
+        todo!()
+    }
+
+    pub fn active(&self) -> bool {
+        todo!()
+    }
+}
+
+struct StateEstimator<const L: usize, const K: usize> {
+    ekf: BufferedEKF<L>,
+    vision_filter: VisionFilter<K>,
+    odometer: Odometer,
+}
+
+impl<const L: usize, const K: usize> StateEstimator<L, K> {
+
+    pub fn new() -> Self {
+        // Check that the vision filter max_age_acceptance is equal or less than EKF buffer size
+        todo!()
+    }
+
+    pub fn tick(
+        &mut self,
+        imu: &ImuSample,
+        encoder: &EncoderSample,
+        vision: Option<&VisionSample>,
+    ) -> Result<(), ()> {
+
+        let mut z: Option<SVector<f32, MEAS_LEN>> = None;
+        let mut z_age_us = 0;
+
+        match self.vision_filter.tick(
+            vision,
+            self.ekf.get_pos()
+        ) {
+            VisionSampleAction::Accept(accept_action, meas, meas_age_us) => {
+                z = Some(meas);
+                z_age_us = meas_age_us;
+                match accept_action {
+                    VisionSampleAccept::SnapState => {
+                        self.ekf.init(
+                            meas,
+                            SVector::<f32, 3>::zeros(),
+                        )
+                    },
+                    VisionSampleAccept::UpdateState => {},
+                };
+            },
+            VisionSampleAction::Reject(reject) => {
+                todo!();
+            },
+            VisionSampleAction::None => {},
+        }
+
+        if (!self.vision_active()) {
+            // TODO: Uncomment after odometer is implemented
+            // if (!self.odometer.active()) {
+            //     self.odometer.start(self.ekf.get_pos());
+            // }
+            // self.odometer.tick(encoder);
+            // z = Some(self.odometer.get_pos());
+            // z_age_us = 0;
+
+            z = None
+        }
+
+        let u = SVector::<f32, INPUT_LEN>::new(
+            imu.x_acc_mps2,
+            imu.y_acc_mps2,
+            imu.w_gyro_radps,
+        );
+
+        self.ekf.tick(
+            u,
+            z,
+            z_age_us as u32,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn vision_active(&self) -> bool {
+        self.vision_filter.signal_active()
+    }
+
+    pub fn get_pos(&self) -> SVector<f32, 3> {
+        self.ekf.get_pos()
+    }
+
+    pub fn get_vel(&self) -> SVector<f32, 3> {
+        self.ekf.get_vel()
+    }
+
+    pub fn get_ekf_pos(&self) -> SVector<f32, 3> {
+        self.ekf.get_ekf_pos()
+    }
+
+    pub fn get_ekf_vel(&self) -> SVector<f32, 3> {
+        self.ekf.get_ekf_vel()
     }
 }
 
