@@ -122,6 +122,9 @@ impl<const L: usize> BufferedEKF<L> {
     ) -> Self {
         assert!(params.ekf_delay_us % params.dt_us == 0, "EKF delay in microseconds must be a multiple of update period in microseconds");
         assert!(params.corr_coef > 0., "Correction coefficient must be greater than 0");
+        // The buffer needs to have at least one frame in between the current
+        // frame and the ekf (horizon) frame so that it's available in the
+        // reckon_predict() step
         let ekf_delay_frames = (params.ekf_delay_us / params.dt_us) as usize;
         assert!(ekf_delay_frames < (L - 1), "The specified buffer size is too small for the specified EKF delay");
         let dt_s = (params.dt_us as f32) * 1e-6;
@@ -237,6 +240,11 @@ impl<const L: usize> BufferedEKF<L> {
 
     pub fn get_params(&self) -> BufferedEKFParams {
         self.params
+    }
+
+    /// The vision measurement at the EKF (horizon) frame
+    pub fn applied_measurement(&self) -> Option<SVector<f32, EKF_MEAS_LEN>> {
+        self.buff[self.idx_ekf].z
     }
 
     /// Insert the vision measurement at the correct frame in the past
@@ -913,6 +921,14 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
 
     pub fn get_vel_buff(&self) -> SVector<f32, 3> {
         self.ekf.get_vel_buff()
+    }
+
+    /// The vision measurement the buffered EKF applied on the most recent
+    /// `tick()` (age-placed at the horizon), or `None` if no measurement was
+    /// applied this tick. Lets telemetry report a vision update when the EKF
+    /// actually uses the measurement rather than when the packet is received.
+    pub fn applied_vision(&self) -> Option<SVector<f32, 3>> {
+        self.ekf.applied_measurement()
     }
 }
 

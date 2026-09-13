@@ -107,7 +107,7 @@ pub const DEFAULT_VISION_SEED_SAMPLES: usize = 20;
 // the vision measurement at the correct instant in the EKF buffer and throw out
 // old measurements.
 pub const DEFAULT_VISION_MIN_LATENCY_US: u64 = 15_000;  // 15 ms
-pub const DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US: u64 = 35_000;  // 35 ms
+pub const DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US: u64 = 62_000;  // 63 ms
 // Timeout to consider vision as "inactive". This may stop the robot if the
 // active control mode requires absolute vision positioning.
 pub const DEFAULT_VISION_INACTIVE_THRESHOLD_US: u64 = 500_000;  // 500 ms
