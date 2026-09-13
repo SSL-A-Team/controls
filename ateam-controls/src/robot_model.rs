@@ -150,9 +150,9 @@ pub struct RobotModel {
 
 impl Default for RobotModel {
     fn default() -> Self {
-        use crate::defaults::DEFAULT_CONTROL_DT;
+        use crate::defaults::DEFAULT_CONTROL_DT_US;
         RobotModel::new(
-            DEFAULT_CONTROL_DT,
+            DEFAULT_CONTROL_DT_US as f32 * 1e-6,
             KalmanFilterParams::default(),
             RobotPhysicalParams::default(),
         )

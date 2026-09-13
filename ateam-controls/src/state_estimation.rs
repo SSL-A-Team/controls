@@ -3,24 +3,21 @@ use libm::{cosf, roundf, sinf};
 use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector};
 
-use crate::defaults::{DEFAULT_CONTROL_DT_US, DEFAULT_EKF_DELAY_US,
-DEFAULT_EKF_R, DEFAULT_EKF_Q, DEFAULT_EKF_CORR_COEF,
-DEFAULT_VISION_ACCEPT_RADIUS_BASE_M, DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS,
-DEFAULT_VISION_ACCEPT_VARIANCE_M2, DEFAULT_VISION_INACTIVE_THRESHOLD_US,
-DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US, DEFAULT_VISION_MIN_LATENCY_US,
-DEFAULT_VISION_SEED_SAMPLES};
-
-
-pub const STATE_LEN: usize = 5;
-pub const INPUT_LEN: usize = 3;
-pub const MEAS_LEN: usize = 3;
+use crate::defaults::{
+    EKF_STATE_LEN, EKF_INPUT_LEN, EKF_MEAS_LEN, DEFAULT_CONTROL_DT_US,
+    DEFAULT_EKF_R, DEFAULT_EKF_Q, DEFAULT_EKF_CORR_COEF,
+    DEFAULT_VISION_ACCEPT_RADIUS_BASE_M, DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS,
+    DEFAULT_VISION_ACCEPT_VARIANCE_M2, DEFAULT_VISION_INACTIVE_THRESHOLD_US,
+    DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US, DEFAULT_VISION_MIN_LATENCY_US,
+    DEFAULT_VISION_SEED_SAMPLES
+};
 
 
 #[derive(Clone, Copy)]
 pub struct VisionSample {
     /// x_m, y_m, w_rad
-    meas: SVector<f32, 3>,
-    t_capture_host_us: u64,
+    pub meas: SVector<f32, 3>,
+    pub t_capture_host_us: u64,
 }
 
 impl Default for VisionSample {
@@ -35,15 +32,15 @@ impl Default for VisionSample {
 #[derive(Clone, Copy)]
 struct StateFrame {
     /// EKF state
-    x_ekf: SVector<f32, STATE_LEN>,
+    x_ekf: SVector<f32, EKF_STATE_LEN>,
     /// EKF state estimate covariance
-    p_ekf: SMatrix<f32, STATE_LEN, STATE_LEN>,
+    p_ekf: SMatrix<f32, EKF_STATE_LEN, EKF_STATE_LEN>,
     /// Dead reckoned state
-    x_reck: SVector<f32, STATE_LEN>,
+    x_reck: SVector<f32, EKF_STATE_LEN>,
     /// IMU control input
-    u: SVector<f32, INPUT_LEN>,
+    u: SVector<f32, EKF_INPUT_LEN>,
     /// Vision measurement
-    z: Option<SVector<f32, MEAS_LEN>>,
+    z: Option<SVector<f32, EKF_MEAS_LEN>>,
 }
 
 impl Default for StateFrame {
@@ -60,20 +57,20 @@ impl Default for StateFrame {
 
 #[derive(Clone, Copy)]
 pub struct BufferedEKFParams {
-    dt_us: u32,
-    ekf_delay_us: u32,
+    pub dt_us: u32,
+    pub ekf_delay_us: u32,
     /// Observation covariance R
-    r: SMatrix<f32, MEAS_LEN, MEAS_LEN>,
+    pub r: SMatrix<f32, EKF_MEAS_LEN, EKF_MEAS_LEN>,
     /// Process covariance Q
-    q: SMatrix<f32, STATE_LEN, STATE_LEN>,
-    corr_coef: f32,
+    pub q: SMatrix<f32, EKF_STATE_LEN, EKF_STATE_LEN>,
+    pub corr_coef: f32,
 }
 
 impl Default for BufferedEKFParams {
     fn default() -> Self {
         Self {
             dt_us: DEFAULT_CONTROL_DT_US,
-            ekf_delay_us: DEFAULT_EKF_DELAY_US,
+            ekf_delay_us: DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US as u32,
             r: DEFAULT_EKF_R,
             q: DEFAULT_EKF_Q,
             corr_coef: DEFAULT_EKF_CORR_COEF,
@@ -89,7 +86,7 @@ pub struct BufferedEKF<const L: usize> {
     ekf_delay_frames: usize,
     dt_s: f32,
     /// Observation jacobian H
-    h: SMatrix<f32, MEAS_LEN, STATE_LEN>,
+    h: SMatrix<f32, EKF_MEAS_LEN, EKF_STATE_LEN>,
     /// Gain for dead reckoning error correction
     corr_gain: f32
 }
@@ -128,7 +125,7 @@ impl<const L: usize> BufferedEKF<L> {
         let ekf_delay_frames = (params.ekf_delay_us / params.dt_us) as usize;
         assert!(ekf_delay_frames < L, "EKF delay is too large for buffer size");
         let dt_s = (params.dt_us as f32) * 1e-6;
-        let h = SMatrix::<f32, MEAS_LEN, STATE_LEN>::identity();
+        let h = SMatrix::<f32, EKF_MEAS_LEN, EKF_STATE_LEN>::identity();
         let corr_gain = (params.dt_us as f32) / ((params.ekf_delay_us as f32) * params.corr_coef);
         let mut estimator = BufferedEKF {
             params,
@@ -151,13 +148,13 @@ impl<const L: usize> BufferedEKF<L> {
         init_vel: SVector<f32, 3>,
     ) {
         // Set the entire buffer to 0
-        self.buff = unsafe{ core::mem::zeroed() };  // reset all bytes in the buffer to 0's
+        self.buff = [StateFrame::default(); L];  // reset buffer
         // Initialize buffer indices
         self.idx_ekf = 0;
         self.idx_reck = self.ekf_delay_frames;
         // Initialize the state estimate covariance
-        self.buff[self.idx_ekf].p_ekf = SMatrix::<f32, STATE_LEN, STATE_LEN>::from_diagonal(
-            &SVector::<f32, STATE_LEN>::from(
+        self.buff[self.idx_ekf].p_ekf = SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::from_diagonal(
+            &SVector::<f32, EKF_STATE_LEN>::from(
                 [1000., 1000., PI*PI, 25., 25.]
             )
         );
@@ -176,8 +173,8 @@ impl<const L: usize> BufferedEKF<L> {
 
     pub fn tick(
         &mut self,
-        u: SVector<f32, INPUT_LEN>,
-        z: Option<SVector<f32, MEAS_LEN>>,
+        u: SVector<f32, EKF_INPUT_LEN>,
+        z: Option<SVector<f32, EKF_MEAS_LEN>>,
         z_delay_us: u32,  // Microseconds elapsed since the frame that provided this measurement was taken
     ) -> Result<(), ()> {
         // Progress buffer indices
@@ -245,7 +242,7 @@ impl<const L: usize> BufferedEKF<L> {
     /// Insert the vision measurement at the correct frame in the past
     fn insert_meas(
         &mut self,
-        z: SVector<f32, MEAS_LEN>,
+        z: SVector<f32, EKF_MEAS_LEN>,
         z_delay_us: u32,
     ) {
         // How many frames have past since the time-of-capture
@@ -262,7 +259,7 @@ impl<const L: usize> BufferedEKF<L> {
 
     fn reckon_predict(
         &mut self,
-        u: SVector<f32, INPUT_LEN>
+        u: SVector<f32, EKF_INPUT_LEN>
     ) {
         let idx_prev = Self::move_idx(self.idx_reck, 1, false);
         let x = self.buff[idx_prev].x_reck;
@@ -291,7 +288,7 @@ impl<const L: usize> BufferedEKF<L> {
         let p = self.buff[idx_prev].p_ekf;
         let u = self.buff[self.idx_ekf].u;
         // F (jacobian evaluated at x, u)
-        let mut f = SMatrix::<f32, STATE_LEN, STATE_LEN>::zeros();
+        let mut f = SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::zeros();
 
         // Run state prediction and jacobian evaluation
         let x1 = Self::f_xu(x, u, self.dt_s, Some(&mut f));
@@ -319,18 +316,18 @@ impl<const L: usize> BufferedEKF<L> {
             let k = frame.p_ekf * self.h.transpose() * s_inv;
             // Update EKF state
             frame.x_ekf = frame.x_ekf + k * y;
-            frame.p_ekf = (SMatrix::<f32, STATE_LEN, STATE_LEN>::identity() - k * self.h) * frame.p_ekf;
+            frame.p_ekf = (SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::identity() - k * self.h) * frame.p_ekf;
         }
 
         Ok(())
     }
 
     fn f_xu(
-        x: SVector<f32, STATE_LEN>,
-        u: SVector<f32, INPUT_LEN>,
+        x: SVector<f32, EKF_STATE_LEN>,
+        u: SVector<f32, EKF_INPUT_LEN>,
         dt: f32,
-        jacobian_out: Option<&mut SMatrix<f32, STATE_LEN, STATE_LEN>>,
-    ) -> SVector<f32, STATE_LEN> {
+        jacobian_out: Option<&mut SMatrix<f32, EKF_STATE_LEN, EKF_STATE_LEN>>,
+    ) -> SVector<f32, EKF_STATE_LEN> {
         // State vars
         let px = x[(0, 0)];  // global x
         let py = x[(1, 0)];  // global y
@@ -356,7 +353,7 @@ impl<const L: usize> BufferedEKF<L> {
 
         // Compute the jacobian at provided x, u
         if let Some(jac) = jacobian_out {
-            let mut f = SMatrix::<f32, STATE_LEN, STATE_LEN>::identity();
+            let mut f = SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::identity();
 
             f[(0, 2)] = -ay * cosa * 0.5 * dt2 - vx * sina * dt - vy * cosa * dt - ax * sina * 0.5 * dt2;
             f[(0, 3)] = cosa * dt + vw * sina * 0.5 * dt2;
@@ -374,7 +371,7 @@ impl<const L: usize> BufferedEKF<L> {
         }
 
         // State update integration
-        SVector::<f32, STATE_LEN>::from([
+        SVector::<f32, EKF_STATE_LEN>::from([
             px + (cosa * vx - sina * vy) * dt + 0.5 * (cosa * ax - sina * ay) * dt2,  // local vel and acc are rotated
             py + (sina * vx + cosa * vy) * dt + 0.5 * (sina * ax + cosa * ay) * dt2,  // local vel and acc are rotated
             pw + dt * vw,
@@ -435,7 +432,8 @@ impl<const L: usize> Default for BufferedEKF<L> {
     }
 }
 
-enum VisionSampleReject {
+pub enum VisionSampleReject {
+    MalformedTimestamp,
     OutOfOrder,
     Seeding,
     VarianceThreshold,
@@ -443,18 +441,18 @@ enum VisionSampleReject {
     AgeThreshold,
 }
 
-enum VisionSampleAccept {
+pub enum VisionSampleAccept {
     TeleportState,
     UpdateState,
 }
 
-enum VisionSampleAction {
+pub enum VisionSampleAction {
     None,
     Reject(VisionSampleReject),
     Accept(
         VisionSampleAccept,
         // Measurement values (px, py, pw)
-        SVector<f32, MEAS_LEN>,
+        SVector<f32, EKF_MEAS_LEN>,
         // Measurement age in microseconds
         u64,
     ),
@@ -484,14 +482,14 @@ enum VisionFilterState {
 
 #[derive(Clone, Copy)]
 pub struct VisionFilterParams {
-    dt_us: u32,
-    accept_radius_base_m: f32,
-    accept_radius_rate_mps: f32,
-    accept_variance_m2: f32,
-    seed_samples: usize,
-    min_latency_us: u64,
-    max_age_acceptance_us: u64,
-    inactive_threshold_us: u64,
+    pub dt_us: u32,
+    pub accept_radius_base_m: f32,
+    pub accept_radius_rate_mps: f32,
+    pub accept_variance_m2: f32,
+    pub seed_samples: usize,
+    pub min_latency_us: u64,
+    pub max_age_acceptance_us: u64,
+    pub inactive_threshold_us: u64,
 }
 
 impl Default for VisionFilterParams {
@@ -509,7 +507,7 @@ impl Default for VisionFilterParams {
     }
 }
 
-struct VisionFilter<const L: usize> {
+pub struct VisionFilter<const L: usize> {
     params: VisionFilterParams,
     state: VisionFilterState,
     /// time delta between calls to ```tick()``` in seconds
@@ -596,13 +594,20 @@ impl<const L: usize> VisionFilter<L> {
             // Calculate measured clock skew
             // meas_skew = skew - min_latency - jitter_latency
             if (t_us > new_sample.t_capture_host_us) {
-                panic!("Why is robot time greater than unix epoch timestamp ")
+                action = VisionSampleAction::Reject(VisionSampleReject::MalformedTimestamp);
+                return action;
             }
             let meas_skew = new_sample.t_capture_host_us - t_us;
 
-            // Insert into buffer
+            // Insert into buffer, update flag when index wraps back to the
+            // beginning of the buffer
             self.meas_skew_buff[self.buff_idx] = meas_skew;
-            self.buff_idx += 1;
+            let next_idx = Self::move_idx(self.buff_idx, 1, true);
+            if !self.buff_full && next_idx < self.buff_idx{
+                self.buff_full = true;
+            }
+            self.buff_idx = next_idx;
+            
 
             // Update a currently seeding state
             // note: this action will get overwritten in the signal_active
@@ -645,6 +650,10 @@ impl<const L: usize> VisionFilter<L> {
         }
 
         action
+    }
+
+    pub fn get_params(&self) -> VisionFilterParams {
+        self.params
     }
 
     fn reset_buff(&mut self) {
@@ -796,9 +805,9 @@ impl<const L: usize> Default for VisionFilter<L> {
     }
 }
 
-struct StateEstimator<const L: usize, const K: usize> {
-    ekf: BufferedEKF<L>,
-    vision_filter: VisionFilter<K>,
+pub struct StateEstimator<const L: usize, const K: usize> {
+    pub ekf: BufferedEKF<L>,
+    pub vision_filter: VisionFilter<K>,
     // odometer: Odometer,
 }
 
@@ -809,6 +818,7 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
         vision_filter: VisionFilter<K>,
     ) -> Self {
         // Check that the vision filter max_age_acceptance is equal or less than EKF buffer size
+        assert!(ekf.params.ekf_delay_us as u64 >= vision_filter.params.max_age_acceptance_us, "EKF buffer should be larger than the maximum acceptable vision sample age in the vision filter");
         Self {
             ekf,
             vision_filter,
@@ -818,7 +828,7 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
     pub fn tick(
         &mut self,
         t_us: u64,
-        imu: &SVector<f32, INPUT_LEN>,  // acc_x_mps2, acc_y_mps2, gyro_w_radps
+        imu: &SVector<f32, EKF_INPUT_LEN>,  // acc_x_mps2, acc_y_mps2, gyro_w_radps
         encoder: &SVector<f32, 4>,  // fl_radps, bl_radps, br_radps, fr_radps
         vision: Option<&VisionSample>,
     ) -> Result<(), ()> {
@@ -868,6 +878,15 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
         Ok(())
     }
 
+    pub fn init(
+        &mut self,
+        init_pos: SVector<f32, 3>,
+        init_vel: SVector<f32, 3>,
+    ) {
+        self.ekf.init(init_pos, init_vel);
+        self.vision_filter.reset();
+    }
+
     pub fn vision_active(&self) -> bool {
         self.vision_filter.signal_active()
     }
@@ -886,6 +905,14 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
 
     pub fn get_vel_buff(&self) -> SVector<f32, 3> {
         self.ekf.get_vel_buff()
+    }
+}
+
+impl<const K: usize, const L: usize> Default for StateEstimator<K, L> {
+    fn default() -> Self {
+        let ekf = BufferedEKF::default();
+        let vision_filter = VisionFilter::default();
+        Self::new(ekf, vision_filter)
     }
 }
 

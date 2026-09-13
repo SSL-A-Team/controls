@@ -1,5 +1,5 @@
 use core::f32::consts::PI;
-use nalgebra::{Matrix3x5, SMatrix};
+use nalgebra::SMatrix;
 
 // Control loop period
 pub const DEFAULT_CONTROL_DT_US: u32 = 1000;  // 1ms
@@ -26,20 +26,20 @@ pub const DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL: f32 = 0.35;       // rad / 
 pub const DEFAULT_LINEAR_COLINEAR_START_THRESH: f32 = 0.01;             // m
 
 // // Kalman filter noise standard deviations
-// pub const DEFAULT_KF_PROCESS_STD_POS_LINEAR: f32 = 0.01;
-// pub const DEFAULT_KF_PROCESS_STD_POS_ANGULAR: f32 = 0.02;
-// pub const DEFAULT_KF_PROCESS_STD_VEL_LINEAR: f32 = 0.03;
-// pub const DEFAULT_KF_PROCESS_STD_VEL_ANGULAR: f32 = 0.04;
-// pub const DEFAULT_KF_MEASUREMENT_STD_VISION_POS_LINEAR: f32 = 0.5;
-// pub const DEFAULT_KF_MEASUREMENT_STD_VISION_POS_ANGULAR: f32 = 0.75;
-// pub const DEFAULT_KF_MEASUREMENT_STD_ENCODER_VEL_ANGULAR: f32 = 50.0;
-// pub const DEFAULT_KF_MEASUREMENT_STD_GYRO_VEL_ANGULAR: f32 = 0.015;
+pub const DEFAULT_KF_PROCESS_STD_POS_LINEAR: f32 = 0.01;
+pub const DEFAULT_KF_PROCESS_STD_POS_ANGULAR: f32 = 0.02;
+pub const DEFAULT_KF_PROCESS_STD_VEL_LINEAR: f32 = 0.03;
+pub const DEFAULT_KF_PROCESS_STD_VEL_ANGULAR: f32 = 0.04;
+pub const DEFAULT_KF_MEASUREMENT_STD_VISION_POS_LINEAR: f32 = 0.5;
+pub const DEFAULT_KF_MEASUREMENT_STD_VISION_POS_ANGULAR: f32 = 0.75;
+pub const DEFAULT_KF_MEASUREMENT_STD_ENCODER_VEL_ANGULAR: f32 = 50.0;
+pub const DEFAULT_KF_MEASUREMENT_STD_GYRO_VEL_ANGULAR: f32 = 0.015;
 
 // // Kalman filter max state values (for covariance initialization)
-// pub const DEFAULT_KF_MAX_POS_LINEAR: f32 = 64.0;         // m (half-field)
-// pub const DEFAULT_KF_MAX_POS_ANGULAR: f32 = 3.14;        // rad
-// pub const DEFAULT_KF_MAX_VEL_LINEAR: f32 = 3.0;          // m/s
-// pub const DEFAULT_KF_MAX_VEL_ANGULAR: f32 = 3.0 * PI;    // rad/s
+pub const DEFAULT_KF_MAX_POS_LINEAR: f32 = 64.0;         // m (half-field)
+pub const DEFAULT_KF_MAX_POS_ANGULAR: f32 = 3.14;        // rad
+pub const DEFAULT_KF_MAX_VEL_LINEAR: f32 = 3.0;          // m/s
+pub const DEFAULT_KF_MAX_VEL_ANGULAR: f32 = 3.0 * PI;    // rad/s
 
 // Robot physical parameters
 pub const DEFAULT_PHYS_ALPHA: f32 = PI / 6.0;            // 30 deg, front wheel angle
@@ -67,7 +67,7 @@ pub const DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR: f32 = 0.0;
 
 
 // Defines how far back in time the EKF should run within the buffered EKF
-pub const DEFAULT_EKF_DELAY_US: u32 = 35_000;  // 35 ms
+pub const DEFAULT_EKF_BUFF_LEN: usize = 64;
 pub const EKF_STATE_LEN: usize = 5;
 pub const EKF_INPUT_LEN: usize = 3;
 pub const EKF_MEAS_LEN: usize = 3;
@@ -93,6 +93,7 @@ pub const DEFAULT_EKF_Q: SMatrix<f32, EKF_STATE_LEN, EKF_STATE_LEN> = SMatrix::<
 pub const DEFAULT_EKF_CORR_COEF: f32 = 1.0;
 
 
+pub const DEFAULT_VISION_BUFF_LEN: usize = 256;
 // DEFAULT_VISION_ACCEPT_VARIANCE_M2 and DEFAULT_VISION_SEED_SAMPLES control the
 // startup stability check: the robot must receive SEED_SAMPLES consecutive
 // vision measurements whose positional standard deviation is below the

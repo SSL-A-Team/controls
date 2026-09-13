@@ -1,6 +1,6 @@
 use core::f32::consts::PI;
 use libm::{atan2f, cosf, fabsf, sinf, sqrtf};
-use crate::defaults::{DEFAULT_PIVOT_ORBIT_MAX_VEL_ANGULAR, DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR, DEFAULT_PIVOT_ORBIT_RADIUS, DEFAULT_PIVOT_ORBIT_INSET_ANGLE, DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL};
+use crate::defaults::{DEFAULT_PIVOT_ORBIT_MAX_VEL_ANGULAR, DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR, DEFAULT_PIVOT_ORBIT_RADIUS, DEFAULT_PIVOT_ORBIT_INSET_ANGLE};
 use crate::{wrap_angle, ControlsError, Vector3f, Vector6f};
 use crate::bangbang_trajectory::{BangBangTraj1D, solve_1d_pose, eval_1d_state_at, eval_1d_accel_at};
 use crate::trajectory::Trajectory;
