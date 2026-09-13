@@ -3,7 +3,12 @@ use libm::{cosf, roundf, sinf};
 use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector};
 
-use crate::defaults::{DEFAULT_VISION_INACTIVE_THRESHOLD_US, DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US, DEFAULT_VISION_MAX_AGE_TIME_SYNC_US, DEFAULT_VISION_MAX_AGE_VARIANCE_US, DEFAULT_VISION_MIN_LATENCY_US, DEFAULT_VISION_MIN_SAMPLES_TIME_SYNC, DEFAULT_VISION_MIN_SAMPLES_VARIANCE};
+use crate::defaults::{DEFAULT_CONTROL_DT_US, DEFAULT_EKF_DELAY_US,
+DEFAULT_EKF_R, DEFAULT_EKF_Q, DEFAULT_EKF_CORR_COEF,
+DEFAULT_VISION_ACCEPT_RADIUS_BASE_M, DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS,
+DEFAULT_VISION_ACCEPT_VARIANCE_M2, DEFAULT_VISION_INACTIVE_THRESHOLD_US,
+DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US, DEFAULT_VISION_MIN_LATENCY_US,
+DEFAULT_VISION_SEED_SAMPLES};
 
 
 pub const STATE_LEN: usize = 5;
@@ -13,34 +18,16 @@ pub const MEAS_LEN: usize = 3;
 
 #[derive(Clone, Copy)]
 pub struct VisionSample {
-    x_m: f32,
-    y_m: f32,
-    w_rad: f32,
-    t_capture_us: u128,
-    t_rx_us: u64,
-}
-
-pub struct ImuSample {
-    x_acc_mps2: f32,
-    y_acc_mps2: f32,
-    w_gyro_radps: f32,
-}
-
-pub struct EncoderSample {
-    fl_radps: f32,
-    bl_radps: f32,
-    br_radps: f32,
-    fr_radps: f32,
+    /// x_m, y_m, w_rad
+    meas: SVector<f32, 3>,
+    t_capture_host_us: u64,
 }
 
 impl Default for VisionSample {
     fn default() -> Self {
         Self { 
-            x_m: 0.,
-            y_m: 0.,
-            w_rad: 0.,
-            t_capture_us: 0,
-            t_rx_us: 0
+            meas: SVector::<f32, 3>::zeros(),
+            t_capture_host_us: 0,
         }
     }
 }
@@ -71,17 +58,36 @@ impl Default for StateFrame {
     }
 }
 
-pub struct BufferedEKF<const L: usize> {
-    buff: [StateFrame; L],
-    idx_ekf: usize,
-    idx_reck: usize,
-    ekf_delay_frames: usize,
+#[derive(Clone, Copy)]
+pub struct BufferedEKFParams {
     dt_us: u32,
-    dt_s: f32,
+    ekf_delay_us: u32,
     /// Observation covariance R
     r: SMatrix<f32, MEAS_LEN, MEAS_LEN>,
     /// Process covariance Q
     q: SMatrix<f32, STATE_LEN, STATE_LEN>,
+    corr_coef: f32,
+}
+
+impl Default for BufferedEKFParams {
+    fn default() -> Self {
+        Self {
+            dt_us: DEFAULT_CONTROL_DT_US,
+            ekf_delay_us: DEFAULT_EKF_DELAY_US,
+            r: DEFAULT_EKF_R,
+            q: DEFAULT_EKF_Q,
+            corr_coef: DEFAULT_EKF_CORR_COEF,
+        }
+    }
+}
+
+pub struct BufferedEKF<const L: usize> {
+    params: BufferedEKFParams,
+    buff: [StateFrame; L],
+    idx_ekf: usize,
+    idx_reck: usize,
+    ekf_delay_frames: usize,
+    dt_s: f32,
     /// Observation jacobian H
     h: SMatrix<f32, MEAS_LEN, STATE_LEN>,
     /// Gain for dead reckoning error correction
@@ -89,15 +95,9 @@ pub struct BufferedEKF<const L: usize> {
 }
 
 impl<const L: usize> BufferedEKF<L> {
-    /// Creates a new buffered EKF with a delayed-measurement fusion horizon.
-    ///
-    /// The EKF runs `ekf_delay_us` in the past so that delayed vision
-    /// measurements can be applied at their true time of capture, while a
-    /// dead-reckoning estimate is tracked forward to the present.
-    ///
     /// # Arguments
     ///
-    /// * `dt_us` - Update period in microseconds. [`tick`](Self::tick) must be
+    /// * `dt_us` - Update period in microseconds. ```tick()``` must be
     ///   called at this interval.
     /// * `ekf_delay_us` - How far in the past to run the EKF, in microseconds.
     ///   Must be a whole multiple of `dt_us`.
@@ -119,30 +119,24 @@ impl<const L: usize> BufferedEKF<L> {
     /// resulting delay in frames does not fit in the buffer (`>= L`), or if
     /// `corr_coef` is not greater than `0`.
     pub fn new(
-        dt_us: u32,
-        ekf_delay_us: u32,
-        r: SMatrix<f32, MEAS_LEN, MEAS_LEN>,
-        q: SMatrix<f32, STATE_LEN, STATE_LEN>,
-        corr_coef: f32,
+        params: BufferedEKFParams,
         init_pos: SVector<f32, 3>,
         init_vel: SVector<f32, 3>,
     ) -> Self {
-        assert!(ekf_delay_us % dt_us == 0, "EKF delay in microseconds must be a multiple of update period in microseconds");
-        assert!(corr_coef > 0., "Correction coefficient must be greater than 0");
-        let ekf_delay_frames = (ekf_delay_us / dt_us) as usize;
+        assert!(params.ekf_delay_us % params.dt_us == 0, "EKF delay in microseconds must be a multiple of update period in microseconds");
+        assert!(params.corr_coef > 0., "Correction coefficient must be greater than 0");
+        let ekf_delay_frames = (params.ekf_delay_us / params.dt_us) as usize;
         assert!(ekf_delay_frames < L, "EKF delay is too large for buffer size");
-        let dt_s = (dt_us as f32) * 1e-6;
+        let dt_s = (params.dt_us as f32) * 1e-6;
         let h = SMatrix::<f32, MEAS_LEN, STATE_LEN>::identity();
-        let corr_gain = (dt_us as f32) / ((ekf_delay_us as f32) * corr_coef);
+        let corr_gain = (params.dt_us as f32) / ((params.ekf_delay_us as f32) * params.corr_coef);
         let mut estimator = BufferedEKF {
+            params,
             buff: [StateFrame::default(); L],
             idx_ekf: 0,
             idx_reck: 0,
             ekf_delay_frames,
-            dt_us,
             dt_s,
-            r,
-            q,
             h,
             corr_gain,
         };
@@ -223,7 +217,7 @@ impl<const L: usize> BufferedEKF<L> {
         vel
     }
 
-    pub fn get_ekf_pos(&self) -> SVector<f32, 3> {
+    pub fn get_pos_buff(&self) -> SVector<f32, 3> {
         // px, py, pw come from dead reckoned state
         let mut pos: SVector<f32, 3> = self.buff[self.idx_ekf].x_ekf.fixed_rows::<3>(0).into();
         pos[2] = Self::wrap_turns(pos[2]);
@@ -231,7 +225,7 @@ impl<const L: usize> BufferedEKF<L> {
         pos
     }
 
-    pub fn get_ekf_vel(&self) -> SVector<f32, 3> {
+    pub fn get_vel_buff(&self) -> SVector<f32, 3> {
         let frame_ekf = &self.buff[self.idx_ekf];
         let mut vel = SVector::<f32, 3>::zeros();
         // vx, vy come from dead reckoned state, rotate local to global
@@ -244,6 +238,10 @@ impl<const L: usize> BufferedEKF<L> {
         vel
     }
 
+    pub fn get_params(&self) -> BufferedEKFParams {
+        self.params
+    }
+
     /// Insert the vision measurement at the correct frame in the past
     fn insert_meas(
         &mut self,
@@ -251,7 +249,7 @@ impl<const L: usize> BufferedEKF<L> {
         z_delay_us: u32,
     ) {
         // How many frames have past since the time-of-capture
-        let frames_past = ((z_delay_us + self.dt_us / 2) / self.dt_us) as usize;  // Delay gets rounded to nearest frame
+        let frames_past = ((z_delay_us + self.params.dt_us / 2) / self.params.dt_us) as usize;  // Delay gets rounded to nearest frame
         // If it's further in the past than the EKF delay, throw it out
         if frames_past > self.ekf_delay_frames {
             return;
@@ -298,7 +296,7 @@ impl<const L: usize> BufferedEKF<L> {
         // Run state prediction and jacobian evaluation
         let x1 = Self::f_xu(x, u, self.dt_s, Some(&mut f));
         // Update the state covariance
-        let p1 = f * p * f.transpose() + self.q;
+        let p1 = f * p * f.transpose() + self.params.q;
 
         self.buff[self.idx_ekf].x_ekf.copy_from(&x1);
         self.buff[self.idx_ekf].p_ekf.copy_from(&p1);
@@ -314,7 +312,7 @@ impl<const L: usize> BufferedEKF<L> {
             // Calculate residual
             let y = z - frame.x_ekf.xyz();
             // Calculate residual covariance
-            let s = self.h * frame.p_ekf * self.h.transpose() + self.r;
+            let s = self.h * frame.p_ekf * self.h.transpose() + self.params.r;
             // Invert the residual covariance
             let s_inv = s.try_inverse().ok_or_else(|| ())?;
             // Calculate kalman gain
@@ -385,7 +383,6 @@ impl<const L: usize> BufferedEKF<L> {
         ])
     }
 
-    #[inline(always)]
     fn unwrap_turns(
         a: f32,  // Angle to be unwrapped
         a_ref: f32,  // Reference angle to wrap closest to
@@ -393,7 +390,6 @@ impl<const L: usize> BufferedEKF<L> {
         a + roundf((a_ref - a) / (2. * PI)) * 2. * PI
     }
 
-    #[inline(always)]
     fn wrap_turns(
         a: f32,
     ) -> f32 {
@@ -404,7 +400,6 @@ impl<const L: usize> BufferedEKF<L> {
         a_wrap - PI
     }
 
-    #[inline(always)]
     fn move_idx(
         i: usize,  // base index
         di: usize,  // change in index
@@ -417,7 +412,6 @@ impl<const L: usize> BufferedEKF<L> {
         }
     }
 
-    #[inline(always)]
     fn rotate_xy(
         xy: &SVector<f32, 2>,
         a: f32,
@@ -431,16 +425,26 @@ impl<const L: usize> BufferedEKF<L> {
     }
 }
 
+impl<const L: usize> Default for BufferedEKF<L> {
+    fn default() -> Self {
+        Self::new(
+            BufferedEKFParams::default(),
+            SVector::<f32, 3>::zeros(),
+            SVector::<f32, 3>::zeros(),
+        )
+    }
+}
+
 enum VisionSampleReject {
-    Seeding,
-    DistanceThreshold,
-    VarianceThreshold,
     OutOfOrder,
-    TooOld,
+    Seeding,
+    VarianceThreshold,
+    DistanceThreshold,
+    AgeThreshold,
 }
 
 enum VisionSampleAccept {
-    SnapState,
+    TeleportState,
     UpdateState,
 }
 
@@ -449,73 +453,111 @@ enum VisionSampleAction {
     Reject(VisionSampleReject),
     Accept(
         VisionSampleAccept,
+        // Measurement values (px, py, pw)
         SVector<f32, MEAS_LEN>,
+        // Measurement age in microseconds
         u64,
     ),
 }
 
-struct VisionFilter<const L: usize> {
-    buff: [Option<VisionSample>; L],
-    buff_idx: usize,
-    /// Estimated minimum possible latency from camera capture time to robot vision packet receive time
-    min_latency_us: u32,
-    /// Minimum number of samples to compute variance before accepting measurements
-    min_samples_variance: usize,
-    /// Maximum age of samples to compute variance before accepting measurements
-    max_age_variance_us: u32,
-    /// Minimum number of samples to compute robot time offset with vision source
-    min_samples_time_sync: usize,
-    /// Maximum age of samples to compute robot time offset with vision source
-    max_age_time_sync_us: u32,
-    /// Maximum age of a sample for measurement acceptance
-    max_age_acceptance_us: u32,
-    /// Duration until vision signal is considered inactive
-    inactive_threshold_us: u32,
-    /// Last sample accept absolute time in microseconds
-    last_sample_accept_us: u64,
-    signal_active: bool,
+#[derive(Clone, Copy)]
+struct SeedState {
+    seed_samples_ct: usize,
+    sum: SVector<f32, 2>,
+    sum2: SVector<f32, 2>,
 }
 
-impl<const L: usize> Default for VisionFilter<L> {
+impl Default for SeedState {
     fn default() -> Self {
-        Self::new(
-            DEFAULT_VISION_MIN_LATENCY_US,
-            DEFAULT_VISION_MIN_SAMPLES_VARIANCE,
-            DEFAULT_VISION_MAX_AGE_VARIANCE_US,
-            DEFAULT_VISION_MIN_SAMPLES_TIME_SYNC,
-            DEFAULT_VISION_MAX_AGE_TIME_SYNC_US,
-            DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US,
-            DEFAULT_VISION_INACTIVE_THRESHOLD_US,
-        )
+        Self {
+            seed_samples_ct: 0,
+            sum: SVector::<f32, 2>::zeros(),
+            sum2: SVector::<f32, 2>::zeros(),
+        }
     }
 }
 
-impl<const L: usize> VisionFilter<L> {
-    fn new(
-        min_latency_us: u32,
-        min_samples_variance: usize,
-        max_age_variance_us: u32,
-        min_samples_time_sync: usize,
-        max_age_time_sync_us: u32,
-        max_age_acceptance_us: u32,
-        inactive_threshold_us: u32,
-    ) -> VisionFilter<L> {
-        // Check that min samples is less than max_age * 30hz vision for variance and time sync (sample count is achievable in the time window, accounting for dropped packets)
-        // Check that max age for time sync is greater than max age for variance (we can drop samples after time sync max age)
-        // Check that max_age_time_sync_us / inactive_threshold_us > min_samples_time_sync (as long as signal is active, we have enough time sync samples)
-        VisionFilter {
-            buff: [None; L],
-            buff_idx: 0,
-            min_latency_us,
-            min_samples_variance,
-            max_age_variance_us,
-            min_samples_time_sync,
-            max_age_time_sync_us,
-            max_age_acceptance_us,
-            inactive_threshold_us,
-            last_sample_accept_us: 0,
-            signal_active: false,
+enum VisionFilterState {
+    Seeding(SeedState),
+    SignalActive,
+}
+
+#[derive(Clone, Copy)]
+pub struct VisionFilterParams {
+    dt_us: u32,
+    accept_radius_base_m: f32,
+    accept_radius_rate_mps: f32,
+    accept_variance_m2: f32,
+    seed_samples: usize,
+    min_latency_us: u64,
+    max_age_acceptance_us: u64,
+    inactive_threshold_us: u64,
+}
+
+impl Default for VisionFilterParams {
+    fn default() -> Self {
+        Self {
+             dt_us: DEFAULT_CONTROL_DT_US,
+             accept_radius_base_m: DEFAULT_VISION_ACCEPT_RADIUS_BASE_M,
+             accept_radius_rate_mps: DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS,
+             accept_variance_m2: DEFAULT_VISION_ACCEPT_VARIANCE_M2,
+             seed_samples: DEFAULT_VISION_SEED_SAMPLES,
+             min_latency_us: DEFAULT_VISION_MIN_LATENCY_US,
+             max_age_acceptance_us: DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US,
+             inactive_threshold_us: DEFAULT_VISION_INACTIVE_THRESHOLD_US,
         }
+    }
+}
+
+struct VisionFilter<const L: usize> {
+    params: VisionFilterParams,
+    state: VisionFilterState,
+    /// time delta between calls to ```tick()``` in seconds
+    dt_s: f32,
+    /// Buffer holding each recent sample's measured clock skew
+    meas_skew_buff: [u64; L],
+    /// Buffer index of the next open slot in the buffer
+    buff_idx: usize,
+    /// Flag to indicate that the buffer is full of recent valid samples
+    buff_full: bool,
+    /// Last sample rx absolute robot time in microseconds
+    t_last_sample_us: u64,
+    /// Last sample capture absolute vision host time in microseconds
+    t_last_sample_host_us: u64,
+    /// Last sample accept absolute robot time in microseconds
+    t_last_accept_us: u64,
+    /// Maximum radius from current state for transition to active signal. Grows with time.
+    accept_radius_m: f32,
+}
+
+impl<const L: usize> VisionFilter<L> {
+    pub fn new(
+        params: VisionFilterParams,
+    ) -> VisionFilter<L> {
+        VisionFilter {
+            params,
+            state: VisionFilterState::Seeding(SeedState::default()),
+            dt_s: params.dt_us as f32 * 1e-6,
+            meas_skew_buff: [0; L],
+            buff_idx: 0,
+            buff_full: false,
+            t_last_sample_us: 0,
+            t_last_sample_host_us: 0,
+            t_last_accept_us: 0,
+            accept_radius_m: 0.,
+        }
+    }
+
+    pub fn reset(
+        &mut self
+    ) {
+        self.reset_buff();
+        self.reset_state();
+        self.accept_radius_m = self.params.accept_radius_base_m;
+    }
+
+    pub fn signal_active(&self) -> bool {
+        matches!(self.state, VisionFilterState::SignalActive)
     }
 
     /// # Arguments
@@ -525,97 +567,214 @@ impl<const L: usize> VisionFilter<L> {
     pub fn tick(
         &mut self,
         t_us: u64,
-        pos_est: SVector<f32, 3>,
+        pos_est: &SVector<f32, 3>,
         sample: Option<&VisionSample>,
+    ) -> VisionSampleAction {
+        // Default action and accept type
+        let mut action = VisionSampleAction::None;
+
+        // Reset on inactivity
+        self.check_inactive(t_us);
+
+        // Increase acceptance radius if currently seeding
+        if matches!(self.state, VisionFilterState::Seeding(_)) {
+            self.accept_radius_m += self.params.accept_radius_rate_mps * self.dt_s;
+        }
+
+        // Handle a new sample
+        if let Some(new_sample) = sample {
+            // Ensure this sample came in order and return early if out of order, throwing this sample out
+            if !self.sample_in_order(new_sample) {
+                action = VisionSampleAction::Reject(VisionSampleReject::OutOfOrder);
+                return action;
+            }
+
+            // Update last sample times
+            self.t_last_sample_us = t_us;
+            self.t_last_sample_host_us = new_sample.t_capture_host_us;
+
+            // Calculate measured clock skew
+            // meas_skew = skew - min_latency - jitter_latency
+            if (t_us > new_sample.t_capture_host_us) {
+                panic!("Why is robot time greater than unix epoch timestamp ")
+            }
+            let meas_skew = new_sample.t_capture_host_us - t_us;
+
+            // Insert into buffer
+            self.meas_skew_buff[self.buff_idx] = meas_skew;
+            self.buff_idx += 1;
+
+            // Update a currently seeding state
+            // note: this action will get overwritten in the signal_active
+            // state update below if the seed just completed
+            action = self.update_seed_state(
+                new_sample,
+                pos_est,
+            );
+
+            // Update an active signal state
+            if self.signal_active() {
+
+                let sample_age_us = self.estimate_sample_age(t_us, new_sample);
+                if sample_age_us < self.params.max_age_acceptance_us {
+
+                    // distance check
+                    let dist_m = Self::sample_distance(new_sample, pos_est);
+                    // special case if the seed just completed and the sample should be accepted with teleport
+                    let accept_type = if matches!(action, VisionSampleAction::Accept(VisionSampleAccept::TeleportState, _, _)) {
+                        VisionSampleAccept::TeleportState
+                    } else {
+                        VisionSampleAccept::UpdateState
+                    };
+
+                    if matches!(accept_type, VisionSampleAccept::TeleportState) ||
+                        dist_m < self.accept_radius_m {
+                        action = VisionSampleAction::Accept(
+                            accept_type, 
+                            new_sample.meas,
+                            sample_age_us,
+                        );
+                        self.t_last_accept_us = t_us;
+                    } else {
+                        action = VisionSampleAction::Reject(VisionSampleReject::DistanceThreshold);
+                    }
+                } else {
+                    action = VisionSampleAction::Reject(VisionSampleReject::AgeThreshold);
+                }
+            }
+        }
+
+        action
+    }
+
+    fn reset_buff(&mut self) {
+        self.buff_idx = 0;
+        self.buff_full = false;
+    }
+
+    fn reset_state(&mut self) {
+        self.state = VisionFilterState::Seeding(SeedState::default());
+    }
+
+    fn check_inactive(&mut self, t_us: u64) {
+        match self.state {
+            VisionFilterState::Seeding(seed_state) => {
+                // Check if inactivity should reset filter state
+                if seed_state.seed_samples_ct > 0 &&
+                    (t_us - self.t_last_sample_us) > self.params.inactive_threshold_us {
+                    self.reset();
+                }
+            },
+            VisionFilterState::SignalActive => {
+                // Check if inactivity should reset filter state
+                if (t_us - self.t_last_accept_us) > self.params.inactive_threshold_us {
+                    self.reset();
+                }
+            },
+        }
+    }
+
+    fn sample_in_order(&self, sample: &VisionSample) -> bool {
+        if let VisionFilterState::Seeding(seed_state) = self.state {
+            if seed_state.seed_samples_ct == 0 {
+                // This is the first sample since filter init/reset
+                return true;
+            }
+        }
+        // Check if the timestamp on this sample is greater than the last one
+        sample.t_capture_host_us > self.t_last_sample_host_us
+    }
+
+    fn update_seed_state(&mut self,
+        sample: &VisionSample,
+        pos_est: &SVector<f32, 3>,
     ) -> VisionSampleAction {
         let mut action = VisionSampleAction::None;
 
-        if let Some(new_sample) = sample {
-            if let Some(head_sample) = self.buff[self.buff_idx] {
-                // ensure this sample is the latest, otherwise throw it away
-                if new_sample.t_capture_us > head_sample.t_capture_us {
-                    // insert into buffer at the head
-                    self.buff_idx = Self::move_idx(self.buff_idx, 1, true);
-                    self.buff[self.buff_idx] = Some(*new_sample);
+        if let VisionFilterState::Seeding(seed_state) = &mut self.state {
+
+            // State metric updates
+            seed_state.sum += sample.meas.xy();
+            seed_state.sum2 += sample.meas.xy().component_mul(&sample.meas.xy());
+            seed_state.seed_samples_ct += 1;
+
+            // If seed count threshold is hit, check if the sample can be accepted
+            if (seed_state.seed_samples_ct >= self.params.seed_samples) {
+
+                // Distance check
+                let dist_m = Self::sample_distance(sample, pos_est);
+                if dist_m < self.accept_radius_m {
+
+                    // Variance check
+                    let n = SVector::<f32, 2>::new(seed_state.seed_samples_ct as f32, seed_state.seed_samples_ct as f32);
+                    let e_x = seed_state.sum.component_div(&n);
+                    let e_x2 = seed_state.sum2.component_div(&n);
+                    let e_x_2 = e_x.component_mul(&e_x);
+                    let var_x = e_x2 - e_x_2;
+                    if var_x.x < self.params.accept_variance_m2 &&
+                    var_x.y < self.params.accept_variance_m2 {
+                        action = VisionSampleAction::Accept(
+                            VisionSampleAccept::TeleportState,
+                            sample.meas,
+                            0,  // age unknown, will be set later
+                        );
+                    } else {
+                        action = VisionSampleAction::Reject(VisionSampleReject::VarianceThreshold);
+                    }
+
                 } else {
-                    // this is older than the current buffer head
-                    action = VisionSampleAction::Reject(VisionSampleReject::OutOfOrder);
+                    action = VisionSampleAction::Reject(VisionSampleReject::DistanceThreshold);
                 }
-            }
-        }
-
-        // if (t_us - tail_sample.t_rx_us) > self.max_age_time_sync_us
-
-        // Loop through buffer to get required metrics
-        let mut idx = self.buff_idx;
-        let mut meas_sum = SVector::<f32, MEAS_LEN>::zeros();
-        let mut meas_sq_sum = SVector::<f32, MEAS_LEN>::zeros();
-        let mut variance_samples = 0;
-        let mut min_t_diff = u128::MAX;
-        let mut time_sync_samples = 0;
-        while let Some(sample) = self.buff[idx] {
-            // Metrics for variance check before measurement acceptance
-            if sample.t_rx_us > (t_us - self.max_age_variance_us as u64) {
-                let meas_vec: SVector<f32, MEAS_LEN> = SVector::<f32, MEAS_LEN>::new(
-                    sample.x_m,
-                    sample.y_m,
-                    sample.w_rad,
-                );
-                meas_sum += meas_vec;
-                meas_sq_sum += meas_vec.component_mul(&meas_vec);
-                variance_samples += 1;
-            }
-
-            // Metrics for time sync with vision clock
-            if sample.t_rx_us > (t_us - self.max_age_time_sync_us as u64) {
-                let t_diff = (t_us as u128) - sample.t_capture_us;
-                if t_diff < min_t_diff {
-                    min_t_diff = t_diff;
-                }
-                time_sync_samples += 1;
             } else {
-                // exhausted the buffer for samples that are within the time sync age (variance age is smaller)
-                break;
+                action = VisionSampleAction::Reject(VisionSampleReject::Seeding);
             }
 
-            // move backward in the buffer
-            idx = Self::move_idx(self.buff_idx, 1, false);
-            if idx == self.buff_idx {
-                // exhausted the entire buffer
-                break;
+            match action {
+                VisionSampleAction::Reject(VisionSampleReject::DistanceThreshold) |
+                VisionSampleAction::Reject(VisionSampleReject::VarianceThreshold) => {
+                    // Only reset buffer and seed state, let accept radius continue to expand
+                    self.reset_buff();
+                    self.reset_state();
+                },
+                _ => {},
+            }
+
+            // If the seed completed, set signal to active and update acceptance radius
+            if matches!(action, VisionSampleAction::Accept(..)) {
+                // set signal active
+                self.state = VisionFilterState::SignalActive;
+                // shrink acceptance radius back to the base
+                self.accept_radius_m = self.params.accept_radius_base_m;
             }
         }
 
-        // Check for state transition to active signal
-        if !self.signal_active() {
-            // check if seeding is complete
+        action
+    }
 
-            // check if within expanding radius and signal variance is acceptable
-
-            // set accept action to snap
-
-            // expand search radius
+    fn estimate_sample_age(&self, t_us: u64, sample: &VisionSample) -> u64 {
+        // Get the max measured skew from the buffer
+        let end_idx = if self.buff_full {
+            L
+        } else {
+            self.buff_idx
         };
+        let max_meas_skew_us = self.meas_skew_buff[0..end_idx].iter().max().expect(
+                "VisionFilter: failed to find maximum clock skew - measured clock skew buffer was unexpectedly empty"
+            );
 
-        if self.signal_active() {
-            // check if within radius of pos_est if not snapped and accept
+        // meas_skew = skew - min_latency - jitter_latency
+        // jitter_latency assumed 0 for the max_meas_skew
+        // skew = max_meas_skew + min_latency
+        let clock_skew_us = max_meas_skew_us + self.params.min_latency_us;
+        let t_host_us = t_us + clock_skew_us;
 
-            // check if signal has stopped
-
-            // update time sync min
-
-            // calculate age of sample
-
-        }
-
-        todo!()
+        t_host_us - sample.t_capture_host_us
     }
 
-    pub fn signal_active(&self) -> bool {
-        self.signal_active
+    fn sample_distance(sample: &VisionSample, pos_est: &SVector<f32, 3>) -> f32 {
+        (sample.meas.xy() - pos_est.xy()).norm()
     }
 
-    #[inline(always)]
     fn move_idx(
         i: usize,  // base index
         di: usize,  // change in index
@@ -629,67 +788,50 @@ impl<const L: usize> VisionFilter<L> {
     }
 }
 
-struct Odometer {
-}
-
-impl Odometer {
-    pub fn start(
-        &self,
-        start_pos: SVector<f32, 3>,
-    ) {
-        todo!()
-    }
-
-    pub fn tick(
-        &self,
-        enc: &EncoderSample,
-    ) {
-        todo!()
-    }
-
-    pub fn get_pos(&self) -> SVector<f32, MEAS_LEN> {
-        todo!()
-    }
-
-    pub fn active(&self) -> bool {
-        todo!()
+impl<const L: usize> Default for VisionFilter<L> {
+    fn default() -> Self {
+        Self::new(
+            VisionFilterParams::default()
+        )
     }
 }
 
 struct StateEstimator<const L: usize, const K: usize> {
     ekf: BufferedEKF<L>,
     vision_filter: VisionFilter<K>,
-    odometer: Odometer,
+    // odometer: Odometer,
 }
 
 impl<const L: usize, const K: usize> StateEstimator<L, K> {
 
-    pub fn new() -> Self {
+    pub fn new(
+        ekf: BufferedEKF<L>,
+        vision_filter: VisionFilter<K>,
+    ) -> Self {
         // Check that the vision filter max_age_acceptance is equal or less than EKF buffer size
-        todo!()
+        Self {
+            ekf,
+            vision_filter,
+        }
     }
 
     pub fn tick(
         &mut self,
         t_us: u64,
-        imu: &ImuSample,
-        encoder: &EncoderSample,
+        imu: &SVector<f32, INPUT_LEN>,  // acc_x_mps2, acc_y_mps2, gyro_w_radps
+        encoder: &SVector<f32, 4>,  // fl_radps, bl_radps, br_radps, fr_radps
         vision: Option<&VisionSample>,
     ) -> Result<(), ()> {
 
-        let mut z: Option<SVector<f32, MEAS_LEN>> = None;
-        let mut z_age_us = 0;
-
-        match self.vision_filter.tick(
+        // Feed vision sample through the vision filter
+        let (mut z, mut z_age_us) = match self.vision_filter.tick(
             t_us,
-            self.ekf.get_pos(),
+            &self.ekf.get_pos(),
             vision,
         ) {
-            VisionSampleAction::Accept(accept_action, meas, meas_age_us) => {
-                z = Some(meas);
-                z_age_us = meas_age_us;
-                match accept_action {
-                    VisionSampleAccept::SnapState => {
+            VisionSampleAction::Accept(accept_type, meas, meas_age_us) => {
+                match accept_type {
+                    VisionSampleAccept::TeleportState => {
                         self.ekf.init(
                             meas,
                             SVector::<f32, 3>::zeros(),
@@ -697,12 +839,15 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
                     },
                     VisionSampleAccept::UpdateState => {},
                 };
+                (Some(meas), meas_age_us)
             },
             VisionSampleAction::Reject(reject) => {
-                todo!();
+                (None, 0)
             },
-            VisionSampleAction::None => {},
-        }
+            VisionSampleAction::None => {
+                (None, 0)
+            },
+        };
 
         if (!self.vision_active()) {
             // TODO: Uncomment after odometer is implemented
@@ -712,18 +857,10 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
             // self.odometer.tick(encoder);
             // z = Some(self.odometer.get_pos());
             // z_age_us = 0;
-
-            z = None
         }
 
-        let u = SVector::<f32, INPUT_LEN>::new(
-            imu.x_acc_mps2,
-            imu.y_acc_mps2,
-            imu.w_gyro_radps,
-        );
-
         self.ekf.tick(
-            u,
+            *imu,
             z,
             z_age_us as u32,
         )?;
@@ -743,14 +880,41 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
         self.ekf.get_vel()
     }
 
-    pub fn get_ekf_pos(&self) -> SVector<f32, 3> {
-        self.ekf.get_ekf_pos()
+    pub fn get_pos_buff(&self) -> SVector<f32, 3> {
+        self.ekf.get_pos_buff()
     }
 
-    pub fn get_ekf_vel(&self) -> SVector<f32, 3> {
-        self.ekf.get_ekf_vel()
+    pub fn get_vel_buff(&self) -> SVector<f32, 3> {
+        self.ekf.get_vel_buff()
     }
 }
+
+// struct Odometer {
+// }
+
+// impl Odometer {
+//     pub fn start(
+//         &self,
+//         start_pos: SVector<f32, 3>,
+//     ) {
+//         todo!()
+//     }
+
+//     pub fn tick(
+//         &self,
+//         enc: &EncoderSample,
+//     ) {
+//         todo!()
+//     }
+
+//     pub fn get_pos(&self) -> SVector<f32, MEAS_LEN> {
+//         todo!()
+//     }
+
+//     pub fn active(&self) -> bool {
+//         todo!()
+//     }
+// }
 
 
 #[cfg(test)]
