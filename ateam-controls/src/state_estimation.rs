@@ -123,7 +123,7 @@ impl<const L: usize> BufferedEKF<L> {
         assert!(params.ekf_delay_us % params.dt_us == 0, "EKF delay in microseconds must be a multiple of update period in microseconds");
         assert!(params.corr_coef > 0., "Correction coefficient must be greater than 0");
         let ekf_delay_frames = (params.ekf_delay_us / params.dt_us) as usize;
-        assert!(ekf_delay_frames < L, "EKF delay is too large for buffer size");
+        assert!(ekf_delay_frames < (L - 1), "The specified buffer size is too small for the specified EKF delay");
         let dt_s = (params.dt_us as f32) * 1e-6;
         let h = SMatrix::<f32, EKF_MEAS_LEN, EKF_STATE_LEN>::identity();
         let corr_gain = (params.dt_us as f32) / ((params.ekf_delay_us as f32) * params.corr_coef);
