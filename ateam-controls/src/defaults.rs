@@ -110,7 +110,7 @@ pub const DEFAULT_VISION_MIN_LATENCY_US: u64 = 15_000;  // 15 ms
 pub const DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US: u64 = 35_000;  // 35 ms
 // Timeout to consider vision as "inactive". This may stop the robot if the
 // active control mode requires absolute vision positioning.
-pub const DEFAULT_VISION_INACTIVE_THRESHOLD_US: u64 = 300_000;  // 300 ms
+pub const DEFAULT_VISION_INACTIVE_THRESHOLD_US: u64 = 500_000;  // 500 ms
 // TODO: Tighten slack with testing
 pub const DEFAULT_VISION_STATE_ESTIMATE_ERROR_SLACK_M: f32 = 0.5;  // 0.5 m
 // DEFAULT_VISION_ACCEPT_RADIUS_BASE_M is derived from the worst-case error between a valid

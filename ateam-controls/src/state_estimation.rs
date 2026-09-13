@@ -542,7 +542,7 @@ impl<const L: usize> VisionFilter<L> {
             t_last_sample_us: 0,
             t_last_sample_host_us: 0,
             t_last_accept_us: 0,
-            accept_radius_m: 0.,
+            accept_radius_m: params.accept_radius_base_m,
         }
     }
 
@@ -551,7 +551,7 @@ impl<const L: usize> VisionFilter<L> {
     ) {
         self.reset_buff();
         self.reset_state();
-        self.accept_radius_m = self.params.accept_radius_base_m;
+        self.reset_times_and_radius();
     }
 
     pub fn signal_active(&self) -> bool {
@@ -657,12 +657,20 @@ impl<const L: usize> VisionFilter<L> {
     }
 
     fn reset_buff(&mut self) {
+        self.meas_skew_buff = [0; L];
         self.buff_idx = 0;
         self.buff_full = false;
     }
 
     fn reset_state(&mut self) {
         self.state = VisionFilterState::Seeding(SeedState::default());
+    }
+
+    fn reset_times_and_radius(&mut self) {
+        self.t_last_sample_us = 0;
+        self.t_last_sample_host_us = 0;
+        self.t_last_accept_us = 0;
+        self.accept_radius_m = self.params.accept_radius_base_m;
     }
 
     fn check_inactive(&mut self, t_us: u64) {
