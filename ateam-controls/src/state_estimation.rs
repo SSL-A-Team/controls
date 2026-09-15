@@ -37,6 +37,8 @@ struct StateFrame {
     u: SVector<f32, EKF_INPUT_LEN>,
     /// Vision measurement
     z: Option<SVector<f32, EKF_MEAS_LEN>>,
+    /// Age of the vision measurement when it was inserted in microseconds
+    z_insert_age: u32,
 }
 
 impl Default for StateFrame {
@@ -45,6 +47,7 @@ impl Default for StateFrame {
             x_reck: SMatrix::zeros(),
             u: SMatrix::zeros(),
             z: None,
+            z_insert_age: 0,
         }
     }
 }
@@ -242,9 +245,18 @@ impl<const L: usize> BufferedEKF<L> {
         self.params
     }
 
-    /// The vision measurement at the EKF (horizon) frame
-    pub fn applied_measurement(&self) -> Option<SVector<f32, EKF_MEAS_LEN>> {
-        self.buff[self.idx_ekf].z
+    /// Get the measurement that was applied to the EKF at this instant
+    /// Returns:
+    ///     None - no measurement was applied
+    ///     Some(meas, insert_age, used) - the measurement, it's age on insert
+    ///       in microseconds, and whether it was actually used
+    pub fn applied_measurement(&self) -> Option<(SVector<f32, EKF_MEAS_LEN>, u32, bool)> {
+        let frame = &self.buff[self.idx_ekf];
+        frame.z.map(|z| (z, frame.z_insert_age, self.meas_should_be_used(frame.z_insert_age)))
+    }
+
+    fn meas_should_be_used(&self, z_insert_age_us: u32) -> bool {
+        z_insert_age_us < self.params.ekf_delay_us
     }
 
     /// Insert the vision measurement at the correct frame in the past
@@ -255,14 +267,13 @@ impl<const L: usize> BufferedEKF<L> {
     ) {
         // How many frames have past since the time-of-capture
         let frames_past = ((z_delay_us + self.params.dt_us / 2) / self.params.dt_us) as usize;  // Delay gets rounded to nearest frame
-        // If it's further in the past than the EKF delay, throw it out
-        if frames_past > self.ekf_delay_frames {
-            return;
-        }
+        // clamp it so that it always gets inserted at most on the EKF horizon in the past
+        let frames_past = frames_past.min(self.ekf_delay_frames);
         // Get the index in the buffer
         let vision_idx = Self::move_idx(self.idx_reck, frames_past, false);
-        // Update that frame with the measurement
+        // Update that frame with the measurement and its received age
         self.buff[vision_idx].z = Some(z);
+        self.buff[vision_idx].z_insert_age = z_delay_us;
     }
 
     fn reckon_predict(
@@ -309,7 +320,12 @@ impl<const L: usize> BufferedEKF<L> {
     fn ekf_update(
         &mut self,
     ) -> Result<(), ()> {
-        if let Some(mut z) = self.buff[self.idx_ekf].z {
+        let frame = self.buff[self.idx_ekf];
+        if let Some(mut z) = frame.z {
+            // Only apply if the measurement is as recent as the ekf horizon
+            if !self.meas_should_be_used(frame.z_insert_age) {
+                return Ok(());
+            }
             // Unwrap measurement theta
             z[(2, 0)] = Self::unwrap_turns(z[(2, 0)], self.x_ekf[(2, 0)]);
             // Calculate residual
@@ -921,11 +937,7 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
         self.ekf.get_vel_buff()
     }
 
-    /// The vision measurement the buffered EKF applied on the most recent
-    /// `tick()` (age-placed at the horizon), or `None` if no measurement was
-    /// applied this tick. Lets telemetry report a vision update when the EKF
-    /// actually uses the measurement rather than when the packet is received.
-    pub fn applied_vision(&self) -> Option<SVector<f32, 3>> {
+    pub fn applied_vision(&self) -> Option<(SVector<f32, 3>, u32, bool)> {
         self.ekf.applied_measurement()
     }
 }
