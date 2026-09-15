@@ -31,10 +31,6 @@ impl Default for VisionSample {
 
 #[derive(Clone, Copy)]
 struct StateFrame {
-    /// EKF state
-    x_ekf: SVector<f32, EKF_STATE_LEN>,
-    /// EKF state estimate covariance
-    p_ekf: SMatrix<f32, EKF_STATE_LEN, EKF_STATE_LEN>,
     /// Dead reckoned state
     x_reck: SVector<f32, EKF_STATE_LEN>,
     /// IMU control input
@@ -46,8 +42,6 @@ struct StateFrame {
 impl Default for StateFrame {
     fn default() -> Self {
         StateFrame {
-            x_ekf: SMatrix::zeros(),
-            p_ekf: SMatrix::zeros(),
             x_reck: SMatrix::zeros(),
             u: SMatrix::zeros(),
             z: None,
@@ -85,6 +79,10 @@ pub struct BufferedEKF<const L: usize> {
     idx_reck: usize,
     ekf_delay_frames: usize,
     dt_s: f32,
+    /// EKF state
+    x_ekf: SVector<f32, EKF_STATE_LEN>,
+    /// EKF state estimate covariance
+    p_ekf: SMatrix<f32, EKF_STATE_LEN, EKF_STATE_LEN>,
     /// Observation jacobian H
     h: SMatrix<f32, EKF_MEAS_LEN, EKF_STATE_LEN>,
     /// Gain for dead reckoning error correction
@@ -137,6 +135,8 @@ impl<const L: usize> BufferedEKF<L> {
             idx_reck: 0,
             ekf_delay_frames,
             dt_s,
+            x_ekf: SMatrix::zeros(),
+            p_ekf: SMatrix::zeros(),
             h,
             corr_gain,
         };
@@ -156,16 +156,17 @@ impl<const L: usize> BufferedEKF<L> {
         self.idx_ekf = 0;
         self.idx_reck = self.ekf_delay_frames;
         // Initialize the state estimate covariance
-        self.buff[self.idx_ekf].p_ekf = SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::from_diagonal(
+        self.p_ekf = SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::from_diagonal(
             &SVector::<f32, EKF_STATE_LEN>::from(
                 [1000., 1000., PI*PI, 25., 25.]
             )
         );
+        // Initialize the EKF state
+        self.x_ekf = SVector::<f32, EKF_STATE_LEN>::zeros();
+        self.x_ekf.fixed_rows_mut::<3>(0).copy_from(&init_pos);  // px, py, pw
+        self.x_ekf.fixed_rows_mut::<2>(3).copy_from(&init_vel.fixed_rows::<2>(0));  // vx, vy
         // Initialize position and velocity in the current buffer window
         for i in self.idx_ekf..(self.idx_reck + 1) {
-            // update ekf state
-            self.buff[i].x_ekf.fixed_rows_mut::<3>(0).copy_from(&init_pos);  // px, py, pw
-            self.buff[i].x_ekf.fixed_rows_mut::<2>(3).copy_from(&init_vel.fixed_rows::<2>(0));  // vx, vy
             // update dead reckon state
             self.buff[i].x_reck.fixed_rows_mut::<3>(0).copy_from(&init_pos);  // px, py, pw
             self.buff[i].x_reck.fixed_rows_mut::<2>(3).copy_from(&init_vel.fixed_rows::<2>(0));  // vx, vy
@@ -219,21 +220,20 @@ impl<const L: usize> BufferedEKF<L> {
 
     pub fn get_pos_buff(&self) -> SVector<f32, 3> {
         // px, py, pw come from dead reckoned state
-        let mut pos: SVector<f32, 3> = self.buff[self.idx_ekf].x_ekf.fixed_rows::<3>(0).into();
+        let mut pos: SVector<f32, 3> = self.x_ekf.fixed_rows::<3>(0).into();
         pos[2] = Self::wrap_turns(pos[2]);
 
         pos
     }
 
     pub fn get_vel_buff(&self) -> SVector<f32, 3> {
-        let frame_ekf = &self.buff[self.idx_ekf];
         let mut vel = SVector::<f32, 3>::zeros();
         // vx, vy come from dead reckoned state, rotate local to global
         vel.fixed_rows_mut::<2>(0).copy_from(
-            &Self::rotate_xy(&frame_ekf.x_ekf.fixed_rows::<2>(3).into(), frame_ekf.x_ekf.z)
+            &Self::rotate_xy(&self.x_ekf.fixed_rows::<2>(3).into(), self.x_ekf.z)
         );
         // vw comes from input
-        vel[2] = frame_ekf.u[2];
+        vel[2] = self.buff[self.idx_ekf].u[2];
 
         vel
     }
@@ -281,7 +281,7 @@ impl<const L: usize> BufferedEKF<L> {
         &mut self
     ) {
         // Calculate the error between the EKF frame and the reckon frame in the past
-        let err = self.buff[self.idx_ekf].x_reck - self.buff[self.idx_ekf].x_ekf;
+        let err = self.buff[self.idx_ekf].x_reck - self.x_ekf;
         // Calculate the correction to apply via the correction gain
         let corr = - self.corr_gain * err;
         // Apply to all frames from now to the EKF frame, working backwards in time
@@ -291,9 +291,8 @@ impl<const L: usize> BufferedEKF<L> {
     }
 
     fn ekf_predict(&mut self) {
-        let idx_prev = Self::move_idx(self.idx_ekf, 1, false);
-        let x = self.buff[idx_prev].x_ekf;
-        let p = self.buff[idx_prev].p_ekf;
+        let x = self.x_ekf;
+        let p = self.p_ekf;
         let u = self.buff[self.idx_ekf].u;
         // F (jacobian evaluated at x, u)
         let mut f = SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::zeros();
@@ -303,28 +302,27 @@ impl<const L: usize> BufferedEKF<L> {
         // Update the state covariance
         let p1 = f * p * f.transpose() + self.params.q;
 
-        self.buff[self.idx_ekf].x_ekf.copy_from(&x1);
-        self.buff[self.idx_ekf].p_ekf.copy_from(&p1);
+        self.x_ekf.copy_from(&x1);
+        self.p_ekf.copy_from(&p1);
     }
 
     fn ekf_update(
         &mut self,
     ) -> Result<(), ()> {
-        let frame = &mut self.buff[self.idx_ekf];
-        if let Some(mut z) = frame.z {
+        if let Some(mut z) = self.buff[self.idx_ekf].z {
             // Unwrap measurement theta
-            z[(2, 0)] = Self::unwrap_turns(z[(2, 0)], frame.x_ekf[(2, 0)]);
+            z[(2, 0)] = Self::unwrap_turns(z[(2, 0)], self.x_ekf[(2, 0)]);
             // Calculate residual
-            let y = z - frame.x_ekf.xyz();
+            let y = z - self.x_ekf.xyz();
             // Calculate residual covariance
-            let s = self.h * frame.p_ekf * self.h.transpose() + self.params.r;
+            let s = self.h * self.p_ekf * self.h.transpose() + self.params.r;
             // Invert the residual covariance
             let s_inv = s.try_inverse().ok_or_else(|| ())?;
             // Calculate kalman gain
-            let k = frame.p_ekf * self.h.transpose() * s_inv;
+            let k = self.p_ekf * self.h.transpose() * s_inv;
             // Update EKF state
-            frame.x_ekf = frame.x_ekf + k * y;
-            frame.p_ekf = (SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::identity() - k * self.h) * frame.p_ekf;
+            self.x_ekf = self.x_ekf + k * y;
+            self.p_ekf = (SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::identity() - k * self.h) * self.p_ekf;
         }
 
         Ok(())
