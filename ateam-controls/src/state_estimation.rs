@@ -460,7 +460,12 @@ pub enum VisionSampleReject {
     Seeding,
     VarianceThreshold,
     DistanceThreshold,
-    AgeThreshold,
+    AgeThreshold(
+        // Measurement values (px, py, pw)
+        SVector<f32, EKF_MEAS_LEN>,
+        // Measurement age in microseconds
+        u64,
+    ),
 }
 
 pub enum VisionSampleAccept {
@@ -666,7 +671,10 @@ impl<const L: usize> VisionFilter<L> {
                         action = VisionSampleAction::Reject(VisionSampleReject::DistanceThreshold);
                     }
                 } else {
-                    action = VisionSampleAction::Reject(VisionSampleReject::AgeThreshold);
+                    action = VisionSampleAction::Reject(VisionSampleReject::AgeThreshold(
+                        new_sample.meas,
+                        sample_age_us,
+                    ));
                 }
             }
         }
@@ -881,8 +889,16 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
                 };
                 (Some(meas), meas_age_us)
             },
-            VisionSampleAction::Reject(reject) => {
-                (None, 0)
+            VisionSampleAction::Reject(reject_type) => {
+                match reject_type {
+                    VisionSampleReject::AgeThreshold(meas, meas_age_us) => {
+                        // Still return to EKF so that telemetry can be collected
+                        (Some(meas), meas_age_us)
+                    },
+                    _ => {
+                        (None, 0)
+                    }
+                }
             },
             VisionSampleAction::None => {
                 (None, 0)
