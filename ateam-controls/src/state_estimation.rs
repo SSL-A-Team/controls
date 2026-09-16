@@ -460,6 +460,7 @@ pub enum VisionSampleReject {
     Seeding,
     VarianceThreshold,
     DistanceThreshold,
+    AgeThreshold,
 }
 
 pub enum VisionSampleAccept {
@@ -469,12 +470,8 @@ pub enum VisionSampleAccept {
 
 pub enum VisionSampleAction {
     None,
-    Reject(
-        // Reject type
-        VisionSampleReject
-    ),
+    Reject(VisionSampleReject),
     Accept(
-        // Accept type
         VisionSampleAccept,
         // Measurement values (px, py, pw)
         SVector<f32, EKF_MEAS_LEN>,
@@ -513,6 +510,7 @@ pub struct VisionFilterParams {
     pub accept_variance_m2: f32,
     pub seed_samples: usize,
     pub min_latency_us: u64,
+    pub max_age_acceptance_us: u64,
     pub inactive_threshold_us: u64,
 }
 
@@ -525,6 +523,7 @@ impl Default for VisionFilterParams {
              accept_variance_m2: DEFAULT_VISION_ACCEPT_VARIANCE_M2,
              seed_samples: DEFAULT_VISION_SEED_SAMPLES,
              min_latency_us: DEFAULT_VISION_MIN_LATENCY_US,
+             max_age_acceptance_us: DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US,
              inactive_threshold_us: DEFAULT_VISION_INACTIVE_THRESHOLD_US,
         }
     }
@@ -644,26 +643,30 @@ impl<const L: usize> VisionFilter<L> {
             if self.signal_active() {
 
                 let sample_age_us = self.estimate_sample_age(t_us, new_sample);
+                if sample_age_us < self.params.max_age_acceptance_us {
 
-                // distance check
-                let dist_m = Self::sample_distance(new_sample, pos_est);
-                // special case if the seed just completed and the sample should be accepted with teleport
-                let accept_type = if matches!(action, VisionSampleAction::Accept(VisionSampleAccept::TeleportState, _, _)) {
-                    VisionSampleAccept::TeleportState
-                } else {
-                    VisionSampleAccept::UpdateState
-                };
+                    // distance check
+                    let dist_m = Self::sample_distance(new_sample, pos_est);
+                    // special case if the seed just completed and the sample should be accepted with teleport
+                    let accept_type = if matches!(action, VisionSampleAction::Accept(VisionSampleAccept::TeleportState, _, _)) {
+                        VisionSampleAccept::TeleportState
+                    } else {
+                        VisionSampleAccept::UpdateState
+                    };
 
-                if matches!(accept_type, VisionSampleAccept::TeleportState) ||
-                    dist_m < self.accept_radius_m {
-                    action = VisionSampleAction::Accept(
-                        accept_type, 
-                        new_sample.meas,
-                        sample_age_us,
-                    );
-                    self.t_last_accept_us = t_us;
+                    if matches!(accept_type, VisionSampleAccept::TeleportState) ||
+                        dist_m < self.accept_radius_m {
+                        action = VisionSampleAction::Accept(
+                            accept_type, 
+                            new_sample.meas,
+                            sample_age_us,
+                        );
+                        self.t_last_accept_us = t_us;
+                    } else {
+                        action = VisionSampleAction::Reject(VisionSampleReject::DistanceThreshold);
+                    }
                 } else {
-                    action = VisionSampleAction::Reject(VisionSampleReject::DistanceThreshold);
+                    action = VisionSampleAction::Reject(VisionSampleReject::AgeThreshold);
                 }
             }
         }
@@ -844,6 +847,8 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
         ekf: BufferedEKF<L>,
         vision_filter: VisionFilter<K>,
     ) -> Self {
+        // Check that the vision filter max_age_acceptance is equal or less than EKF buffer size
+        assert!(ekf.params.ekf_delay_us as u64 >= vision_filter.params.max_age_acceptance_us, "EKF buffer should be larger than the maximum acceptable vision sample age in the vision filter");
         Self {
             ekf,
             vision_filter,
