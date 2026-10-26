@@ -29,16 +29,25 @@ impl Default for VisionSample {
     }
 }
 
+/// Origin of a position measurement fed to the EKF
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MeasSource {
+    Vision,
+    Odometry,
+}
+
 #[derive(Clone, Copy)]
 struct StateFrame {
     /// Dead reckoned state
     x_reck: SVector<f32, EKF_STATE_LEN>,
     /// IMU control input
     u: SVector<f32, EKF_INPUT_LEN>,
-    /// Vision measurement
+    /// Position measurement (vision or odometry)
     z: Option<SVector<f32, EKF_MEAS_LEN>>,
-    /// Age of the vision measurement when it was inserted in microseconds
+    /// Age of the measurement when it was inserted in microseconds
     z_insert_age: u32,
+    /// Origin of the measurement
+    z_src: MeasSource,
 }
 
 impl Default for StateFrame {
@@ -48,6 +57,7 @@ impl Default for StateFrame {
             u: SMatrix::zeros(),
             z: None,
             z_insert_age: 0,
+            z_src: MeasSource::Vision,
         }
     }
 }
@@ -183,6 +193,7 @@ impl<const L: usize> BufferedEKF<L> {
         u: SVector<f32, EKF_INPUT_LEN>,
         z: Option<SVector<f32, EKF_MEAS_LEN>>,
         z_delay_us: u32,  // Microseconds elapsed since the frame that provided this measurement was taken
+        z_src: MeasSource,
     ) -> Result<(), ()> {
         // Progress buffer indices
         self.idx_ekf = Self::move_idx(self.idx_ekf, 1, true);
@@ -191,7 +202,7 @@ impl<const L: usize> BufferedEKF<L> {
         self.buff[self.idx_reck] = StateFrame::default();
 
         if let Some(meas) = z {
-            self.insert_meas(meas, z_delay_us);
+            self.insert_meas(meas, z_delay_us, z_src);
         }
         self.reckon_predict(u);
         self.ekf_predict();
@@ -248,11 +259,12 @@ impl<const L: usize> BufferedEKF<L> {
     /// Get the measurement that was applied to the EKF at this instant
     /// Returns:
     ///     None - no measurement was applied
-    ///     Some(meas, insert_age, used) - the measurement, it's age on insert
-    ///       in microseconds, and whether it was actually used
-    pub fn applied_measurement(&self) -> Option<(SVector<f32, EKF_MEAS_LEN>, u32, bool)> {
+    ///     Some(meas, insert_age, used, src) - the measurement, it's age on
+    ///       insert in microseconds, whether it was actually used, and its
+    ///       origin
+    pub fn applied_measurement(&self) -> Option<(SVector<f32, EKF_MEAS_LEN>, u32, bool, MeasSource)> {
         let frame = &self.buff[self.idx_ekf];
-        frame.z.map(|z| (z, frame.z_insert_age, self.meas_should_be_used(frame.z_insert_age)))
+        frame.z.map(|z| (z, frame.z_insert_age, self.meas_should_be_used(frame.z_insert_age), frame.z_src))
     }
 
     fn meas_should_be_used(&self, z_insert_age_us: u32) -> bool {
@@ -264,6 +276,7 @@ impl<const L: usize> BufferedEKF<L> {
         &mut self,
         z: SVector<f32, EKF_MEAS_LEN>,
         z_delay_us: u32,
+        z_src: MeasSource,
     ) {
         // How many frames have past since the time-of-capture
         let frames_past = ((z_delay_us + self.params.dt_us / 2) / self.params.dt_us) as usize;  // Delay gets rounded to nearest frame
@@ -274,6 +287,7 @@ impl<const L: usize> BufferedEKF<L> {
         // Update that frame with the measurement and its received age
         self.buff[vision_idx].z = Some(z);
         self.buff[vision_idx].z_insert_age = z_delay_us;
+        self.buff[vision_idx].z_src = z_src;
     }
 
     fn reckon_predict(
@@ -911,7 +925,7 @@ impl Odometer {
         self.active = true;
     }
 
-    pub fn stop(&mut self) {
+    pub fn reset(&mut self) {
         self.active = false;
     }
 
@@ -919,16 +933,26 @@ impl Odometer {
         self.active
     }
 
+    /// Convert wheel angular velocities to local (robot frame) velocity
+    /// [vx_mps, vy_mps, vw_radps]
+    pub fn wheel_to_local_vel(
+        &self,
+        encoder: &SVector<f32, 4>,  // fl_radps, bl_radps, br_radps, fr_radps
+    ) -> SVector<f32, 3> {
+        self.wheel2vel * encoder
+    }
+
     pub fn tick(
         &mut self,
         encoder: &SVector<f32, 4>,  // fl_radps, bl_radps, br_radps, fr_radps
     ) {
-        let local_vel = self.wheel2vel * encoder;
-        let mut global_vel = local_vel.clone();
         let theta = self.pos.z;
-        // Rotate the X/Y components into global frame
-        global_vel.fixed_view_mut::<2, 1>(0, 0).copy_from(
-            &(Rotation2::new(theta) * local_vel.xy())
+        let local_vel = self.wheel_to_local_vel(encoder);
+        let global_vel_xy = Rotation2::new(theta) * local_vel.xy();
+        let global_vel = SVector::<f32, 3>::new(
+            global_vel_xy.x,
+            global_vel_xy.y,
+            local_vel.z,
         );
         // Integrate into position
         self.pos += global_vel * self.dt_s;
@@ -1013,25 +1037,28 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
             },
         };
 
+        let mut z_src = MeasSource::Vision;
+
         if (self.vision_active()) {
             // Odometer not needed while vision is active
-            self.odometer.stop();
+            self.odometer.reset();
         } else {
-            if (self.odometer.active()) {
-                self.odometer.tick(encoder);
-            } else {
+            if (!self.odometer.active()) {
                 self.odometer.start(
                     self.ekf.get_pos()
                 );
             }
+            self.odometer.tick(encoder);
             z = Some(self.odometer.get_pos());
             z_age_us = 0;
+            z_src = MeasSource::Odometry;
         }
 
         self.ekf.tick(
             *imu,
             z,
             z_age_us as u32,
+            z_src,
         )?;
 
         Ok(())
@@ -1044,6 +1071,7 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
     ) {
         self.ekf.init(init_pos, init_vel);
         self.vision_filter.reset();
+        self.odometer.reset();
     }
 
     pub fn vision_active(&self) -> bool {
@@ -1066,8 +1094,13 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
         self.ekf.get_vel_buff()
     }
 
+    /// Vision measurement applied to the EKF at its horizon this tick, if any.
+    /// Odometry measurements are excluded.
     pub fn applied_vision(&self) -> Option<(SVector<f32, 3>, u32, bool)> {
-        self.ekf.applied_measurement()
+        match self.ekf.applied_measurement() {
+            Some((z, age, used, MeasSource::Vision)) => Some((z, age, used)),
+            _ => None,
+        }
     }
 }
 
