@@ -872,8 +872,8 @@ mod tests {
         let mut traj = LinearTrajectory::from_point(
             init, 2.0, 2.0, start, dir, 1.5, test_params(),
         ).unwrap();
-        let predicted = traj.state_at(DEFAULT_CONTROL_DT).unwrap();
-        traj.tick(DEFAULT_CONTROL_DT);
+        let predicted = traj.state_at(DEFAULT_CONTROL_DT_US as f32 * 1e-6).unwrap();
+        traj.tick(DEFAULT_CONTROL_DT_US as f32 * 1e-6);
         let (sampled, _) = traj.sample();
         for i in 0..6 {
             assert!((sampled[i] - predicted[i]).abs() < 1e-4, "idx {i}: {} vs {}", sampled[i], predicted[i]);
