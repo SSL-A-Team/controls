@@ -1112,39 +1112,3 @@ impl<const K: usize, const L: usize> Default for StateEstimator<K, L> {
         Self::new(ekf, vision_filter, odometer)
     }
 }
-
-// struct Odometer {
-// }
-
-// impl Odometer {
-//     pub fn start(
-//         &self,
-//         start_pos: SVector<f32, 3>,
-//     ) {
-//         todo!()
-//     }
-
-//     pub fn tick(
-//         &self,
-//         enc: &EncoderSample,
-//     ) {
-//         todo!()
-//     }
-
-//     pub fn get_pos(&self) -> SVector<f32, MEAS_LEN> {
-//         todo!()
-//     }
-
-//     pub fn active(&self) -> bool {
-//         todo!()
-//     }
-// }
-
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test1() {
-        assert!(true);
-    }
-}
