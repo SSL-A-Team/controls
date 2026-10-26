@@ -120,3 +120,5 @@ pub const DEFAULT_VISION_ACCEPT_RADIUS_BASE_M: f32 = DEFAULT_MAX_VEL_LINEAR * (D
 // DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS is the expansion rate for accepting a
 // vision measurement as valid after initialization or after vision loss
 pub const DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS: f32 = 2.0;  // 2 m/s
+// Robot angular velocity threshold measured from encoders to consider the robot at standstill, gyro measurement is used otherwise
+pub const DEFAULT_ENCODER_STANDSTILL_RADPS: f32 = 0.01;  // 0.01 rad/s
