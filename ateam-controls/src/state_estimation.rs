@@ -652,9 +652,15 @@ impl<const L: usize> VisionFilter<L> {
                 new_sample,
                 pos_est,
             );
+            let seed_completed = matches!(
+                action,
+                VisionSampleAction::Accept(VisionSampleAccept::TeleportState, _, _)
+            );
 
-            // Update an active signal state
-            if self.signal_active() {
+            // Update an active signal state, or finish a just-completed seed.
+            // The signal only becomes active once the seed sample also passes
+            // the age check below.
+            if seed_completed || self.signal_active() {
 
                 let sample_age_us = self.estimate_sample_age(t_us, new_sample);
                 if sample_age_us < self.params.max_age_acceptance_us {
@@ -662,14 +668,18 @@ impl<const L: usize> VisionFilter<L> {
                     // distance check
                     let dist_m = Self::sample_distance(new_sample, pos_est);
                     // special case if the seed just completed and the sample should be accepted with teleport
-                    let accept_type = if matches!(action, VisionSampleAction::Accept(VisionSampleAccept::TeleportState, _, _)) {
+                    let accept_type = if seed_completed {
                         VisionSampleAccept::TeleportState
                     } else {
                         VisionSampleAccept::UpdateState
                     };
 
-                    if matches!(accept_type, VisionSampleAccept::TeleportState) ||
-                        dist_m < self.accept_radius_m {
+                    if seed_completed || dist_m < self.accept_radius_m {
+                        if seed_completed {
+                            // set signal active and shrink acceptance radius back to the base
+                            self.state = VisionFilterState::SignalActive;
+                            self.accept_radius_m = self.params.accept_radius_base_m;
+                        }
                         action = VisionSampleAction::Accept(
                             accept_type, 
                             new_sample.meas,
@@ -793,14 +803,6 @@ impl<const L: usize> VisionFilter<L> {
                     self.reset_state();
                 },
                 _ => {},
-            }
-
-            // If the seed completed, set signal to active and update acceptance radius
-            if matches!(action, VisionSampleAction::Accept(..)) {
-                // set signal active
-                self.state = VisionFilterState::SignalActive;
-                // shrink acceptance radius back to the base
-                self.accept_radius_m = self.params.accept_radius_base_m;
             }
         }
 
