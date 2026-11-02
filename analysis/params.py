@@ -46,35 +46,35 @@ PARAM_MAP = {
     "PHYS_WHEEL": {
         "param_id": 3,
         "fields": [
-            (0, "phys", "alpha"),
-            (1, "phys", "beta"),
-            (2, "phys", "l"),
-            (3, "phys", "r"),
+            (0, "phys", "alpha_rad"),
+            (1, "phys", "beta_rad"),
+            (2, "phys", "l_m"),
+            (3, "phys", "r_m"),
         ],
     },
     "PHYS_INERTIA": {
         "param_id": 4,
         "fields": [
-            (0, "phys", "mass"),
-            (1, "phys", "iz"),
+            (0, "phys", "mass_kg"),
+            (1, "phys", "iz_kgm2"),
         ],
     },
     "PHYS_MOTOR_MODEL": {
         "param_id": 5,
         "fields": [
-            (0, "phys", "motor_torque_constant"),
+            (0, "phys", "motor_torque_constant_nmpa"),
             (1, "phys", "motor_efficiency_factor"),
         ],
     },
     "PHYS_FRICTION_MODEL": {
         "param_id": 6,
         "fields": [
-            (0, "phys", "coulomb_friction_coefficient_linear_x"),
-            (1, "phys", "coulomb_friction_coefficient_linear_y"),
-            (2, "phys", "coulomb_friction_coefficient_angular"),
-            (3, "phys", "viscous_friction_coefficient_linear_x"),
-            (4, "phys", "viscous_friction_coefficient_linear_y"),
-            (5, "phys", "viscous_friction_coefficient_angular"),
+            (0, "phys", "coulomb_friction_linear_x_n"),
+            (1, "phys", "coulomb_friction_linear_y_n"),
+            (2, "phys", "coulomb_friction_angular_nm"),
+            (3, "phys", "viscous_friction_linear_x_nspm"),
+            (4, "phys", "viscous_friction_linear_y_nspm"),
+            (5, "phys", "viscous_friction_angular_nmsprad"),
         ],
     },
     # Parameters used only for upload (no ctypes struct mapping):

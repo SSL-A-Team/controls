@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from itertools import chain
 
 from ateam_controls import (
-    robot_model_transform_wheel2twist,
+    robot_model_transform_wheel2vel_global,
     robot_model_free,
 )
 from params import load_robot_model
@@ -55,7 +55,7 @@ def compute_all_state_measurements(state_estimates, sensor_measurements, param_j
             theta = float(state_estimates[i, 2])
             sensors = sensor_measurements[i]
 
-            mat_c = robot_model_transform_wheel2twist(model, ctypes.c_float(theta))
+            mat_c = robot_model_transform_wheel2vel_global(model, ctypes.c_float(theta))
             mat = np.array(list(mat_c.data), dtype=np.float32).reshape((3, 4), order='F')
             encoders = np.array(sensors[3:7], dtype=np.float32)
             twist = mat @ encoders

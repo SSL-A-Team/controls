@@ -45,46 +45,108 @@ pub unsafe extern "C" fn ateam_controls_robot_model_free(model: *mut RobotModel)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_update_physical_params(
+pub unsafe extern "C" fn ateam_controls_robot_model_update_params(
     model: *mut RobotModel,
     phys_params: RobotPhysicalParams,
 ) -> i32 {
-    match unsafe { (*model).update_physical_params(phys_params) } {
+    match unsafe { (*model).update_params(phys_params) } {
         Ok(()) => 0,
         Err(e) => e as i32,
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2twist(
+pub unsafe extern "C" fn ateam_controls_robot_model_wheel_to_local_vel(
+    model: *const RobotModel,
+    encoder: Vector4C,
+) -> Vector3C {
+    unsafe { (*model).wheel_to_local_vel(&encoder.into()).into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_wheel_to_global_vel(
+    model: *const RobotModel,
+    encoder: Vector4C,
+    theta: f32,
+) -> Vector3C {
+    unsafe { (*model).wheel_to_global_vel(&encoder.into(), theta).into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_wheel_to_local_accel(
+    model: *const RobotModel,
+    torque: Vector4C,
+) -> Vector3C {
+    unsafe { (*model).wheel_to_local_accel(&torque.into()).into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_wheel_to_global_accel(
+    model: *const RobotModel,
+    torque: Vector4C,
+    theta: f32,
+) -> Vector3C {
+    unsafe { (*model).wheel_to_global_accel(&torque.into(), theta).into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2vel_local(
+    model: *const RobotModel,
+) -> Matrix3x4C {
+    unsafe { (*model).transform_wheel2vel_local().into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2vel_global(
     model: *const RobotModel,
     theta: f32,
 ) -> Matrix3x4C {
-    unsafe { (*model).transform_wheel2twist(theta).into() }
+    unsafe { (*model).transform_wheel2vel_global(theta).into() }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_transform_twist2wheel(
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_vel2wheel_local(
+    model: *const RobotModel,
+) -> Matrix4x3C {
+    unsafe { (*model).transform_vel2wheel_local().into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_vel2wheel_global(
     model: *const RobotModel,
     theta: f32,
 ) -> Matrix4x3C {
-    unsafe { (*model).transform_twist2wheel(theta).into() }
+    unsafe { (*model).transform_vel2wheel_global(theta).into() }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2accel(
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2accel_local(
+    model: *const RobotModel,
+) -> Matrix3x4C {
+    unsafe { (*model).transform_wheel2accel_local().into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2accel_global(
     model: *const RobotModel,
     theta: f32,
 ) -> Matrix3x4C {
-    unsafe { (*model).transform_wheel2accel(theta).into() }
+    unsafe { (*model).transform_wheel2accel_global(theta).into() }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_transform_accel2wheel(
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_accel2wheel_local(
+    model: *const RobotModel,
+) -> Matrix4x3C {
+    unsafe { (*model).transform_accel2wheel_local().into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_accel2wheel_global(
     model: *const RobotModel,
     theta: f32,
 ) -> Matrix4x3C {
-    unsafe { (*model).transform_accel2wheel(theta).into() }
+    unsafe { (*model).transform_accel2wheel_global(theta).into() }
 }
 
 #[unsafe(no_mangle)]

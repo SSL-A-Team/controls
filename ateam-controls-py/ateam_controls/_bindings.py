@@ -106,20 +106,20 @@ class Matrix4x3C(ctypes.Structure):
 
 class RobotPhysicalParams(ctypes.Structure):
     _fields_ = [
-        ("alpha", ctypes.c_float),
-        ("beta", ctypes.c_float),
-        ("l", ctypes.c_float),
-        ("r", ctypes.c_float),
-        ("mass", ctypes.c_float),
-        ("iz", ctypes.c_float),
-        ("motor_torque_constant", ctypes.c_float),
+        ("alpha_rad", ctypes.c_float),
+        ("beta_rad", ctypes.c_float),
+        ("l_m", ctypes.c_float),
+        ("r_m", ctypes.c_float),
+        ("mass_kg", ctypes.c_float),
+        ("iz_kgm2", ctypes.c_float),
+        ("motor_torque_constant_nmpa", ctypes.c_float),
         ("motor_efficiency_factor", ctypes.c_float),
-        ("coulomb_friction_coefficient_linear_x", ctypes.c_float),
-        ("coulomb_friction_coefficient_linear_y", ctypes.c_float),
-        ("coulomb_friction_coefficient_angular", ctypes.c_float),
-        ("viscous_friction_coefficient_linear_x", ctypes.c_float),
-        ("viscous_friction_coefficient_linear_y", ctypes.c_float),
-        ("viscous_friction_coefficient_angular", ctypes.c_float),
+        ("coulomb_friction_linear_x_n", ctypes.c_float),
+        ("coulomb_friction_linear_y_n", ctypes.c_float),
+        ("coulomb_friction_angular_nm", ctypes.c_float),
+        ("viscous_friction_linear_x_nspm", ctypes.c_float),
+        ("viscous_friction_linear_y_nspm", ctypes.c_float),
+        ("viscous_friction_angular_nmsprad", ctypes.c_float),
     ]
 
 class TrajectoryParams(ctypes.Structure):
@@ -240,16 +240,32 @@ def _setup_signatures(lib):
     lib.ateam_controls_robot_model_new.restype = ctypes.c_int32
     lib.ateam_controls_robot_model_free.argtypes = [ctypes.c_void_p]
     lib.ateam_controls_robot_model_free.restype = None
-    lib.ateam_controls_robot_model_update_physical_params.argtypes = [ctypes.c_void_p, RobotPhysicalParams]
-    lib.ateam_controls_robot_model_update_physical_params.restype = ctypes.c_int32
-    lib.ateam_controls_robot_model_transform_wheel2twist.argtypes = [ctypes.c_void_p, ctypes.c_float]
-    lib.ateam_controls_robot_model_transform_wheel2twist.restype = Matrix3x4C
-    lib.ateam_controls_robot_model_transform_twist2wheel.argtypes = [ctypes.c_void_p, ctypes.c_float]
-    lib.ateam_controls_robot_model_transform_twist2wheel.restype = Matrix4x3C
-    lib.ateam_controls_robot_model_transform_wheel2accel.argtypes = [ctypes.c_void_p, ctypes.c_float]
-    lib.ateam_controls_robot_model_transform_wheel2accel.restype = Matrix3x4C
-    lib.ateam_controls_robot_model_transform_accel2wheel.argtypes = [ctypes.c_void_p, ctypes.c_float]
-    lib.ateam_controls_robot_model_transform_accel2wheel.restype = Matrix4x3C
+    lib.ateam_controls_robot_model_update_params.argtypes = [ctypes.c_void_p, RobotPhysicalParams]
+    lib.ateam_controls_robot_model_update_params.restype = ctypes.c_int32
+    lib.ateam_controls_robot_model_wheel_to_local_vel.argtypes = [ctypes.c_void_p, Vector4C]
+    lib.ateam_controls_robot_model_wheel_to_local_vel.restype = Vector3C
+    lib.ateam_controls_robot_model_wheel_to_global_vel.argtypes = [ctypes.c_void_p, Vector4C, ctypes.c_float]
+    lib.ateam_controls_robot_model_wheel_to_global_vel.restype = Vector3C
+    lib.ateam_controls_robot_model_wheel_to_local_accel.argtypes = [ctypes.c_void_p, Vector4C]
+    lib.ateam_controls_robot_model_wheel_to_local_accel.restype = Vector3C
+    lib.ateam_controls_robot_model_wheel_to_global_accel.argtypes = [ctypes.c_void_p, Vector4C, ctypes.c_float]
+    lib.ateam_controls_robot_model_wheel_to_global_accel.restype = Vector3C
+    lib.ateam_controls_robot_model_transform_wheel2vel_local.argtypes = [ctypes.c_void_p]
+    lib.ateam_controls_robot_model_transform_wheel2vel_local.restype = Matrix3x4C
+    lib.ateam_controls_robot_model_transform_wheel2vel_global.argtypes = [ctypes.c_void_p, ctypes.c_float]
+    lib.ateam_controls_robot_model_transform_wheel2vel_global.restype = Matrix3x4C
+    lib.ateam_controls_robot_model_transform_vel2wheel_local.argtypes = [ctypes.c_void_p]
+    lib.ateam_controls_robot_model_transform_vel2wheel_local.restype = Matrix4x3C
+    lib.ateam_controls_robot_model_transform_vel2wheel_global.argtypes = [ctypes.c_void_p, ctypes.c_float]
+    lib.ateam_controls_robot_model_transform_vel2wheel_global.restype = Matrix4x3C
+    lib.ateam_controls_robot_model_transform_wheel2accel_local.argtypes = [ctypes.c_void_p]
+    lib.ateam_controls_robot_model_transform_wheel2accel_local.restype = Matrix3x4C
+    lib.ateam_controls_robot_model_transform_wheel2accel_global.argtypes = [ctypes.c_void_p, ctypes.c_float]
+    lib.ateam_controls_robot_model_transform_wheel2accel_global.restype = Matrix3x4C
+    lib.ateam_controls_robot_model_transform_accel2wheel_local.argtypes = [ctypes.c_void_p]
+    lib.ateam_controls_robot_model_transform_accel2wheel_local.restype = Matrix4x3C
+    lib.ateam_controls_robot_model_transform_accel2wheel_global.argtypes = [ctypes.c_void_p, ctypes.c_float]
+    lib.ateam_controls_robot_model_transform_accel2wheel_global.restype = Matrix4x3C
     lib.ateam_controls_robot_model_torques_to_currents.argtypes = [ctypes.c_void_p, Vector4C]
     lib.ateam_controls_robot_model_torques_to_currents.restype = Vector4C
     lib.ateam_controls_traj_from_target_pose.argtypes = [Vector6C, Vector3C, TrajectoryParams, ctypes.POINTER(BangBangTraj3D)]
@@ -329,21 +345,45 @@ def robot_model_new(phys_params):
 def robot_model_free(model):
     _lib().ateam_controls_robot_model_free(model)
 
-def robot_model_update_physical_params(model, phys_params):
-    _rc = _lib().ateam_controls_robot_model_update_physical_params(model, phys_params)
-    _check_rc(_rc, 'ateam_controls_robot_model_update_physical_params')
+def robot_model_update_params(model, phys_params):
+    _rc = _lib().ateam_controls_robot_model_update_params(model, phys_params)
+    _check_rc(_rc, 'ateam_controls_robot_model_update_params')
 
-def robot_model_transform_wheel2twist(model, theta):
-    return _lib().ateam_controls_robot_model_transform_wheel2twist(model, theta)
+def robot_model_wheel_to_local_vel(model, encoder):
+    return _lib().ateam_controls_robot_model_wheel_to_local_vel(model, encoder)
 
-def robot_model_transform_twist2wheel(model, theta):
-    return _lib().ateam_controls_robot_model_transform_twist2wheel(model, theta)
+def robot_model_wheel_to_global_vel(model, encoder, theta):
+    return _lib().ateam_controls_robot_model_wheel_to_global_vel(model, encoder, theta)
 
-def robot_model_transform_wheel2accel(model, theta):
-    return _lib().ateam_controls_robot_model_transform_wheel2accel(model, theta)
+def robot_model_wheel_to_local_accel(model, torque):
+    return _lib().ateam_controls_robot_model_wheel_to_local_accel(model, torque)
 
-def robot_model_transform_accel2wheel(model, theta):
-    return _lib().ateam_controls_robot_model_transform_accel2wheel(model, theta)
+def robot_model_wheel_to_global_accel(model, torque, theta):
+    return _lib().ateam_controls_robot_model_wheel_to_global_accel(model, torque, theta)
+
+def robot_model_transform_wheel2vel_local(model):
+    return _lib().ateam_controls_robot_model_transform_wheel2vel_local(model)
+
+def robot_model_transform_wheel2vel_global(model, theta):
+    return _lib().ateam_controls_robot_model_transform_wheel2vel_global(model, theta)
+
+def robot_model_transform_vel2wheel_local(model):
+    return _lib().ateam_controls_robot_model_transform_vel2wheel_local(model)
+
+def robot_model_transform_vel2wheel_global(model, theta):
+    return _lib().ateam_controls_robot_model_transform_vel2wheel_global(model, theta)
+
+def robot_model_transform_wheel2accel_local(model):
+    return _lib().ateam_controls_robot_model_transform_wheel2accel_local(model)
+
+def robot_model_transform_wheel2accel_global(model, theta):
+    return _lib().ateam_controls_robot_model_transform_wheel2accel_global(model, theta)
+
+def robot_model_transform_accel2wheel_local(model):
+    return _lib().ateam_controls_robot_model_transform_accel2wheel_local(model)
+
+def robot_model_transform_accel2wheel_global(model, theta):
+    return _lib().ateam_controls_robot_model_transform_accel2wheel_global(model, theta)
 
 def robot_model_torques_to_currents(model, torques):
     return _lib().ateam_controls_robot_model_torques_to_currents(model, torques)

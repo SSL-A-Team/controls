@@ -62,20 +62,20 @@ typedef struct Matrix4x3C {
 } Matrix4x3C_t;
 
 typedef struct RobotPhysicalParams {
-    float alpha;
-    float beta;
-    float l;
-    float r;
-    float mass;
-    float iz;
-    float motor_torque_constant;
+    float alpha_rad;
+    float beta_rad;
+    float l_m;
+    float r_m;
+    float mass_kg;
+    float iz_kgm2;
+    float motor_torque_constant_nmpa;
     float motor_efficiency_factor;
-    float coulomb_friction_coefficient_linear_x;
-    float coulomb_friction_coefficient_linear_y;
-    float coulomb_friction_coefficient_angular;
-    float viscous_friction_coefficient_linear_x;
-    float viscous_friction_coefficient_linear_y;
-    float viscous_friction_coefficient_angular;
+    float coulomb_friction_linear_x_n;
+    float coulomb_friction_linear_y_n;
+    float coulomb_friction_angular_nm;
+    float viscous_friction_linear_x_nspm;
+    float viscous_friction_linear_y_nspm;
+    float viscous_friction_angular_nmsprad;
 } RobotPhysicalParams_t;
 
 // Opaque handle to the full RobotModel (physical matrices, kinematic transforms, etc.)
@@ -124,17 +124,35 @@ int32_t ateam_controls_robot_model_new(
     RobotModel_t** out);
 void ateam_controls_robot_model_free(RobotModel_t* model);
 
-int32_t ateam_controls_robot_model_update_physical_params(
+int32_t ateam_controls_robot_model_update_params(
     RobotModel_t* model,
     RobotPhysicalParams_t phys_params);
 
-Matrix3x4C_t ateam_controls_robot_model_transform_wheel2twist(
+// Wheel order is FL, BL, BR, FR (rad/s for velocities, N*m for torques).
+// local = robot frame, global = field frame rotated by robot heading theta.
+Vector3C_t ateam_controls_robot_model_wheel_to_local_vel(
+    const RobotModel_t* model, Vector4C_t encoder);
+Vector3C_t ateam_controls_robot_model_wheel_to_global_vel(
+    const RobotModel_t* model, Vector4C_t encoder, float theta);
+Vector3C_t ateam_controls_robot_model_wheel_to_local_accel(
+    const RobotModel_t* model, Vector4C_t torque);
+Vector3C_t ateam_controls_robot_model_wheel_to_global_accel(
+    const RobotModel_t* model, Vector4C_t torque, float theta);
+Matrix3x4C_t ateam_controls_robot_model_transform_wheel2vel_local(
+    const RobotModel_t* model);
+Matrix3x4C_t ateam_controls_robot_model_transform_wheel2vel_global(
     const RobotModel_t* model, float theta);
-Matrix4x3C_t ateam_controls_robot_model_transform_twist2wheel(
+Matrix4x3C_t ateam_controls_robot_model_transform_vel2wheel_local(
+    const RobotModel_t* model);
+Matrix4x3C_t ateam_controls_robot_model_transform_vel2wheel_global(
     const RobotModel_t* model, float theta);
-Matrix3x4C_t ateam_controls_robot_model_transform_wheel2accel(
+Matrix3x4C_t ateam_controls_robot_model_transform_wheel2accel_local(
+    const RobotModel_t* model);
+Matrix3x4C_t ateam_controls_robot_model_transform_wheel2accel_global(
     const RobotModel_t* model, float theta);
-Matrix4x3C_t ateam_controls_robot_model_transform_accel2wheel(
+Matrix4x3C_t ateam_controls_robot_model_transform_accel2wheel_local(
+    const RobotModel_t* model);
+Matrix4x3C_t ateam_controls_robot_model_transform_accel2wheel_global(
     const RobotModel_t* model, float theta);
 
 Vector4C_t ateam_controls_robot_model_torques_to_currents(

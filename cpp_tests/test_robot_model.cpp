@@ -8,20 +8,20 @@
 
 static RobotPhysicalParams_t test_phys_params() {
   RobotPhysicalParams_t phys = {};
-  phys.alpha = static_cast<float>(M_PI / 6.0);
-  phys.beta = static_cast<float>(M_PI / 4.0);
-  phys.l = 0.0814f;
-  phys.r = 0.030f;
-  phys.mass = 2.7f;
-  phys.iz = 0.008f;
-  phys.motor_torque_constant = 0.0335f;
+  phys.alpha_rad = static_cast<float>(M_PI / 6.0);
+  phys.beta_rad = static_cast<float>(M_PI / 4.0);
+  phys.l_m = 0.0814f;
+  phys.r_m = 0.030f;
+  phys.mass_kg = 2.7f;
+  phys.iz_kgm2 = 0.008f;
+  phys.motor_torque_constant_nmpa = 0.0335f;
   phys.motor_efficiency_factor = 13.0f;
-  phys.coulomb_friction_coefficient_linear_x = 2.058f;
-  phys.coulomb_friction_coefficient_linear_y = 2.058f;
-  phys.coulomb_friction_coefficient_angular = 0.05f;
-  phys.viscous_friction_coefficient_linear_x = 5.0f;
-  phys.viscous_friction_coefficient_linear_y = 5.0f;
-  phys.viscous_friction_coefficient_angular = 0.0063f;
+  phys.coulomb_friction_linear_x_n = 2.058f;
+  phys.coulomb_friction_linear_y_n = 2.058f;
+  phys.coulomb_friction_angular_nm = 0.05f;
+  phys.viscous_friction_linear_x_nspm = 5.0f;
+  phys.viscous_friction_linear_y_nspm = 5.0f;
+  phys.viscous_friction_angular_nmsprad = 0.0063f;
   return phys;
 }
 
@@ -42,13 +42,13 @@ TEST(RobotModelBindings, NewAndFree) {
 
 TEST(RobotModelBindings, NewWithCustomParams) {
   RobotPhysicalParams_t phys = {};
-  phys.alpha = 0.7854f;
-  phys.beta = 0.7854f;
-  phys.l = 0.08f;
-  phys.r = 0.025f;
-  phys.mass = 2.5f;
-  phys.iz = 0.01f;
-  phys.motor_torque_constant = 0.02f;
+  phys.alpha_rad = 0.7854f;
+  phys.beta_rad = 0.7854f;
+  phys.l_m = 0.08f;
+  phys.r_m = 0.025f;
+  phys.mass_kg = 2.5f;
+  phys.iz_kgm2 = 0.01f;
+  phys.motor_torque_constant_nmpa = 0.02f;
   phys.motor_efficiency_factor = 0.85f;
 
   RobotModel_t* model = nullptr;
@@ -65,9 +65,9 @@ TEST(RobotModelBindings, UpdatePhysicalParams) {
   RobotModel_t* model = nullptr;
   ASSERT_EQ(create_test_model(&model), ATEAM_CONTROLS_OK);
   RobotPhysicalParams_t phys = test_phys_params();
-  phys.mass = 3.0f;
-  ASSERT_EQ(ateam_controls_robot_model_update_physical_params(model, phys), ATEAM_CONTROLS_OK);
-  Matrix3x4C_t w2t = ateam_controls_robot_model_transform_wheel2twist(model, 0.0f);
+  phys.mass_kg = 3.0f;
+  ASSERT_EQ(ateam_controls_robot_model_update_params(model, phys), ATEAM_CONTROLS_OK);
+  Matrix3x4C_t w2t = ateam_controls_robot_model_transform_wheel2vel_global(model, 0.0f);
   (void)w2t;
   ateam_controls_robot_model_free(model);
 }
@@ -75,10 +75,14 @@ TEST(RobotModelBindings, UpdatePhysicalParams) {
 TEST(RobotModelBindings, TransformReturnsSomething) {
   RobotModel_t* model = nullptr;
   ASSERT_EQ(create_test_model(&model), ATEAM_CONTROLS_OK);
-  Matrix3x4C_t w2t = ateam_controls_robot_model_transform_wheel2twist(model, 0.0f);
-  Matrix4x3C_t t2w = ateam_controls_robot_model_transform_twist2wheel(model, 0.0f);
-  Matrix3x4C_t w2a = ateam_controls_robot_model_transform_wheel2accel(model, 0.0f);
-  Matrix4x3C_t a2w = ateam_controls_robot_model_transform_accel2wheel(model, 0.0f);
+  Matrix3x4C_t w2t = ateam_controls_robot_model_transform_wheel2vel_global(model, 0.0f);
+  Matrix4x3C_t t2w = ateam_controls_robot_model_transform_vel2wheel_global(model, 0.0f);
+  Matrix3x4C_t w2a = ateam_controls_robot_model_transform_wheel2accel_global(model, 0.0f);
+  Matrix4x3C_t a2w = ateam_controls_robot_model_transform_accel2wheel_global(model, 0.0f);
+  Matrix3x4C_t lw2t = ateam_controls_robot_model_transform_wheel2vel_local(model);
+  Matrix4x3C_t lt2w = ateam_controls_robot_model_transform_vel2wheel_local(model);
+  Matrix3x4C_t lw2a = ateam_controls_robot_model_transform_wheel2accel_local(model);
+  Matrix4x3C_t la2w = ateam_controls_robot_model_transform_accel2wheel_local(model);
   // Just verify the binding returned without crashing and has non-zero data
   bool any_nonzero = false;
   for (int i = 0; i < 12; i++) {
@@ -86,6 +90,24 @@ TEST(RobotModelBindings, TransformReturnsSomething) {
   }
   EXPECT_TRUE(any_nonzero);
   (void)t2w; (void)w2a; (void)a2w;
+  (void)lw2t; (void)lt2w; (void)lw2a; (void)la2w;
+  ateam_controls_robot_model_free(model);
+}
+
+TEST(RobotModelBindings, WheelToLocalVel) {
+  RobotModel_t* model = nullptr;
+  ASSERT_EQ(create_test_model(&model), ATEAM_CONTROLS_OK);
+  // Pure rotation: every wheel spins the same way at the same rate
+  Vector4C_t encoder = {10.0f, 10.0f, 10.0f, 10.0f};
+  Vector3C_t vel = ateam_controls_robot_model_wheel_to_local_vel(model, encoder);
+  EXPECT_NEAR(vel.x, 0.0f, 1e-4f);
+  EXPECT_NEAR(vel.y, 0.0f, 1e-4f);
+  EXPECT_GT(vel.z, 0.0f);
+  // Pure rotation is frame independent
+  Vector3C_t gvel = ateam_controls_robot_model_wheel_to_global_vel(model, encoder, 1.0f);
+  EXPECT_NEAR(gvel.x, 0.0f, 1e-4f);
+  EXPECT_NEAR(gvel.y, 0.0f, 1e-4f);
+  EXPECT_NEAR(gvel.z, vel.z, 1e-5f);
   ateam_controls_robot_model_free(model);
 }
 
