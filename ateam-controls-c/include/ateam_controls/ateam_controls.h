@@ -61,21 +61,6 @@ typedef struct Matrix4x3C {
     float data[12];
 } Matrix4x3C_t;
 
-typedef struct KalmanFilterParams {
-    float process_noise_std_pos_linear;
-    float process_noise_std_pos_angular;
-    float process_noise_std_vel_linear;
-    float process_noise_std_vel_angular;
-    float measurement_noise_std_vision_pos_linear;
-    float measurement_noise_std_vision_pos_angular;
-    float measurement_noise_std_encoder_vel_angular;
-    float measurement_noise_std_gyro_vel_angular;
-    float max_pos_linear;
-    float max_pos_angular;
-    float max_vel_linear;
-    float max_vel_angular;
-} KalmanFilterParams_t;
-
 typedef struct RobotPhysicalParams {
     float alpha;
     float beta;
@@ -93,7 +78,7 @@ typedef struct RobotPhysicalParams {
     float viscous_friction_coefficient_angular;
 } RobotPhysicalParams_t;
 
-// Opaque handle to the full RobotModel (includes KF state, physical matrices, etc.)
+// Opaque handle to the full RobotModel (physical matrices, kinematic transforms, etc.)
 typedef struct RobotModel RobotModel_t;
 
 typedef struct TrajectoryParams {
@@ -127,7 +112,6 @@ typedef struct BangBangTraj3D {
 // Default parameter constructors
 // ============================================================================
 
-KalmanFilterParams_t ateam_controls_default_kf_params(void);
 RobotPhysicalParams_t ateam_controls_default_phys_params(void);
 TrajectoryParams_t ateam_controls_default_traj_params(void);
 
@@ -136,29 +120,13 @@ TrajectoryParams_t ateam_controls_default_traj_params(void);
 // ============================================================================
 
 int32_t ateam_controls_robot_model_new(
-    float kf_dt,
-    KalmanFilterParams_t kf_params,
     RobotPhysicalParams_t phys_params,
     RobotModel_t** out);
 void ateam_controls_robot_model_free(RobotModel_t* model);
 
-void ateam_controls_robot_model_update_kf_params(
-    RobotModel_t* model,
-    KalmanFilterParams_t kf_params);
 int32_t ateam_controls_robot_model_update_physical_params(
     RobotModel_t* model,
     RobotPhysicalParams_t phys_params);
-
-void ateam_controls_robot_model_kf_predict(RobotModel_t* model, Vector3C_t accel);
-int32_t ateam_controls_robot_model_kf_update(
-    RobotModel_t* model,
-    Vector8C_t measurement,
-    bool mask_vision,
-    bool mask_encoder,
-    bool mask_gyro);
-
-Vector6C_t ateam_controls_robot_model_get_state(const RobotModel_t* model);
-void ateam_controls_robot_model_set_state(RobotModel_t* model, Vector6C_t state);
 
 Matrix3x4C_t ateam_controls_robot_model_transform_wheel2twist(
     const RobotModel_t* model, float theta);

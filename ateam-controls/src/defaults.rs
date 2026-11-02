@@ -25,22 +25,6 @@ pub const DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL: f32 = 0.35;       // rad / 
 /// accelerating along the line toward the target colinear velocity.
 pub const DEFAULT_LINEAR_COLINEAR_START_THRESH: f32 = 0.01;             // m
 
-// // Kalman filter noise standard deviations
-pub const DEFAULT_KF_PROCESS_STD_POS_LINEAR: f32 = 0.01;
-pub const DEFAULT_KF_PROCESS_STD_POS_ANGULAR: f32 = 0.02;
-pub const DEFAULT_KF_PROCESS_STD_VEL_LINEAR: f32 = 0.03;
-pub const DEFAULT_KF_PROCESS_STD_VEL_ANGULAR: f32 = 0.04;
-pub const DEFAULT_KF_MEASUREMENT_STD_VISION_POS_LINEAR: f32 = 0.5;
-pub const DEFAULT_KF_MEASUREMENT_STD_VISION_POS_ANGULAR: f32 = 0.75;
-pub const DEFAULT_KF_MEASUREMENT_STD_ENCODER_VEL_ANGULAR: f32 = 50.0;
-pub const DEFAULT_KF_MEASUREMENT_STD_GYRO_VEL_ANGULAR: f32 = 0.015;
-
-// // Kalman filter max state values (for covariance initialization)
-pub const DEFAULT_KF_MAX_POS_LINEAR: f32 = 64.0;         // m (half-field)
-pub const DEFAULT_KF_MAX_POS_ANGULAR: f32 = 3.14;        // rad
-pub const DEFAULT_KF_MAX_VEL_LINEAR: f32 = 3.0;          // m/s
-pub const DEFAULT_KF_MAX_VEL_ANGULAR: f32 = 3.0 * PI;    // rad/s
-
 // Robot physical parameters
 pub const DEFAULT_PHYS_ALPHA: f32 = PI / 6.0;            // 30 deg, front wheel angle
 pub const DEFAULT_PHYS_BETA: f32 = PI / 4.0;             // 45 deg, back wheel angle

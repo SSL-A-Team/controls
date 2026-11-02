@@ -10,11 +10,6 @@ use ateam_controls::robot_model::*;
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_default_kf_params() -> KalmanFilterParams {
-    KalmanFilterParams::default()
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ateam_controls_default_phys_params() -> RobotPhysicalParams {
     RobotPhysicalParams::default()
 }
@@ -30,12 +25,10 @@ pub extern "C" fn ateam_controls_default_traj_params() -> TrajectoryParams {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_robot_model_new(
-    kf_dt: f32,
-    kf_params: KalmanFilterParams,
     phys_params: RobotPhysicalParams,
     out: *mut *mut RobotModel,
 ) -> i32 {
-    match RobotModel::new(kf_dt, kf_params, phys_params) {
+    match RobotModel::new(phys_params) {
         Ok(model) => {
             unsafe { *out = Box::into_raw(Box::new(model)); }
             0
@@ -52,14 +45,6 @@ pub unsafe extern "C" fn ateam_controls_robot_model_free(model: *mut RobotModel)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_update_kf_params(
-    model: *mut RobotModel,
-    kf_params: KalmanFilterParams,
-) {
-    unsafe { (*model).update_kf_params(kf_params); }
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_robot_model_update_physical_params(
     model: *mut RobotModel,
     phys_params: RobotPhysicalParams,
@@ -68,43 +53,6 @@ pub unsafe extern "C" fn ateam_controls_robot_model_update_physical_params(
         Ok(()) => 0,
         Err(e) => e as i32,
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_kf_predict(
-    model: *mut RobotModel,
-    accel: Vector3C,
-) {
-    unsafe { (*model).kf_predict(accel.into()); }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_kf_update(
-    model: *mut RobotModel,
-    measurement: Vector8C,
-    mask_vision: bool,
-    mask_encoder: bool,
-    mask_gyro: bool,
-) -> i32 {
-    match unsafe { (*model).kf_update(measurement.into(), mask_vision, mask_encoder, mask_gyro) } {
-        Ok(()) => 0,
-        Err(e) => e as i32,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_get_state(
-    model: *const RobotModel,
-) -> Vector6C {
-    unsafe { (*model).x.into() }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_set_state(
-    model: *mut RobotModel,
-    state: Vector6C,
-) {
-    unsafe { (*model).x = state.into(); }
 }
 
 #[unsafe(no_mangle)]

@@ -12,14 +12,11 @@ enum. Each PARAM_MAP entry describes one JSON key:
                describing how to populate the ctypes structs from the JSON array
 """
 
-import ctypes
 import json
 
 from ateam_controls import (
-    KalmanFilterParams,
     RobotPhysicalParams,
     TrajectoryParams,
-    default_kf_params,
     default_phys_params,
     default_traj_params,
     robot_model_new,
@@ -31,36 +28,20 @@ from ateam_controls import (
 #
 # param_id: firmware ParameterName enum value (for robot upload)
 # fields: list of (array_index, struct_name, field_name) tuples.
-# struct_name is one of: "traj", "kf", "phys" (or None if not used in viz).
+# struct_name is one of: "traj", "phys" (or None if not used in viz).
 # ---------------------------------------------------------------------------
 
 PARAM_MAP = {
+    # State estimator (EKF) noise: upload-only, no ctypes struct mapping.
+    # KF_PROCESS_STD:     [pos_linear, pos_angular, vel_linear, unused]
+    # KF_MEASUREMENT_STD: [vision_pos_linear, vision_pos_angular, unused, unused]
     "KF_PROCESS_STD": {
         "param_id": 0,
-        "fields": [
-            (0, "kf", "process_noise_std_pos_linear"),
-            (1, "kf", "process_noise_std_pos_angular"),
-            (2, "kf", "process_noise_std_vel_linear"),
-            (3, "kf", "process_noise_std_vel_angular"),
-        ],
+        "fields": [],
     },
     "KF_MEASUREMENT_STD": {
         "param_id": 1,
-        "fields": [
-            (0, "kf", "measurement_noise_std_vision_pos_linear"),
-            (1, "kf", "measurement_noise_std_vision_pos_angular"),
-            (2, "kf", "measurement_noise_std_encoder_vel_angular"),
-            (3, "kf", "measurement_noise_std_gyro_vel_angular"),
-        ],
-    },
-    "KF_MAX_STATE": {
-        "param_id": 2,
-        "fields": [
-            (0, "kf", "max_pos_linear"),
-            (1, "kf", "max_pos_angular"),
-            (2, "kf", "max_vel_linear"),
-            (3, "kf", "max_vel_angular"),
-        ],
+        "fields": [],
     },
     "PHYS_WHEEL": {
         "param_id": 3,
@@ -158,14 +139,11 @@ def load_robot_model(path: str = None):
     Returns an opaque ctypes.c_void_p handle. The caller must call
     robot_model_free() when done.
     """
-    kf = default_kf_params()
     phys = default_phys_params()
     if path is not None:
         with open(path) as f:
-            data = json.load(f)
-        _load_struct(kf, "kf", data)
-        _load_struct(phys, "phys", data)
-    return robot_model_new(ctypes.c_float(0.001), kf, phys)
+            _load_struct(phys, "phys", json.load(f))
+    return robot_model_new(phys)
 
 
 # ---------------------------------------------------------------------------
@@ -196,11 +174,6 @@ def _struct_to_dict(struct, struct_name: str) -> dict:
 def phys_params_to_json_dict(phys: RobotPhysicalParams) -> dict:
     """Return a JSON-compatible dict of all PARAM_MAP entries sourced from phys."""
     return _struct_to_dict(phys, "phys")
-
-
-def kf_params_to_json_dict(kf: KalmanFilterParams) -> dict:
-    """Return a JSON-compatible dict of all PARAM_MAP entries sourced from kf."""
-    return _struct_to_dict(kf, "kf")
 
 
 def default_controller_params_dict() -> dict:
@@ -240,14 +213,13 @@ def default_params_dict() -> dict:
     """Full parameter dict built from the Rust library and firmware defaults.
 
     Includes:
-      * Every PARAM_MAP entry materialized from ``KalmanFilterParams`` and
-        ``RobotPhysicalParams`` (the Rust controls library defaults).
+      * Every PARAM_MAP entry materialized from ``RobotPhysicalParams``
+        (the Rust controls library defaults).
       * Controller-side firmware defaults from
         ``default_controller_params_dict()`` (PID gains, friction-comp
         gating, trajectory recompute thresholds, pose control gain).
     """
     return {
-        **kf_params_to_json_dict(default_kf_params()),
         **phys_params_to_json_dict(default_phys_params()),
         **default_controller_params_dict(),
     }

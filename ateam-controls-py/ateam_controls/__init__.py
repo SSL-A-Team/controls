@@ -21,7 +21,6 @@ from ._bindings import (
     Matrix3C,
     Matrix3x4C,
     Matrix4x3C,
-    KalmanFilterParams,
     RobotPhysicalParams,
     TrajectoryParams,
     BangBangTraj1D,
@@ -35,7 +34,6 @@ from ._bindings import (
     LINEAR_HEADING_MODE_FIXED,
     LINEAR_HEADING_MODE_FACE_POINT,
     # Default parameter constructors
-    default_kf_params,
     default_phys_params,
     default_traj_params,
     default_pivot_params,
@@ -43,12 +41,7 @@ from ._bindings import (
     # RobotModel functions
     robot_model_new,
     robot_model_free,
-    robot_model_update_kf_params,
     robot_model_update_physical_params,
-    robot_model_kf_predict,
-    robot_model_kf_update,
-    robot_model_get_state,
-    robot_model_set_state,
     robot_model_transform_wheel2twist,
     robot_model_transform_twist2wheel,
     robot_model_transform_wheel2accel,

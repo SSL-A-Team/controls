@@ -104,22 +104,6 @@ class Matrix4x3C(ctypes.Structure):
         ("data", ctypes.c_float * 12),
     ]
 
-class KalmanFilterParams(ctypes.Structure):
-    _fields_ = [
-        ("process_noise_std_pos_linear", ctypes.c_float),
-        ("process_noise_std_pos_angular", ctypes.c_float),
-        ("process_noise_std_vel_linear", ctypes.c_float),
-        ("process_noise_std_vel_angular", ctypes.c_float),
-        ("measurement_noise_std_vision_pos_linear", ctypes.c_float),
-        ("measurement_noise_std_vision_pos_angular", ctypes.c_float),
-        ("measurement_noise_std_encoder_vel_angular", ctypes.c_float),
-        ("measurement_noise_std_gyro_vel_angular", ctypes.c_float),
-        ("max_pos_linear", ctypes.c_float),
-        ("max_pos_angular", ctypes.c_float),
-        ("max_vel_linear", ctypes.c_float),
-        ("max_vel_angular", ctypes.c_float),
-    ]
-
 class RobotPhysicalParams(ctypes.Structure):
     _fields_ = [
         ("alpha", ctypes.c_float),
@@ -247,29 +231,17 @@ def _lib():
 def _setup_signatures(lib):
     """Declare argument/return types for every FFI function."""
     # Default parameter constructors
-    lib.ateam_controls_default_kf_params.argtypes = []
-    lib.ateam_controls_default_kf_params.restype = KalmanFilterParams
     lib.ateam_controls_default_phys_params.argtypes = []
     lib.ateam_controls_default_phys_params.restype = RobotPhysicalParams
     lib.ateam_controls_default_traj_params.argtypes = []
     lib.ateam_controls_default_traj_params.restype = TrajectoryParams
     # RobotModel
-    lib.ateam_controls_robot_model_new.argtypes = [ctypes.c_float, KalmanFilterParams, RobotPhysicalParams, ctypes.POINTER(ctypes.c_void_p)]
+    lib.ateam_controls_robot_model_new.argtypes = [RobotPhysicalParams, ctypes.POINTER(ctypes.c_void_p)]
     lib.ateam_controls_robot_model_new.restype = ctypes.c_int32
     lib.ateam_controls_robot_model_free.argtypes = [ctypes.c_void_p]
     lib.ateam_controls_robot_model_free.restype = None
-    lib.ateam_controls_robot_model_update_kf_params.argtypes = [ctypes.c_void_p, KalmanFilterParams]
-    lib.ateam_controls_robot_model_update_kf_params.restype = None
     lib.ateam_controls_robot_model_update_physical_params.argtypes = [ctypes.c_void_p, RobotPhysicalParams]
     lib.ateam_controls_robot_model_update_physical_params.restype = ctypes.c_int32
-    lib.ateam_controls_robot_model_kf_predict.argtypes = [ctypes.c_void_p, Vector3C]
-    lib.ateam_controls_robot_model_kf_predict.restype = None
-    lib.ateam_controls_robot_model_kf_update.argtypes = [ctypes.c_void_p, Vector8C, ctypes.c_bool, ctypes.c_bool, ctypes.c_bool]
-    lib.ateam_controls_robot_model_kf_update.restype = ctypes.c_int32
-    lib.ateam_controls_robot_model_get_state.argtypes = [ctypes.c_void_p]
-    lib.ateam_controls_robot_model_get_state.restype = Vector6C
-    lib.ateam_controls_robot_model_set_state.argtypes = [ctypes.c_void_p, Vector6C]
-    lib.ateam_controls_robot_model_set_state.restype = None
     lib.ateam_controls_robot_model_transform_wheel2twist.argtypes = [ctypes.c_void_p, ctypes.c_float]
     lib.ateam_controls_robot_model_transform_wheel2twist.restype = Matrix3x4C
     lib.ateam_controls_robot_model_transform_twist2wheel.argtypes = [ctypes.c_void_p, ctypes.c_float]
@@ -342,43 +314,24 @@ def _setup_signatures(lib):
 # Wrapper functions (1:1 mapping of the C API)
 # ---------------------------------------------------------------------------
 
-def default_kf_params():
-    return _lib().ateam_controls_default_kf_params()
-
 def default_phys_params():
     return _lib().ateam_controls_default_phys_params()
 
 def default_traj_params():
     return _lib().ateam_controls_default_traj_params()
 
-def robot_model_new(kf_dt, kf_params, phys_params):
+def robot_model_new(phys_params):
     _out = ctypes.c_void_p()
-    _rc = _lib().ateam_controls_robot_model_new(kf_dt, kf_params, phys_params, ctypes.byref(_out))
+    _rc = _lib().ateam_controls_robot_model_new(phys_params, ctypes.byref(_out))
     _check_rc(_rc, 'ateam_controls_robot_model_new')
     return _out
 
 def robot_model_free(model):
     _lib().ateam_controls_robot_model_free(model)
 
-def robot_model_update_kf_params(model, kf_params):
-    _lib().ateam_controls_robot_model_update_kf_params(model, kf_params)
-
 def robot_model_update_physical_params(model, phys_params):
     _rc = _lib().ateam_controls_robot_model_update_physical_params(model, phys_params)
     _check_rc(_rc, 'ateam_controls_robot_model_update_physical_params')
-
-def robot_model_kf_predict(model, accel):
-    _lib().ateam_controls_robot_model_kf_predict(model, accel)
-
-def robot_model_kf_update(model, measurement, mask_vision, mask_encoder, mask_gyro):
-    _rc = _lib().ateam_controls_robot_model_kf_update(model, measurement, mask_vision, mask_encoder, mask_gyro)
-    _check_rc(_rc, 'ateam_controls_robot_model_kf_update')
-
-def robot_model_get_state(model):
-    return _lib().ateam_controls_robot_model_get_state(model)
-
-def robot_model_set_state(model, state):
-    _lib().ateam_controls_robot_model_set_state(model, state)
 
 def robot_model_transform_wheel2twist(model, theta):
     return _lib().ateam_controls_robot_model_transform_wheel2twist(model, theta)
