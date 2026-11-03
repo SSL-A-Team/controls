@@ -33,7 +33,9 @@ pub const DEFAULT_PHYS_R: f32 = 0.030;                   // m, wheel radius
 pub const DEFAULT_PHYS_MASS: f32 = 2.7;                  // kg
 pub const DEFAULT_PHYS_IZ: f32 = 0.008;                  // kg*m^2, moment of inertia
 pub const DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT: f32 = 0.0335;       // N*m/A
-pub const DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR: f32 = 17.36;
+// 1.0 with CS_SYNC_SAMPLING on the wheel-torque image: the current loop regulates
+// real phase current, so torque = Kt * I. 17.36 compensated the old D * I feedback.
+pub const DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR: f32 = 1.0;
 // pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_X: f32 = 1.86 ;
 // pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_Y: f32 = 1.86 ;
 // pub const DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR: f32 = 0.05;
