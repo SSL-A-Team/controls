@@ -20,10 +20,16 @@ from .analysis import (
 from .base import (
     AXIS_TO_COMPONENT,
     BaseTuneNode,
+    LINEAR_AXES,
     PHASE_COAST,
     PHASE_PULSE_NEG,
     PHASE_PULSE_POS,
+    MIN_VISION_COVERAGE,
+    VisionUnavailable,
 )
+
+# After this many consecutive trials lose vision the routine aborts.
+MAX_VISION_RETRIES = 3
 from .checkpoint import CheckpointDir, TrialRecord, save_trial
 from .triangular import T_PULSE, TriangularPulseRunner, default_pulse_accel
 
@@ -48,20 +54,42 @@ def run_triangular_trial(node: BaseTuneNode, amplitude: float,
     """Execute one triangular trial and return fit/score metrics.
 
     Caller is responsible for pushing any param updates before calling.
-    """
-    node.begin_trial()
-    runner = TriangularPulseRunner(node, amplitude=amplitude)
 
-    # Hook the runner into the node's ticking. Save/restore on_tick so
-    # multiple trials can be run sequentially without leaking state.
-    original_on_tick = node.on_tick
-    node.on_tick = runner.tick  # type: ignore[assignment]
-    try:
-        while rclpy.ok() and not runner.done:
-            rclpy.spin_once(node, timeout_sec=1.0 / node.PUBLISH_RATE_HZ)
-    finally:
-        node.on_tick = original_on_tick  # type: ignore[assignment]
-        node.publish_off()
+    Waits for vision before pulsing. If vision drops out during a scored phase,
+    the trial is discarded and redone after a turnaround; only vision-active
+    samples enter the fits.
+    """
+    scored_phases = (PHASE_PULSE_POS, PHASE_COAST, PHASE_PULSE_NEG)
+    for attempt in range(MAX_VISION_RETRIES + 1):
+        node.wait_for_vision()
+        node.begin_trial()
+        runner = TriangularPulseRunner(node, amplitude=amplitude)
+
+        # Hook the runner into the node's ticking. Save/restore on_tick so
+        # multiple trials can be run sequentially without leaking state.
+        original_on_tick = node.on_tick
+        node.on_tick = runner.tick  # type: ignore[assignment]
+        try:
+            while rclpy.ok() and not runner.done:
+                rclpy.spin_once(node, timeout_sec=1.0 / node.PUBLISH_RATE_HZ)
+        finally:
+            node.on_tick = original_on_tick  # type: ignore[assignment]
+            node.publish_off()
+
+        coverage = {ph: node.buffer.vision_coverage(ph) for ph in scored_phases}
+        if node.dry_run or min(coverage.values()) >= MIN_VISION_COVERAGE:
+            break
+        cov_desc = "  ".join(f"{ph}={c:.0%}" for ph, c in coverage.items())
+        if attempt == MAX_VISION_RETRIES:
+            raise VisionUnavailable(
+                f"Vision dropped out in {MAX_VISION_RETRIES + 1} consecutive "
+                f"trials ({cov_desc})."
+            )
+        node.get_logger().warn(
+            f"Vision dropped out during the trial ({cov_desc}); discarding and "
+            f"redoing it (retry {attempt + 1}/{MAX_VISION_RETRIES})."
+        )
+        node.wait_for_turnaround(prompt=node.axis in LINEAR_AXES)
 
     t_pos, v_pos = node.buffer.axis_velocity(PHASE_PULSE_POS, node.axis)
     t_neg, v_neg = node.buffer.axis_velocity(PHASE_PULSE_NEG, node.axis)
@@ -89,6 +117,7 @@ def run_triangular_trial(node: BaseTuneNode, amplitude: float,
         "peak_v": float(score.peak_v),
         "expected_peak_v": float(score.expected_peak),
         "low_motion": bool(score.low_motion),
+        "vision_coverage": {ph: float(c) for ph, c in coverage.items()},
         "score_total": (float(score.total)
                         if not math.isinf(score.total) else None),
         "score_residual": (float(score.residual)

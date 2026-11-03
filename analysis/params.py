@@ -106,6 +106,11 @@ PARAM_MAP = {
         "param_id": 13,
         "fields": [],
     },
+    # [SEED_SAMPLES] vision samples needed to (re)seed the firmware vision filter
+    "VISION_SEED_SAMPLES": {
+        "param_id": 14,
+        "fields": [],
+    },
 }
 
 

@@ -53,6 +53,29 @@ PHASE_COAST = "coast"
 PHASE_PULSE_NEG = "pulse_neg"
 PHASE_WAIT_TURN = "wait_turn"  # waiting for user to manually rotate robot
 
+# Vision gating. Without vision the state estimate dead-reckons on wheel encoders,
+# which run away if a wheel lifts or slips. A sample counts as vision-active if a
+# vision update arrived within this window (vision reaches the robot at ~30 Hz).
+VISION_ACTIVE_WINDOW_S = 0.25
+VISION_WAIT_TIMEOUT_S = 30.0
+# A trial (or coulomb pulse tail) is discarded and redone if less than this
+# fraction of its scored samples were vision-active.
+MIN_VISION_COVERAGE = 0.9
+
+# Every firmware param write resets the controller and reseeds vision. Uploads
+# also set the seed sample count to this so vision is back within one sample.
+TUNING_VISION_SEED_SAMPLES = 1
+
+# Turnaround / settle detection. Rotation is accumulated from per-sample heading
+# deltas so wrapping at +/-pi does not matter; per-sample jumps larger than
+# HEADING_JUMP_REJECT_RAD are estimator snaps (e.g. vision reacquired), not motion.
+HEADING_JUMP_REJECT_RAD = 0.5
+# Settled = wheels and gyro quiet for SETTLE_HOLD_S. Uses raw sensors because the
+# state estimate's velocity drifts while the robot sits still.
+SETTLE_WHEEL_RADS = 1.0
+SETTLE_GYRO_RADS = 0.2
+SETTLE_HOLD_S = 0.3
+
 
 # --------------------------------------------------------------------------
 # Telemetry buffering
@@ -70,6 +93,7 @@ class TelemetrySample:
     imu_accel: tuple[float, float, float] = (0.0, 0.0, 0.0)
     vision_pose: tuple[float, float, float] = (0.0, 0.0, 0.0)
     vision_update: bool = False
+    vision_active: bool = False
     kf_pos_prediction: tuple[float, float, float] = (0.0, 0.0, 0.0)
     kf_vel_prediction: tuple[float, float, float] = (0.0, 0.0, 0.0)
     body_traj_pos: tuple[float, float, float] = (0.0, 0.0, 0.0)
@@ -102,6 +126,13 @@ class TelemetryBuffer:
     def phase_slice(self, phase: str) -> list[TelemetrySample]:
         return [s for s in self.samples if s.phase == phase]
 
+    def vision_coverage(self, phase: str) -> float:
+        """Fraction of a phase's samples that were vision-active (0.0 if none)."""
+        sl = self.phase_slice(phase)
+        if not sl:
+            return 0.0
+        return sum(s.vision_active for s in sl) / len(sl)
+
     def to_arrays(self) -> dict[str, np.ndarray]:
         """Return all per-sample series as NumPy arrays.
 
@@ -126,6 +157,7 @@ class TelemetryBuffer:
                 "kf_vel": empty3,
                 "wheel_vel": empty4,
                 "imu_gyro_z": empty,
+                "vision_active": np.zeros(0, dtype=bool),
             }
             keys.update(self._firmware_slash_arrays(empty_only=True))
             return keys
@@ -140,6 +172,7 @@ class TelemetryBuffer:
         imu_accel = np.array([s.imu_accel for s in self.samples])
         vision_pose = np.array([s.vision_pose for s in self.samples])
         vision_update = np.array([s.vision_update for s in self.samples], dtype=bool)
+        vision_active = np.array([s.vision_active for s in self.samples], dtype=bool)
         kf_pos_pred = np.array([s.kf_pos_prediction for s in self.samples])
         kf_vel_pred = np.array([s.kf_vel_prediction for s in self.samples])
         traj_pos = np.array([s.body_traj_pos for s in self.samples])
@@ -163,6 +196,7 @@ class TelemetryBuffer:
             "kf_vel": kf_vel,
             "wheel_vel": wheel_vel,
             "imu_gyro_z": imu_gyro[:, 2],
+            "vision_active": vision_active,
             # Firmware-style slash-keyed arrays for analysis/visualization/body.py
             "timestamp_us": timestamp_us,
             "body_control_telemetry/vision_pose": vision_pose,
@@ -221,14 +255,15 @@ class TelemetryBuffer:
         """Return ``(t, v)`` arrays from the KF velocity estimate for one
         phase/axis, **projected into the robot's local frame**.
 
+        Only vision-active samples are returned (see ``VISION_ACTIVE_WINDOW_S``).
+
         The KF state estimate is in the global frame; ``BCM_LOCAL_ACCEL``
         commands and the slope-fit metric we compare against are in the
         robot's local frame. For linear axes (``x``, ``y``) we rotate
         ``(vx_global, vy_global)`` by ``−θ`` per sample. For ``theta`` the
         scalar angular velocity is frame-invariant.
         """
-        idx = AXIS_TO_COMPONENT[axis]
-        sl = self.phase_slice(phase)
+        sl = [s for s in self.phase_slice(phase) if s.vision_active]
         if not sl:
             return np.zeros(0), np.zeros(0)
         t = np.array([s.t for s in sl])
@@ -281,6 +316,13 @@ class BaseTuneNode(Node):
         # "robot turned around?").
         self.latest_kf_pos: Optional[tuple[float, float, float]] = None
         self.latest_kf_vel: Optional[tuple[float, float, float]] = None
+        # Node-clock time of the last vision update; persists across trials.
+        self._last_vision_time = None
+        # Accumulated (unwrapped) heading and latest raw sensors for turnaround.
+        self._heading_unwrapped: Optional[float] = None
+        self._last_heading: Optional[float] = None
+        self.latest_wheel_vel: Optional[tuple[float, float, float, float]] = None
+        self.latest_gyro_z: Optional[float] = None
 
         # --- ROS pubs/subs/clients ---
         self.cmd_pub = self.create_publisher(
@@ -437,6 +479,9 @@ class BaseTuneNode(Node):
             wheel_vels.append(float(getattr(vt, "wheel_vel_rads", 0.0))
                               if vt is not None else 0.0)
 
+        now = self.get_clock().now()
+        if vision_update:
+            self._last_vision_time = now
         sample = TelemetrySample(
             t=self.trial_elapsed(),
             phase=self.current_phase,
@@ -448,6 +493,7 @@ class BaseTuneNode(Node):
             imu_accel=imu_accel,
             vision_pose=vision_pose,
             vision_update=vision_update,
+            vision_active=self.vision_active(now),
             kf_pos_prediction=kf_pos_pred,
             kf_vel_prediction=kf_vel_pred,
             body_traj_pos=traj_pos,
@@ -459,7 +505,43 @@ class BaseTuneNode(Node):
         )
         self.latest_kf_pos = kf_pos
         self.latest_kf_vel = kf_vel
+        self.latest_wheel_vel = tuple(wheel_vels)  # type: ignore[assignment]
+        self.latest_gyro_z = imu_gyro[2]
+        heading = kf_pos[2]
+        if self._last_heading is None:
+            self._heading_unwrapped = heading
+        else:
+            dh = _wrap_angle(heading - self._last_heading)
+            if abs(dh) <= HEADING_JUMP_REJECT_RAD:
+                self._heading_unwrapped += dh
+        self._last_heading = heading
         self.buffer.add(sample)
+
+    def vision_active(self, now=None) -> bool:
+        if self._last_vision_time is None:
+            return False
+        now = now if now is not None else self.get_clock().now()
+        age = (now - self._last_vision_time).nanoseconds * 1e-9
+        return age <= VISION_ACTIVE_WINDOW_S
+
+    def wait_for_vision(self, timeout_sec: float = VISION_WAIT_TIMEOUT_S) -> None:
+        """Hold BCM_OFF until vision is active. Raises VisionUnavailable on timeout."""
+        if self.dry_run or self.vision_active():
+            return
+        self.get_logger().info(
+            f">>> Waiting for vision on robot {self.robot_id}..."
+        )
+        start = self.get_clock().now()
+        while rclpy.ok():
+            self.publish_off()
+            rclpy.spin_once(self, timeout_sec=1.0 / self.PUBLISH_RATE_HZ)
+            if self.vision_active():
+                self.get_logger().info(">>> Vision active.")
+                return
+            if (self.get_clock().now() - start).nanoseconds * 1e-9 > timeout_sec:
+                raise VisionUnavailable(
+                    f"No vision for robot {self.robot_id} within {timeout_sec:.0f}s."
+                )
 
     # ------------------------------------------------------------------
     # Tick (subclass override)
@@ -503,9 +585,15 @@ class BaseTuneNode(Node):
             self.get_logger().error("/set_firmware_param not available")
             return False
 
+        params_dict = {**params_dict,
+                       "VISION_SEED_SAMPLES": [float(TUNING_VISION_SEED_SAMPLES)]}
+        keys = (list(only_keys) if only_keys is not None
+                else [k for k in params_dict])
+        if "VISION_SEED_SAMPLES" not in keys:
+            keys.append("VISION_SEED_SAMPLES")
         ok = upload_params_dict(
             self, self.param_client, self.robot_id, params_dict,
-            only_keys=only_keys,
+            only_keys=keys,
             logger=lambda s: self.get_logger().info(s),
         )
         if not ok:
@@ -516,16 +604,22 @@ class BaseTuneNode(Node):
     # Turn-around detection (for linear axes between trials)
     # ------------------------------------------------------------------
 
+    def _sensors_quiet(self) -> bool:
+        if self.latest_wheel_vel is None or self.latest_gyro_z is None:
+            return False
+        return (max(abs(w) for w in self.latest_wheel_vel) < SETTLE_WHEEL_RADS
+                and abs(self.latest_gyro_z) < SETTLE_GYRO_RADS)
+
     def wait_for_turnaround(self, prompt: bool = True,
                             theta_threshold: float = math.pi / 2,
-                            vel_settle: float = 0.05,
                             timeout_sec: float = 120.0) -> bool:
         """Block until the user has manually rotated the robot.
 
-        Detected as ``|Δθ_kf| > theta_threshold`` *and* ``|kf_vel| < vel_settle``
-        on all axes. For angular routines or when no prior pose is known, just
-        waits for the velocity to settle. When ``self.skip_turnaround`` is
-        True, returns immediately after a brief settle wait.
+        Linear axes: the heading accumulated since the wait began (unwrapped, so
+        rotating past +/-pi still counts) must reach ``theta_threshold`` and the
+        robot must then be settled (wheels and gyro quiet for SETTLE_HOLD_S).
+        Angular axes only wait for the robot to settle. When
+        ``self.skip_turnaround`` is True, returns after a brief settle wait.
 
         Raises :class:`TurnaroundTimeout` if the user does not rotate the
         robot within ``timeout_sec``. The caller is expected to abort
@@ -541,22 +635,27 @@ class BaseTuneNode(Node):
                     return True
             return True
         start = self.get_clock().now()
-        anchor_pos = self.latest_kf_pos
+        anchor = self._heading_unwrapped
+        need_rotation = self.axis in LINEAR_AXES
         if prompt:
-            if self.axis in LINEAR_AXES:
+            if need_rotation:
                 self.get_logger().info(
-                    f">>> Please rotate robot {self.robot_id} by >= 90 deg "
-                    "before the next pulse. Waiting..."
+                    f">>> Please rotate robot {self.robot_id} by >= "
+                    f"{math.degrees(theta_threshold):.0f} deg before the next "
+                    "pulse. Waiting..."
                 )
             else:
                 self.get_logger().info(
                     f">>> Waiting for robot {self.robot_id} to settle (any axis)..."
                 )
 
+        quiet_since = None
+        last_report = 0.0
         while rclpy.ok():
             self.publish_off()
             rclpy.spin_once(self, timeout_sec=1.0 / self.PUBLISH_RATE_HZ)
-            elapsed = (self.get_clock().now() - start).nanoseconds * 1e-9
+            now = self.get_clock().now()
+            elapsed = (now - start).nanoseconds * 1e-9
             if elapsed > timeout_sec:
                 self.get_logger().error(
                     f"Turnaround wait timed out after {timeout_sec:.1f}s. "
@@ -568,24 +667,37 @@ class BaseTuneNode(Node):
                     f"robot {self.robot_id} to be rotated >= "
                     f"{math.degrees(theta_threshold):.0f} deg."
                 )
-            pos = self.latest_kf_pos
-            vel = self.latest_kf_vel
-            if pos is None or vel is None:
+            if self._heading_unwrapped is None:
                 continue
-            settled = all(abs(v) < vel_settle for v in vel)
-            if self.axis in LINEAR_AXES:
-                if anchor_pos is None:
-                    anchor_pos = pos
-                    continue
-                dtheta = _wrap_angle(pos[2] - anchor_pos[2])
-                if abs(dtheta) > theta_threshold and settled:
-                    self.get_logger().info(
-                        f">>> Turnaround detected (Δθ={dtheta:.2f} rad, settled)."
-                    )
-                    return True
+            if anchor is None:
+                anchor = self._heading_unwrapped
+
+            if self._sensors_quiet():
+                if quiet_since is None:
+                    quiet_since = now
             else:
-                if settled:
-                    return True
+                quiet_since = None
+            settled = (quiet_since is not None
+                       and (now - quiet_since).nanoseconds * 1e-9 >= SETTLE_HOLD_S)
+
+            rotated = self._heading_unwrapped - anchor
+            if need_rotation and prompt and elapsed - last_report >= 2.0:
+                last_report = elapsed
+                self.get_logger().info(
+                    f"    rotated {math.degrees(rotated):+.0f} deg "
+                    f"(need {math.degrees(theta_threshold):.0f}), "
+                    f"settled={settled}"
+                )
+            if not settled:
+                continue
+            if not need_rotation:
+                return True
+            if abs(rotated) >= theta_threshold:
+                self.get_logger().info(
+                    f">>> Turnaround detected (rotated "
+                    f"{math.degrees(rotated):+.0f} deg, settled)."
+                )
+                return True
         return False
 
 
@@ -596,6 +708,13 @@ class TurnaroundTimeout(RuntimeError):
     re-running with the same ``--run-id``; previously-evaluated candidates
     will be served from the cached ``progress.json`` without re-pulsing the
     robot.
+    """
+
+
+class VisionUnavailable(RuntimeError):
+    """Raised when vision is missing for too long to run valid trials.
+
+    Like TurnaroundTimeout, resume by re-running with the same ``--run-id``.
     """
 
 

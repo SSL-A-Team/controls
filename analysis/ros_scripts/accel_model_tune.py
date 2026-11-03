@@ -370,8 +370,8 @@ def main() -> int:
         except Exception as exc:
             # Lazy-import the typed exception so the CLI works even when ROS
             # isn't sourced (the import path is the same either way).
-            from accel_tuning.base import TurnaroundTimeout
-            if isinstance(exc, TurnaroundTimeout):
+            from accel_tuning.base import TurnaroundTimeout, VisionUnavailable
+            if isinstance(exc, (TurnaroundTimeout, VisionUnavailable)):
                 print(f"\nAborted: {exc}")
                 print(f"To resume, rerun the same command with "
                       f"`--run-id {ckpt.run_id}`. Previously-evaluated "

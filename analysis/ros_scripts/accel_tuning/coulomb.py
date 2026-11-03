@@ -46,6 +46,7 @@ from .base import (
     ANGULAR_AXES,
     BaseTuneNode,
     LINEAR_AXES,
+    MIN_VISION_COVERAGE,
     PHASE_PULSE,
     PHASE_REST,
 )
@@ -197,6 +198,14 @@ class CoulombRoutine(BaseTuneNode):
         once the full ``PUSH_COUNTDOWN_SECONDS`` window has elapsed (the
         pulse itself logs ``>>> PUSH NOW``).
         """
+        if not self.dry_run and not self.vision_active():
+            # Hold in rest until vision is back; restart the countdown afterwards.
+            if not getattr(self, "_vision_wait_logged", False):
+                self.get_logger().info(">>> Waiting for vision before the next pulse...")
+                self._vision_wait_logged = True
+            self._countdown_start = None
+            return
+        self._vision_wait_logged = False
         now = self.get_clock().now()
         if self._countdown_start is None:
             self._countdown_start = now
@@ -246,6 +255,20 @@ class CoulombRoutine(BaseTuneNode):
             self._pulse_sustained = False
             self._record_trial(False, mean_vel=0.0, note=note)
             self.current_accel += self.step
+            return
+
+        # Only judge pulses whose trailing half had vision; otherwise the KF
+        # velocity (v_min) is dead-reckoned and a lifted wheel can fake motion.
+        pulse_samples = self.buffer.phase_slice(PHASE_PULSE)
+        tail_samples = pulse_samples[len(pulse_samples) // 2:]
+        tail_coverage = (sum(s.vision_active for s in tail_samples) / len(tail_samples)
+                         if tail_samples else 0.0)
+        if not self.dry_run and tail_coverage < MIN_VISION_COVERAGE:
+            note = (f"vision active for only {tail_coverage:.0%} of the pulse tail; "
+                    "discarding and repeating this accel")
+            self.get_logger().warn(f"Pulse at {self.current_accel:.4f}: {note}")
+            self._pulse_sustained = False
+            self._record_trial(False, mean_vel=0.0, note=note)
             return
 
         # Sustained-motion criterion: the *trailing half* of the pulse must
@@ -309,13 +332,13 @@ class CoulombRoutine(BaseTuneNode):
 
         The KF state is in the global frame; ``BCM_LOCAL_ACCEL`` commands and
         ``v_min`` are local-frame quantities, so for linear axes we rotate
-        ``(vx_g, vy_g)`` by ``−θ`` per sample. Uses the trailing half of the
-        pulse to skip motor rise-time samples.
+        ``(vx_g, vy_g)`` by ``−θ`` per sample. Uses the vision-active samples in
+        the trailing half of the pulse to skip motor rise-time samples.
         """
         pulse_samples = self.buffer.phase_slice(PHASE_PULSE)
-        if not pulse_samples:
+        tail = [s for s in pulse_samples[len(pulse_samples) // 2:] if s.vision_active]
+        if not tail:
             return 0.0
-        tail = pulse_samples[len(pulse_samples) // 2:]
         if self.axis == "theta":
             return float(np.mean([s.kf_vel[2] for s in tail]))
         vx_g = np.array([s.kf_vel[0] for s in tail])
