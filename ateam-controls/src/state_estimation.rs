@@ -4,7 +4,7 @@ use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector, Rotation2};
 
 use crate::defaults::{
-    DEFAULT_CONTROL_DT_US, DEFAULT_EKF_CORR_COEF, DEFAULT_EKF_Q, DEFAULT_EKF_R, DEFAULT_ENCODER_STANDSTILL_RADPS, DEFAULT_PHYS_ALPHA, DEFAULT_PHYS_BETA, DEFAULT_PHYS_L, DEFAULT_PHYS_R, DEFAULT_VISION_ACCEPT_RADIUS_BASE_M, DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS, DEFAULT_VISION_ACCEPT_VARIANCE_M2, DEFAULT_VISION_INACTIVE_THRESHOLD_US, DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US, DEFAULT_VISION_MIN_LATENCY_US, DEFAULT_VISION_SEED_SAMPLES, EKF_INPUT_LEN, EKF_MEAS_LEN, EKF_STATE_LEN
+    DEFAULT_CONTROL_DT_US, DEFAULT_EKF_CORR_COEF, DEFAULT_EKF_Q, DEFAULT_EKF_R, DEFAULT_ENCODER_STANDSTILL_RADPS, DEFAULT_VISION_ACCEPT_RADIUS_BASE_M, DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS, DEFAULT_VISION_ACCEPT_VARIANCE_M2, DEFAULT_VISION_INACTIVE_THRESHOLD_US, DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US, DEFAULT_VISION_MIN_LATENCY_US, DEFAULT_VISION_SEED_SAMPLES, EKF_INPUT_LEN, EKF_MEAS_LEN, EKF_STATE_LEN
 };
 
 
@@ -857,10 +857,6 @@ impl<const L: usize> Default for VisionFilter<L> {
 #[derive(Clone, Copy)]
 pub struct OdometerParams {
     dt_us: u32,  // Odometer tick period in microseconds
-    l_m: f32,  // Radial distance from center of robot to each wheel in meters
-    r_m: f32,  // Radius of each wheel in meters
-    alpha_rad: f32,  // Angle between robot +y axis and the segment from the center of the robot to the front left wheel in radians
-    beta_rad: f32,  // Angle between robot +y axis and the segment from the center of the robot to the back left wheel in radians
     encoder_standstill_w_radps: f32,  // Angular robot velocity measured at encoders to treat robot at standstill
 }
 
@@ -868,10 +864,6 @@ impl Default for OdometerParams {
     fn default() -> Self {
         Self {
              dt_us: DEFAULT_CONTROL_DT_US,
-             l_m: DEFAULT_PHYS_L,
-             r_m: DEFAULT_PHYS_R,
-             alpha_rad: DEFAULT_PHYS_ALPHA,
-             beta_rad: DEFAULT_PHYS_BETA,
              encoder_standstill_w_radps: DEFAULT_ENCODER_STANDSTILL_RADPS,
         }
     }
@@ -882,7 +874,6 @@ pub struct Odometer {
     pos: SVector<f32, 3>,
     dt_s: f32,
     active: bool,
-    wheel2vel: SMatrix<f32, 3, 4>,
     encoder_standstill_w_radps: f32,
 }
 
@@ -890,30 +881,12 @@ impl Odometer {
     pub fn new(
         params: OdometerParams,
     ) -> Self {
-        // Each column is D_i stacked ontop of the distance from wheel to robot
-        // center. D_i is the 2D unit vector in the robot's CF that points in each
-        // wheel's positive direction (starting from the wheel center). Order
-        // D1-D4 is FL, BL, BR, FR. Reference for this notation: 
-        // https://seas.ucla.edu/coopcontrol/papers/02cn05.pdf (Near-Optimal
-        // Dynamic Trajectory Generation and Control of an Omnidirectional
-        // Vehicle.)
-        let wheel_mat = SMatrix::<f32, 3, 4>::new(
-            -cosf(params.alpha_rad), -cosf(params.beta_rad),  cosf(params.beta_rad), cosf(params.alpha_rad),
-             sinf(params.alpha_rad), -sinf(params.beta_rad), -sinf(params.beta_rad), sinf(params.alpha_rad),
-             params.l_m            ,  params.l_m           ,  params.l_m           , params.l_m
-        );
-        let linear_wheel2vel = wheel_mat
-            .transpose()
-            .pseudo_inverse(1e-6)
-            .expect("Failed inverse of wheel matrix - robot wheel model is incorrect");
-        let angular_wheel2vel = linear_wheel2vel * params.r_m;
         let dt_s = params.dt_us as f32 * 1e-6;
         Self {
             params,
             pos: SVector::<f32, 3>::zeros(),
             dt_s: dt_s,
             active: false,
-            wheel2vel: angular_wheel2vel,
             encoder_standstill_w_radps: params.encoder_standstill_w_radps,
         }
     }
@@ -934,31 +907,20 @@ impl Odometer {
         self.active
     }
 
-    /// Convert wheel angular velocities to local (robot frame) velocity
-    /// [vx_mps, vy_mps, vw_radps]
-    pub fn wheel_to_local_vel(
-        &self,
-        encoder: &SVector<f32, 4>,  // fl_radps, bl_radps, br_radps, fr_radps
-    ) -> SVector<f32, 3> {
-        self.wheel2vel * encoder
-    }
-
     pub fn tick(
         &mut self,
-        encoder: &SVector<f32, 4>,  // fl_radps, bl_radps, br_radps, fr_radps
+        encoder_vel: &SVector<f32, 3>,  // vel_x_mps, vel_y_mps, vel_w_radps (local frame)
         gyro_w_radps: f32,
     ) {
-        // Convert encoders into robot local vel
-        let local_vel = self.wheel_to_local_vel(encoder);
         // Use gyro unless encoders indicate robot is at standstill
-        let w = if local_vel.z.abs() > self.encoder_standstill_w_radps {
+        let w = if encoder_vel.z.abs() > self.encoder_standstill_w_radps {
             gyro_w_radps
         } else {
-            local_vel.z
+            encoder_vel.z
         };
         // Use midpoint theta for rotation to global vel
         let theta_mid = self.pos.z + 0.5 * w * self.dt_s;
-        let xy = Rotation2::new(theta_mid) * local_vel.xy();
+        let xy = Rotation2::new(theta_mid) * encoder_vel.xy();
         let global_vel = SVector::<f32, 3>::new(
             xy.x,
             xy.y,
@@ -1008,8 +970,8 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
     pub fn tick(
         &mut self,
         t_us: u64,
-        imu: &SVector<f32, EKF_INPUT_LEN>,  // acc_x_mps2, acc_y_mps2, gyro_w_radps
-        encoder: &SVector<f32, 4>,  // fl_radps, bl_radps, br_radps, fr_radps
+        imu_accel: &SVector<f32, EKF_INPUT_LEN>,  // acc_x_mps2, acc_y_mps2, gyro_w_radps
+        encoder_vel: &SVector<f32, 3>,  // vel_x_mps, vel_y_mps, vel_w_radps (local frame)
         vision: Option<&VisionSample>,
     ) -> Result<(), ()> {
 
@@ -1058,14 +1020,14 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
                     self.ekf.get_pos()
                 );
             }
-            self.odometer.tick(encoder, imu.z);
+            self.odometer.tick(encoder_vel, imu_accel.z);
             z = Some(self.odometer.get_pos());
             z_age_us = 0;
             z_src = MeasSource::Odometry;
         }
 
         self.ekf.tick(
-            *imu,
+            *imu_accel,
             z,
             z_age_us as u32,
             z_src,
@@ -1120,5 +1082,41 @@ impl<const K: usize, const L: usize> Default for StateEstimator<K, L> {
         let vision_filter = VisionFilter::default();
         let odometer = Odometer::default();
         Self::new(ekf, vision_filter, odometer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn odometer_integrates_encoder_vel() {
+        let mut odom = Odometer::default();
+        odom.start(SVector::<f32, 3>::zeros());
+        let dt_s = DEFAULT_CONTROL_DT_US as f32 * 1e-6;
+        for _ in 0..1000 {
+            odom.tick(&SVector::<f32, 3>::new(1.0, 0.0, 0.0), 0.0);
+        }
+        let pos = odom.get_pos();
+        assert!((pos.x - 1000.0 * dt_s).abs() < 1e-4);
+        assert!(pos.y.abs() < 1e-6);
+        assert!(pos.z.abs() < 1e-6);
+    }
+
+    #[test]
+    fn odometer_uses_gyro_when_rotating() {
+        let mut odom = Odometer::default();
+        odom.start(SVector::<f32, 3>::zeros());
+        odom.tick(&SVector::<f32, 3>::new(0.0, 0.0, 1.0), 2.0);
+        let dt_s = DEFAULT_CONTROL_DT_US as f32 * 1e-6;
+        assert!((odom.get_pos().z - 2.0 * dt_s).abs() < 1e-7);
+    }
+
+    #[test]
+    fn odometer_uses_encoder_at_standstill() {
+        let mut odom = Odometer::default();
+        odom.start(SVector::<f32, 3>::zeros());
+        odom.tick(&SVector::<f32, 3>::zeros(), 0.5);
+        assert!(odom.get_pos().z.abs() < 1e-9);
     }
 }
