@@ -35,9 +35,11 @@ from params import merge_params_dict  # noqa: E402
 
 
 # ===== EDIT ME =====
-DEFAULT_ETA_LOW = 1.0
-DEFAULT_ETA_HIGH = 25.0
-DEFAULT_ETA_INITIAL_GUESS = 13.0  # starting point per user note
+# The wheel-torque image samples phase current (CS_SYNC_SAMPLING), so torque =
+# Kt * I and eta should sit near 1.0; below 1.0 means real losses.
+DEFAULT_ETA_LOW = 0.25
+DEFAULT_ETA_HIGH = 4.0
+DEFAULT_ETA_INITIAL_GUESS = 1.0
 DEFAULT_ETA_TOL = 0.05            # |realized - commanded| stop threshold (tol_y)
 DEFAULT_ETA_MAX_ITER = 8
 # Bracketed-root tuning knobs (replaces the old plain-secant early-exit):

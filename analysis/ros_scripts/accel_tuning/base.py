@@ -178,11 +178,11 @@ class TelemetryBuffer:
             "body_control_telemetry/body_accel_u": accel_u,
             "body_control_telemetry/body_accel_u_fric_comp": accel_u_fric,
             "body_control_telemetry/body_control_mode": bcm,
-            "body_control_telemetry/skill_local_acc/cmd_echo/local_xdd":
+            "body_control_telemetry/maneuver_local_acc/cmd_echo/local_xdd":
                 local_acc_cmd[:, 0],
-            "body_control_telemetry/skill_local_acc/cmd_echo/local_ydd":
+            "body_control_telemetry/maneuver_local_acc/cmd_echo/local_ydd":
                 local_acc_cmd[:, 1],
-            "body_control_telemetry/skill_local_acc/cmd_echo/local_alpha":
+            "body_control_telemetry/maneuver_local_acc/cmd_echo/local_alpha":
                 local_acc_cmd[:, 2],
             "front_left_motor/velocity_telemetry/wheel_vel_rads": wheel_fl,
             "back_left_motor/velocity_telemetry/wheel_vel_rads": wheel_bl,
@@ -208,9 +208,9 @@ class TelemetryBuffer:
             "body_control_telemetry/body_accel_u": empty3,
             "body_control_telemetry/body_accel_u_fric_comp": empty3,
             "body_control_telemetry/body_control_mode": np.zeros(0, dtype=np.uint8),
-            "body_control_telemetry/skill_local_acc/cmd_echo/local_xdd": empty1,
-            "body_control_telemetry/skill_local_acc/cmd_echo/local_ydd": empty1,
-            "body_control_telemetry/skill_local_acc/cmd_echo/local_alpha": empty1,
+            "body_control_telemetry/maneuver_local_acc/cmd_echo/local_xdd": empty1,
+            "body_control_telemetry/maneuver_local_acc/cmd_echo/local_ydd": empty1,
+            "body_control_telemetry/maneuver_local_acc/cmd_echo/local_alpha": empty1,
             "front_left_motor/velocity_telemetry/wheel_vel_rads": empty1,
             "back_left_motor/velocity_telemetry/wheel_vel_rads": empty1,
             "back_right_motor/velocity_telemetry/wheel_vel_rads": empty1,
@@ -416,7 +416,7 @@ class BaseTuneNode(Node):
             imu_gyro = self._xyz(getattr(bct, "imu_gyro", None))
             imu_accel = self._xyz(getattr(bct, "imu_accel", None))
 
-            sla = getattr(bct, "skill_local_acc", None)
+            sla = getattr(bct, "maneuver_local_acc", None)
             if sla is not None:
                 echo = getattr(sla, "cmd_echo", None)
                 if echo is not None:

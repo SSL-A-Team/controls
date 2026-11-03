@@ -81,7 +81,7 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
                          help="Override motor_efficiency_factor in the loaded "
                               "baseline params before running. Use to start "
                               "the viscous/efficiency search at a non-default "
-                              "η (e.g. 10.0) instead of editing JSON by hand.")
+                              "η (e.g. 0.8) instead of editing JSON by hand.")
     parser.add_argument("--no-turnaround", action="store_true",
                          help="Skip the manual-rotation prompt between trials "
                               "(linear axes only). Useful when the robot has "

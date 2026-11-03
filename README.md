@@ -121,7 +121,7 @@ python ros_scripts/accel_model_tune.py viscous -r 0 --axis x \
 
 # 3) Run a single user-chosen value instead of searching
 python ros_scripts/accel_model_tune.py efficiency -r 0 --axis x \
-    --mode single --value 13.0 --a-min 1.4 --v-min 0.12
+    --mode single --value 1.0 --a-min 1.4 --v-min 0.12
 
 # 4) End-to-end automated pipeline
 python ros_scripts/accel_model_tune.py all -r 0

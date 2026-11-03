@@ -193,8 +193,8 @@ def default_controller_params_dict() -> dict:
         wires them up.
     """
     # PID gains: [P, I, D, I_min, I_max]
-    linear_pose_pid = [125.0, 0.5, 10.0, -1.0, 1.0]
-    angular_pose_pid = [125.0, 0.5, 15.0, -1.0, 1.0]
+    linear_pose_pid = [300.0, 0.0, 7.0, 0.0, 0.0]
+    angular_pose_pid = [400.0, 0.0, 30.0, 0.0, 0.0]
     return {
         # FRICTION_COMP_GATING:
         #   [lin_vel_thresh, lin_accel_thresh, ang_vel_thresh, ang_accel_thresh]
@@ -203,7 +203,7 @@ def default_controller_params_dict() -> dict:
         "POSE_CONTROL_GAIN": [1.0, 1.0],
         # TRAJ_RECOMPUTE_ERROR:
         #   [ERROR_POS_LINEAR, ERROR_POS_ANGULAR, ERROR_VEL_LINEAR, ERROR_VEL_ANGULAR]
-        "TRAJ_RECOMPUTE_ERROR": [0.5, 1.0, 4.0, 8.0],
+        "TRAJ_RECOMPUTE_ERROR": [1.0, 1.57, 5.0, 10.0],
         "POSE_FB_PIDII_LINEAR": linear_pose_pid,
         "POSE_FB_PIDII_ANGULAR": angular_pose_pid,
     }

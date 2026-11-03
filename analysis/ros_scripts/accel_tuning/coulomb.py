@@ -69,7 +69,7 @@ DEFAULT_STEP_LIN = 0.05         # m/s^2 per attempt
 DEFAULT_STEP_ANG = 0.2          # rad/s^2 per attempt
 DEFAULT_PULSE_DURATION = 0.3    # seconds
 DEFAULT_REST_DURATION = 1.0     # seconds between pulses
-DEFAULT_MAX_ACCEL_LIN = 5.0     # m/s^2 search ceiling
+DEFAULT_MAX_ACCEL_LIN = 2.0     # m/s^2 search ceiling, stays under control_task MAX_CURRENT_MA at eta=1
 DEFAULT_MAX_ACCEL_ANG = 15.0    # rad/s^2 search ceiling
 DEFAULT_VEL_THRESHOLD_WHEEL = 0.5  # rad/s of wheel encoders
 DEFAULT_MIN_SAMPLES = 3
