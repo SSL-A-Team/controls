@@ -118,6 +118,10 @@ class RobotPhysicalParams(ctypes.Structure):
         ("coulomb_friction_angular_nm", ctypes.c_float),
         ("viscous_friction_linear_nspm", ctypes.c_float),
         ("viscous_friction_angular_nmsprad", ctypes.c_float),
+        ("static_friction_linear_n", ctypes.c_float),
+        ("static_friction_angular_nm", ctypes.c_float),
+        ("stribeck_vel_linear_mps", ctypes.c_float),
+        ("stribeck_vel_angular_radps", ctypes.c_float),
     ]
 
 class TrajectoryParams(ctypes.Structure):

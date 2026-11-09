@@ -1,4 +1,4 @@
-use libm::{sinf, cosf};
+use libm::{sinf, cosf, expf, fabsf};
 use nalgebra::{SMatrix, SVector};
 use crate::{z_rotation_mat, ControlsError};
 
@@ -40,6 +40,10 @@ pub struct RobotPhysicalParams {
     pub coulomb_friction_angular_nm: f32,  // Angular Coulomb friction in N*m
     pub viscous_friction_linear_nspm: f32,  // Linear viscous friction in N/(m/s), for motion along local +x (scaled by the direction factor otherwise)
     pub viscous_friction_angular_nmsprad: f32,  // Angular viscous friction in N*m/(rad/s)
+    pub static_friction_linear_n: f32,  // Linear static (Stribeck peak) friction in N at zero speed, along local +x (direction-scaled); disabled if <= coulomb
+    pub static_friction_angular_nm: f32,  // Angular static (Stribeck peak) friction in N*m at zero speed; disabled if <= coulomb
+    pub stribeck_vel_linear_mps: f32,  // Linear Stribeck velocity in m/s (static -> coulomb decay scale); disabled if <= 0
+    pub stribeck_vel_angular_radps: f32,  // Angular Stribeck velocity in rad/s (static -> coulomb decay scale); disabled if <= 0
 }
 
 impl Default for RobotPhysicalParams {
@@ -58,6 +62,10 @@ impl Default for RobotPhysicalParams {
             coulomb_friction_angular_nm: DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR,
             viscous_friction_linear_nspm: DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR,
             viscous_friction_angular_nmsprad: DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR,
+            static_friction_linear_n: DEFAULT_PHYS_STATIC_FRICTION_LINEAR,
+            static_friction_angular_nm: DEFAULT_PHYS_STATIC_FRICTION_ANGULAR,
+            stribeck_vel_linear_mps: DEFAULT_PHYS_STRIBECK_VEL_LINEAR,
+            stribeck_vel_angular_radps: DEFAULT_PHYS_STRIBECK_VEL_ANGULAR,
         }
     }
 }
@@ -258,10 +266,15 @@ impl RobotModel {
     /// `friction_direction_factor`; 1 along local +x). Angular friction is
     /// independent:
     ///
+    /// Each magnitude adds a Stribeck term that decays from the static value
+    /// at zero speed to Coulomb (disabled when `stribeck_vel <= 0` or
+    /// `static <= coulomb`):
+    ///
     /// ```text
+    /// m(s)  = c_coul + (c_static - c_coul) * exp(-(s / v_stribeck)^2) + c_visc * s
     /// dir   = v_xy / |v_xy|
-    /// F_xy  = -k(dir) * (c_coul_lin + c_visc_lin * |v_xy|) * dir
-    /// Tz    = -c_visc_ang * vw - c_coul_ang * sign(vw)
+    /// F_xy  = -k(dir) * m_lin(|v_xy|) * dir
+    /// Tz    = -sign(vw) * m_ang(|vw|)
     /// ```
     pub fn compute_local_friction_force(&self, local_vel: SVector<f32, 3>) -> SVector<f32, 3> {
         let sign = |v: f32| if v > 0.0 { 1.0 } else if v < 0.0 { -1.0 } else { 0.0 };
@@ -271,15 +284,43 @@ impl RobotModel {
         let f_xy = if speed > 0.0 {
             let dir = v_xy / speed;
             let k = self.friction_direction_factor(dir);
-            -k * (p.coulomb_friction_linear_n + p.viscous_friction_linear_nspm * speed) * dir
+            let mag = Self::friction_magnitude(
+                speed,
+                p.coulomb_friction_linear_n,
+                p.static_friction_linear_n,
+                p.stribeck_vel_linear_mps,
+                p.viscous_friction_linear_nspm,
+            );
+            -k * mag * dir
         } else {
             SVector::<f32, 2>::zeros()
         };
-        SVector::<f32, 3>::new(
-            f_xy.x,
-            f_xy.y,
-            -p.viscous_friction_angular_nmsprad * local_vel.z - p.coulomb_friction_angular_nm * sign(local_vel.z),
-        )
+        let w = local_vel.z;
+        let t_z = -sign(w) * Self::friction_magnitude(
+            fabsf(w),
+            p.coulomb_friction_angular_nm,
+            p.static_friction_angular_nm,
+            p.stribeck_vel_angular_radps,
+            p.viscous_friction_angular_nmsprad,
+        );
+        SVector::<f32, 3>::new(f_xy.x, f_xy.y, t_z)
+    }
+
+    /// Friction magnitude at `speed` (>= 0, and > 0 for a nonzero result):
+    /// Coulomb plus a Stribeck term that decays from `static_` at zero speed
+    /// to `coulomb` above ~`stribeck_vel`, plus viscous. The Stribeck term is
+    /// disabled when `stribeck_vel <= 0` or `static_ <= coulomb`.
+    fn friction_magnitude(speed: f32, coulomb: f32, static_: f32, stribeck_vel: f32, viscous: f32) -> f32 {
+        if speed <= 0.0 {
+            return 0.0;
+        }
+        let stribeck = if stribeck_vel > 0.0 && static_ > coulomb {
+            let r = speed / stribeck_vel;
+            (static_ - coulomb) * expf(-r * r)
+        } else {
+            0.0
+        };
+        coulomb + stribeck + viscous * speed
     }
 }
 
@@ -309,6 +350,10 @@ mod tests {
             coulomb_friction_angular_nm: 0.05,
             viscous_friction_linear_nspm: 5.0,
             viscous_friction_angular_nmsprad: 0.0063,
+            static_friction_linear_n: 0.0,
+            static_friction_angular_nm: 0.0,
+            stribeck_vel_linear_mps: 0.0,
+            stribeck_vel_angular_radps: 0.0,
         }
     }
 
@@ -477,6 +522,44 @@ mod tests {
     }
 
     #[test]
+    fn stribeck_decays_from_static_to_coulomb() {
+        let mut params = test_params();
+        params.coulomb_friction_angular_nm = 0.1;
+        params.static_friction_angular_nm = 0.16;
+        params.stribeck_vel_angular_radps = 2.0;
+        params.viscous_friction_angular_nmsprad = 0.0;
+        let model = RobotModel::new(params).unwrap();
+        let t = |w: f32| model.compute_local_friction_force(SVector::<f32, 3>::new(0.0, 0.0, w)).z;
+        assert!((t(1e-4) + 0.16).abs() < 1e-3);
+        assert!((t(-1e-4) - 0.16).abs() < 1e-3);
+        assert!((t(2.0) + (0.1 + 0.06 * (-1.0f32).exp())).abs() < 1e-5);
+        assert!((t(20.0) + 0.1).abs() < 1e-5);
+        assert_eq!(t(0.0), 0.0);
+
+        // Disabled when static <= coulomb.
+        params.static_friction_angular_nm = 0.05;
+        let model = RobotModel::new(params).unwrap();
+        let t = model.compute_local_friction_force(SVector::<f32, 3>::new(0.0, 0.0, 0.1)).z;
+        assert!((t + 0.1 + params.viscous_friction_angular_nmsprad * 0.1).abs() < 1e-6);
+    }
+
+    #[test]
+    fn stribeck_linear_scales_with_direction_factor() {
+        let mut params = test_params();
+        params.coulomb_friction_linear_n = 2.0;
+        params.static_friction_linear_n = 3.0;
+        params.stribeck_vel_linear_mps = 0.1;
+        params.viscous_friction_linear_nspm = 0.0;
+        let model = RobotModel::new(params).unwrap();
+        let k_y = model.friction_direction_factor(SVector::<f32, 2>::new(0.0, 1.0));
+        let f = model.compute_local_friction_force(SVector::<f32, 3>::new(0.0, 1e-4, 0.0));
+        assert_eq!(f.x, 0.0);
+        assert!((f.y + k_y * 3.0).abs() < 1e-3);
+        let f = model.compute_local_friction_force(SVector::<f32, 3>::new(1.0, 0.0, 0.0));
+        assert!((f.x + 2.0).abs() < 1e-5);
+    }
+
+    #[test]
     fn update_params_no_crash() {
         let mut model = test_model();
         let params = RobotPhysicalParams {
@@ -492,6 +575,10 @@ mod tests {
             coulomb_friction_angular_nm: 0.0,
             viscous_friction_linear_nspm: 0.0,
             viscous_friction_angular_nmsprad: 0.0,
+            static_friction_linear_n: 0.0,
+            static_friction_angular_nm: 0.0,
+            stribeck_vel_linear_mps: 0.0,
+            stribeck_vel_angular_radps: 0.0,
         };
         model.update_params(params).unwrap();
         assert_eq!(model.get_params().mass_kg, 3.0);

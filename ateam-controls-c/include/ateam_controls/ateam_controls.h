@@ -74,6 +74,10 @@ typedef struct RobotPhysicalParams {
     float coulomb_friction_angular_nm;
     float viscous_friction_linear_nspm;
     float viscous_friction_angular_nmsprad;
+    float static_friction_linear_n;
+    float static_friction_angular_nm;
+    float stribeck_vel_linear_mps;
+    float stribeck_vel_angular_radps;
 } RobotPhysicalParams_t;
 
 // Opaque handle to the full RobotModel (physical matrices, kinematic transforms, etc.)

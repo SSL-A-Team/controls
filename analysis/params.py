@@ -75,6 +75,15 @@ PARAM_MAP = {
             (3, "phys", "viscous_friction_angular_nmsprad"),
         ],
     },
+    "PHYS_STRIBECK_MODEL": {
+        "param_id": 15,
+        "fields": [
+            (0, "phys", "static_friction_linear_n"),
+            (1, "phys", "static_friction_angular_nm"),
+            (2, "phys", "stribeck_vel_linear_mps"),
+            (3, "phys", "stribeck_vel_angular_radps"),
+        ],
+    },
     # Parameters used only for upload (no ctypes struct mapping):
     "FRICTION_COMP_VEL_THRESHOLD": {
         "param_id": 7,
