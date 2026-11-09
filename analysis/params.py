@@ -202,8 +202,9 @@ def default_controller_params_dict() -> dict:
     angular_pose_pid = [400.0, 0.0, 30.0, 0.0, 0.0]
     return {
         # FRICTION_COMP_GATING:
-        #   [lin_vel_thresh, lin_accel_thresh, ang_vel_thresh, ang_accel_thresh]
-        "FRICTION_COMP_GATING": [0.1, 0.5, 0.5, 1.0],
+        #   [lin_vel_thresh, lin_accel_thresh (unused), ang_vel_thresh, ang_accel_thresh (unused)]
+        #   gated on commanded velocity
+        "FRICTION_COMP_GATING": [0.01, 0.0, 0.001, 0.0],
         # POSE_CONTROL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for accel path
         "POSE_CONTROL_GAIN": [1.0, 1.0],
         # TRAJ_RECOMPUTE_ERROR:
