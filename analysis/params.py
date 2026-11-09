@@ -101,6 +101,10 @@ PARAM_MAP = {
         "param_id": 16,
         "fields": [],
     },
+    "FRICTION_COMP_HOLD_ERR_THRESHOLD": {
+        "param_id": 17,
+        "fields": [],
+    },
     "POSE_FB_PIDII_LINEAR": {
         "param_id": 10,
         "fields": [],
@@ -215,6 +219,11 @@ def default_controller_params_dict() -> dict:
         # FRICTION_COMP_VEL_THRESHOLD: [lin_vel_thresh, ang_vel_thresh]
         #   friction comp is off below these commanded speeds
         "FRICTION_COMP_VEL_THRESHOLD": [0.01, 0.001],
+        # FRICTION_COMP_HOLD_ERR_THRESHOLD: [lin_err (m), ang_err (rad)]
+        #   while commanded speed is below FRICTION_COMP_VEL_THRESHOLD, apply
+        #   breakaway friction comp toward the target when the pose error
+        #   exceeds these; <= 0 disables
+        "FRICTION_COMP_HOLD_ERR_THRESHOLD": [0.005, 0.02],
         # TRACKING_ACCEL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for the tracking accel path
         "TRACKING_ACCEL_GAIN": [1.0, 1.0],
         # TRACKING_DIVERGENCE_THRESHOLD:
