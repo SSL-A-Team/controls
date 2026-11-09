@@ -13,6 +13,9 @@ Tuning steps (order matters when chaining):
                    so realized accel matches commanded.
     inertia     — angular only; search iz so realized angular accel matches
                    commanded under the tuned linear model.
+    rollout     — spin up, coast with the axis's friction compensation off,
+                   and fit coulomb + Stribeck (static) + viscous friction to
+                   the coast deceleration vs speed. Needs eta/iz tuned first.
     all         — run the full pipeline (coulomb_x → viscous_x → efficiency_x
                    → coulomb_θ → viscous_θ → inertia_θ → coulomb_θ).
 
@@ -53,6 +56,7 @@ from accel_tuning import (  # noqa: E402
     efficiency as efficiency_mod,
     inertia as inertia_mod,
     optimizer as optimizer_mod,
+    rollout as rollout_mod,
     verify as verify_mod,
     viscous as viscous_mod,
 )
@@ -173,6 +177,13 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Run the full coulomb→viscous→efficiency→inertia pipeline")
     _add_common(p_all)
     # 'axis' arg added by _add_common is ignored by the optimizer.
+
+    # rollout
+    p_roll = sub.add_parser("rollout",
+                             help="Spin up, coast with friction comp off, and fit "
+                                  "coulomb + Stribeck + viscous friction vs speed.",
+                             parents=[rollout_mod.build_arg_parser()])
+    _add_common(p_roll)
 
     # verify
     p_ver = sub.add_parser("verify",
@@ -359,6 +370,22 @@ def _dispatch_verify(args, ckpt: CheckpointDir) -> dict:
         node.destroy_node()
 
 
+def _dispatch_rollout(args, ckpt: CheckpointDir) -> dict:
+    amp = _amplitude(args, args.axis)
+    node = rollout_mod.RolloutRoutine(
+        robot_id=args.robot_id, axis=args.axis,
+        amplitude=amp, trials=args.trials, v_fit_min=args.v_fit_min,
+        dry_run=args.dry_run,
+        skip_turnaround=args.no_turnaround,
+    )
+    node.t_pulse, node.t_coast = args.t_pulse, args.t_coast
+    try:
+        params = _load_baseline_params(args)
+        return node.run(ckpt, params)
+    finally:
+        node.destroy_node()
+
+
 DISPATCH = {
     "coulomb": _dispatch_coulomb,
     "viscous": _dispatch_viscous,
@@ -366,6 +393,7 @@ DISPATCH = {
     "inertia": _dispatch_inertia,
     "all": _dispatch_all,
     "verify": _dispatch_verify,
+    "rollout": _dispatch_rollout,
 }
 
 

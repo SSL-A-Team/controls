@@ -118,6 +118,26 @@ def axis_friction_indices(axis: str) -> tuple[int, int]:
         ) from exc
 
 
+# Stribeck-model array layout (PARAM_MAP / PHYS_STRIBECK_MODEL):
+#   [0] static_linear   [1] static_angular
+#   [2] stribeck_vel_linear   [3] stribeck_vel_angular
+_STRIBECK_INDICES = {
+    "x":     (0, 2),  # (static_index, stribeck_vel_index)
+    "y":     (0, 2),
+    "theta": (1, 3),
+}
+
+
+def axis_stribeck_indices(axis: str) -> tuple[int, int]:
+    """Return ``(static_index, stribeck_vel_index)`` into PHYS_STRIBECK_MODEL."""
+    return _STRIBECK_INDICES[axis]
+
+
+def empty_stribeck_array() -> list[float]:
+    """Zero (disabled) PHYS_STRIBECK_MODEL array (4 entries)."""
+    return [0.0] * 4
+
+
 def empty_friction_array() -> list[float]:
     """Zero-initialised PHYS_FRICTION_MODEL array (4 entries)."""
     return [0.0] * 4
@@ -416,12 +436,16 @@ class CoulombRoutine(BaseTuneNode):
         test_friction[visc_idx] = 0.0
         test_motor = list(current_params["PHYS_MOTOR_MODEL"])
         test_motor[1] = 1.0
+        test_stribeck = list(current_params.get("PHYS_STRIBECK_MODEL",
+                                                empty_stribeck_array()))
+        test_stribeck[axis_stribeck_indices(self.axis)[0]] = 0.0
         test_params = merge_params_dict(current_params,
                                         {"PHYS_FRICTION_MODEL": test_friction,
-                                         "PHYS_MOTOR_MODEL": test_motor})
+                                         "PHYS_MOTOR_MODEL": test_motor,
+                                         "PHYS_STRIBECK_MODEL": test_stribeck})
         self.push_params(test_params,
                           only_keys=["PHYS_INERTIA", "PHYS_MOTOR_MODEL",
-                                     "PHYS_FRICTION_MODEL"])
+                                     "PHYS_FRICTION_MODEL", "PHYS_STRIBECK_MODEL"])
 
         self.get_logger().info(
             f"[coulomb][{self.axis}] start_accel={self.start_accel} "
@@ -486,8 +510,10 @@ class CoulombRoutine(BaseTuneNode):
             updated = merge_params_dict(current_params, {
                 "PHYS_FRICTION_MODEL": new_friction,
             })
-            self.push_params(updated, only_keys=["PHYS_MOTOR_MODEL",
-                                                 "PHYS_FRICTION_MODEL"])
+            restore_keys = ["PHYS_MOTOR_MODEL", "PHYS_FRICTION_MODEL"]
+            if "PHYS_STRIBECK_MODEL" in updated:
+                restore_keys.append("PHYS_STRIBECK_MODEL")
+            self.push_params(updated, only_keys=restore_keys)
             result["params_after"] = updated
 
         write_json(ckpt.routine_result("coulomb", self.axis), result)

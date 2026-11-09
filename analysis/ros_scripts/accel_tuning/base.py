@@ -44,6 +44,8 @@ ANGULAR_AXES = ("theta",)
 DIAGNOSTIC_ONLY_AXES: set[str] = set()
 # (coulomb_linear, viscous_linear) indices into PHYS_FRICTION_MODEL.
 LINEAR_FRICTION_INDICES = (0, 2)
+# static_linear index into PHYS_STRIBECK_MODEL (0 disables the linear term).
+LINEAR_STRIBECK_STATIC_INDEX = 0
 
 
 PHASE_REST = "rest"
@@ -593,6 +595,10 @@ class BaseTuneNode(Node):
             fric[LINEAR_FRICTION_INDICES[0]] = 0.0
             fric[LINEAR_FRICTION_INDICES[1]] = 0.0
             params_dict["PHYS_FRICTION_MODEL"] = fric
+        if self.axis in ANGULAR_AXES and "PHYS_STRIBECK_MODEL" in params_dict:
+            strib = list(params_dict["PHYS_STRIBECK_MODEL"])
+            strib[LINEAR_STRIBECK_STATIC_INDEX] = 0.0
+            params_dict["PHYS_STRIBECK_MODEL"] = strib
         keys = (list(only_keys) if only_keys is not None
                 else [k for k in params_dict])
         if "VISION_SEED_SAMPLES" not in keys:
