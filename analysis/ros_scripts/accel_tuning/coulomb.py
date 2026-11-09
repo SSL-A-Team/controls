@@ -12,15 +12,17 @@ From that ``(a_min, v_min)`` pair the routine computes the coulomb-friction
 coefficient consistent with the currently active motor efficiency, viscous
 coefficient, and inertia::
 
-    c_coul = eta * I * a_min - c_visc * v_min
+    c_coul = eta * I * a_min / k - c_visc * v_min
 
 For axes ``x`` and ``y`` ``I`` is the robot mass. For axis ``theta`` ``I``
-is the moment of inertia about z (``iz``). Each axis writes its own slot in
-the firmware friction model:
+is the moment of inertia about z (``iz``). ``k`` is the firmware's linear
+friction direction factor for the axis (1 for ``x`` and ``theta``; the
+wheel-geometry roller ratio for ``y``, see ``axis_friction_factor``). The
+firmware has one linear friction pair (defined along local +x and scaled by
+direction), so ``x`` and ``y`` both estimate the same coefficients:
 
-* ``x``     → ``c_coul_linear_x``, ``c_visc_linear_x``
-* ``y``     → ``c_coul_linear_y``, ``c_visc_linear_y``
-* ``theta`` → ``c_coul_angular``,  ``c_visc_angular``
+* ``x``, ``y`` → ``c_coul_linear``,  ``c_visc_linear``
+* ``theta``    → ``c_coul_angular``, ``c_visc_angular``
 
 The routine is intended to be run with motor_efficiency=1.0, c_visc=0,
 c_coul=0, default inertia at first (baseline coulomb tuning). The same
@@ -96,12 +98,12 @@ def axis_inertia(axis: str, params_dict: dict) -> float:
 
 
 # Friction-model array layout (PARAM_MAP / PHYS_FRICTION_MODEL):
-#   [0] coulomb_linear_x   [1] coulomb_linear_y   [2] coulomb_angular
-#   [3] viscous_linear_x   [4] viscous_linear_y   [5] viscous_angular
+#   [0] coulomb_linear   [1] coulomb_angular
+#   [2] viscous_linear   [3] viscous_angular
 _FRICTION_INDICES = {
-    "x":     (0, 3),  # (c_coul_index, c_visc_index)
-    "y":     (1, 4),
-    "theta": (2, 5),
+    "x":     (0, 2),  # (c_coul_index, c_visc_index)
+    "y":     (0, 2),
+    "theta": (1, 3),
 }
 
 
@@ -117,14 +119,28 @@ def axis_friction_indices(axis: str) -> tuple[int, int]:
 
 
 def empty_friction_array() -> list[float]:
-    """Zero-initialised PHYS_FRICTION_MODEL array (6 entries)."""
-    return [0.0] * 6
+    """Zero-initialised PHYS_FRICTION_MODEL array (4 entries)."""
+    return [0.0] * 4
+
+
+def axis_friction_factor(axis: str, params_dict: dict) -> float:
+    """Firmware linear friction direction factor k for motion along ``axis``.
+
+    Mirrors ``RobotModel::friction_direction_factor``: total omni-roller speed
+    for unit motion along the axis, normalized to 1 along local +x. With wheel
+    angles ``alpha``/``beta`` (PHYS_WHEEL), k(+y) = (cos a + cos b) / (sin a + sin b).
+    Angular friction is not direction-scaled, so ``theta`` returns 1.
+    """
+    if axis != "y":
+        return 1.0
+    alpha, beta = params_dict["PHYS_WHEEL"][0], params_dict["PHYS_WHEEL"][1]
+    return float((math.cos(alpha) + math.cos(beta)) / (math.sin(alpha) + math.sin(beta)))
 
 
 def compute_coulomb(eta: float, inertia: float, a_min: float,
-                    c_visc: float, v_min: float) -> float:
-    """``c_coul = eta * I * a_min - c_visc * v_min`` (see module docstring)."""
-    return float(eta * inertia * a_min - c_visc * v_min)
+                    c_visc: float, v_min: float, k: float = 1.0) -> float:
+    """``c_coul = eta * I * a_min / k - c_visc * v_min`` (see module docstring)."""
+    return float(eta * inertia * a_min / k - c_visc * v_min)
 
 
 class CoulombRoutine(BaseTuneNode):
@@ -389,7 +405,21 @@ class CoulombRoutine(BaseTuneNode):
             current_params["PHYS_MOTOR_MODEL"][1] = 1.0  # eta=1
             current_params["PHYS_FRICTION_MODEL"] = empty_friction_array()
 
-        self.push_params(current_params,
+        # Pulse at eta=1 with no friction compensation on the tested axis: the
+        # coulomb balance below (c = eta * I * a_min / k - ...) assumes the
+        # commanded accel alone, at unit efficiency, overcomes friction. x and
+        # y share the linear slots, so a y run must not inherit x's
+        # compensation. The baseline eta and c_visc are restored in the result.
+        coul_idx, visc_idx = axis_friction_indices(self.axis)
+        test_friction = list(current_params["PHYS_FRICTION_MODEL"])
+        test_friction[coul_idx] = 0.0
+        test_friction[visc_idx] = 0.0
+        test_motor = list(current_params["PHYS_MOTOR_MODEL"])
+        test_motor[1] = 1.0
+        test_params = merge_params_dict(current_params,
+                                        {"PHYS_FRICTION_MODEL": test_friction,
+                                         "PHYS_MOTOR_MODEL": test_motor})
+        self.push_params(test_params,
                           only_keys=["PHYS_INERTIA", "PHYS_MOTOR_MODEL",
                                      "PHYS_FRICTION_MODEL"])
 
@@ -437,7 +467,8 @@ class CoulombRoutine(BaseTuneNode):
             }
         else:
             c_coul = compute_coulomb(eta, inertia, self.detection_accel,
-                                     c_visc, self.v_min or 0.0)
+                                     c_visc, self.v_min or 0.0,
+                                     k=axis_friction_factor(self.axis, current_params))
             result = {
                 "axis": self.axis,
                 "detected": True,
@@ -455,7 +486,8 @@ class CoulombRoutine(BaseTuneNode):
             updated = merge_params_dict(current_params, {
                 "PHYS_FRICTION_MODEL": new_friction,
             })
-            self.push_params(updated, only_keys=["PHYS_FRICTION_MODEL"])
+            self.push_params(updated, only_keys=["PHYS_MOTOR_MODEL",
+                                                 "PHYS_FRICTION_MODEL"])
             result["params_after"] = updated
 
         write_json(ckpt.routine_result("coulomb", self.axis), result)

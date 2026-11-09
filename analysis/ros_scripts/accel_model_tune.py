@@ -29,8 +29,9 @@ Examples:
     # End-to-end automated run (uses defaults from the Rust controls lib):
     python accel_model_tune.py --routine all --robot-id 0
 
-The ``y`` axis is allowed for diagnostic-only runs (no firmware param
-changes are pushed). Checkpoints and per-trial telemetry are written to
+The firmware has one linear friction pair (defined along local +x and scaled
+by wheel geometry for other directions), so ``x`` and ``y`` runs both tune it;
+a ``y`` run checks the geometry scaling. Checkpoints and per-trial telemetry are written to
 ``analysis/data/accel_tuning/<run_id>/``.
 """
 
@@ -68,8 +69,8 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-r", "--robot-id", type=int, required=True,
                          help="Robot ID")
     parser.add_argument("--axis", choices=["x", "y", "theta"], default="x",
-                         help="Axis to tune (default x). y is diagnostic-only "
-                              "(no firmware param push).")
+                         help="Axis to tune (default x). x and y both tune "
+                              "the shared linear friction coefficients.")
     parser.add_argument("--run-id", type=str, default=None,
                          help="Checkpoint dir name (default: timestamp)")
     parser.add_argument("--baseline-params", type=str, default=None,
@@ -120,6 +121,11 @@ def _load_baseline_params(args) -> dict:
             params = data["params_after"]
         else:
             params = data
+        fric = params.get("PHYS_FRICTION_MODEL")
+        if fric is not None and len(fric) == 6:
+            # Legacy per-axis layout [coul_x, coul_y, coul_ang, visc_x, visc_y,
+            # visc_ang]: keep the x (reference-direction) and angular terms.
+            params["PHYS_FRICTION_MODEL"] = [fric[0], fric[2], fric[3], fric[5]]
     if getattr(args, "motor_efficiency", None) is not None:
         # Always keep two slots: [Kt, η].
         mm = list(params.get("PHYS_MOTOR_MODEL",

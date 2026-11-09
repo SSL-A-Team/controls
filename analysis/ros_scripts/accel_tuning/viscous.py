@@ -21,7 +21,7 @@ import rclpy
 from .analysis import SlopeFit, linearity_score
 from .base import ANGULAR_AXES, BaseTuneNode
 from .checkpoint import CheckpointDir, TrialRecord, save_trial, write_json
-from .coulomb import axis_friction_indices, axis_inertia, compute_coulomb
+from .coulomb import axis_friction_factor, axis_friction_indices, axis_inertia, compute_coulomb
 from ._search import (
     format_trial_end_banner,
     format_trial_start_banner,
@@ -99,7 +99,8 @@ class ViscousRoutine(BaseTuneNode):
         """
         eta = self._params["PHYS_MOTOR_MODEL"][1]
         inertia = axis_inertia(self.axis, self._params)
-        c_coul = compute_coulomb(eta, inertia, self._a_min, c_visc, self._v_min)
+        c_coul = compute_coulomb(eta, inertia, self._a_min, c_visc, self._v_min,
+                                 k=axis_friction_factor(self.axis, self._params))
         coul_idx, visc_idx = axis_friction_indices(self.axis)
         new_friction = list(self._params["PHYS_FRICTION_MODEL"])
         new_friction[coul_idx] = c_coul

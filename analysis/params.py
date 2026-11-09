@@ -69,12 +69,10 @@ PARAM_MAP = {
     "PHYS_FRICTION_MODEL": {
         "param_id": 6,
         "fields": [
-            (0, "phys", "coulomb_friction_linear_x_n"),
-            (1, "phys", "coulomb_friction_linear_y_n"),
-            (2, "phys", "coulomb_friction_angular_nm"),
-            (3, "phys", "viscous_friction_linear_x_nspm"),
-            (4, "phys", "viscous_friction_linear_y_nspm"),
-            (5, "phys", "viscous_friction_angular_nmsprad"),
+            (0, "phys", "coulomb_friction_linear_n"),
+            (1, "phys", "coulomb_friction_angular_nm"),
+            (2, "phys", "viscous_friction_linear_nspm"),
+            (3, "phys", "viscous_friction_angular_nmsprad"),
         ],
     },
     # Parameters used only for upload (no ctypes struct mapping):

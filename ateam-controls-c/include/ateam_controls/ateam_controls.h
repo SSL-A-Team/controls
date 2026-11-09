@@ -70,11 +70,9 @@ typedef struct RobotPhysicalParams {
     float iz_kgm2;
     float motor_torque_constant_nmpa;
     float motor_efficiency_factor;
-    float coulomb_friction_linear_x_n;
-    float coulomb_friction_linear_y_n;
+    float coulomb_friction_linear_n;
     float coulomb_friction_angular_nm;
-    float viscous_friction_linear_x_nspm;
-    float viscous_friction_linear_y_nspm;
+    float viscous_friction_linear_nspm;
     float viscous_friction_angular_nmsprad;
 } RobotPhysicalParams_t;
 

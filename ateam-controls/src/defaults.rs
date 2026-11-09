@@ -36,17 +36,11 @@ pub const DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT: f32 = 0.0335;       // N*m/A
 // 1.0 with CS_SYNC_SAMPLING on the wheel-torque image: the current loop regulates
 // real phase current, so torque = Kt * I. 17.36 compensated the old D * I feedback.
 pub const DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR: f32 = 1.0;
-// pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_X: f32 = 1.86 ;
-// pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_Y: f32 = 1.86 ;
-// pub const DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR: f32 = 0.05;
-// pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_X: f32 = 3.30;
-// pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_Y: f32 = 3.30;
-// pub const DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR: f32 = 0.0063;
-pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_X: f32 = 0.0;
-pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR_Y: f32 = 0.0;
+// Linear friction coefficients are for motion along local +x; other directions
+// are scaled by RobotModel::friction_direction_factor.
+pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR: f32 = 0.0;
 pub const DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR: f32 = 0.0;
-pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_X: f32 = 0.0;
-pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR_Y: f32 = 0.0;
+pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR: f32 = 0.0;
 pub const DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR: f32 = 0.0;
 
 

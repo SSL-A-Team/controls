@@ -35,13 +35,12 @@ sys.path.insert(0, str(CONTROLS_DIR / "analysis"))
 from params import upload_params_dict, default_params_dict  # noqa: E402
 
 
-# Axis-to-acceleration-component mapping. ``y`` is allowed only for
-# diagnostic runs (the firmware doesn't have a separate y-friction model).
+# Axis-to-acceleration-component mapping.
 AXIS_TO_COMPONENT = {"x": 0, "y": 1, "theta": 2}
 LINEAR_AXES = ("x", "y")
 ANGULAR_AXES = ("theta",)
-# All axes now push params to firmware (linear x/y have independent friction
-# coefficients in the firmware friction model).
+# All axes push params to firmware. x and y both tune the single linear
+# friction pair (defined along +x, direction-scaled by wheel geometry).
 DIAGNOSTIC_ONLY_AXES: set[str] = set()
 
 

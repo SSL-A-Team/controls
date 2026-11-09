@@ -196,14 +196,12 @@ def format_trial_start_banner(routine: str, axis: str, trial_idx: int,
     rows.append(f"▶ {routine.upper()} · {axis} · TRIAL {trial_idx:04d}")
     rows.append(_rule("─"))
     rows.append(f"  candidate: {cand_str}")
-    if fric is not None and len(fric) >= 6:
+    if fric is not None and len(fric) >= 4:
         rows.append(
-            f"  friction:  c_coul=[x:{fric[0]:.4f}, y:{fric[1]:.4f}, "
-            f"θ:{fric[2]:.4f}]"
+            f"  friction:  c_coul=[lin:{fric[0]:.4f}, θ:{fric[1]:.4f}]"
         )
         rows.append(
-            f"             c_visc=[x:{fric[3]:.4f}, y:{fric[4]:.4f}, "
-            f"θ:{fric[5]:.4f}]"
+            f"             c_visc=[lin:{fric[2]:.4f}, θ:{fric[3]:.4f}]"
         )
     if motor is not None:
         rows.append(f"  motor:     Kt={motor[0]:.4f}  η={motor[1]:.4f}")

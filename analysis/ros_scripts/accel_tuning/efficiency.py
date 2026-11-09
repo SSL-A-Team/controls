@@ -16,7 +16,7 @@ import rclpy
 from .analysis import accel_match_error
 from .base import ANGULAR_AXES, BaseTuneNode
 from .checkpoint import CheckpointDir, TrialRecord, save_trial, write_json
-from .coulomb import axis_friction_indices, axis_inertia, compute_coulomb
+from .coulomb import axis_friction_factor, axis_friction_indices, axis_inertia, compute_coulomb
 from ._search import (
     bracketed_root_search,
     format_trial_end_banner,
@@ -93,7 +93,8 @@ class EfficiencyRoutine(BaseTuneNode):
         coul_idx, visc_idx = axis_friction_indices(self.axis)
         c_visc = self._params["PHYS_FRICTION_MODEL"][visc_idx]
         inertia = axis_inertia(self.axis, self._params)
-        c_coul = compute_coulomb(eta, inertia, self._a_min, c_visc, self._v_min)
+        c_coul = compute_coulomb(eta, inertia, self._a_min, c_visc, self._v_min,
+                                 k=axis_friction_factor(self.axis, self._params))
         new_friction = list(self._params["PHYS_FRICTION_MODEL"])
         new_friction[coul_idx] = c_coul
         new_motor = list(self._params["PHYS_MOTOR_MODEL"])

@@ -114,11 +114,9 @@ class RobotPhysicalParams(ctypes.Structure):
         ("iz_kgm2", ctypes.c_float),
         ("motor_torque_constant_nmpa", ctypes.c_float),
         ("motor_efficiency_factor", ctypes.c_float),
-        ("coulomb_friction_linear_x_n", ctypes.c_float),
-        ("coulomb_friction_linear_y_n", ctypes.c_float),
+        ("coulomb_friction_linear_n", ctypes.c_float),
         ("coulomb_friction_angular_nm", ctypes.c_float),
-        ("viscous_friction_linear_x_nspm", ctypes.c_float),
-        ("viscous_friction_linear_y_nspm", ctypes.c_float),
+        ("viscous_friction_linear_nspm", ctypes.c_float),
         ("viscous_friction_angular_nmsprad", ctypes.c_float),
     ]
 
