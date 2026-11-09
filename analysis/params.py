@@ -105,6 +105,10 @@ PARAM_MAP = {
         "param_id": 17,
         "fields": [],
     },
+    "TRACKING_VEL_LOOKAHEAD_S": {
+        "param_id": 18,
+        "fields": [],
+    },
     "POSE_FB_PIDII_LINEAR": {
         "param_id": 10,
         "fields": [],
@@ -233,6 +237,9 @@ def default_controller_params_dict() -> dict:
         # TRACKING_FF_ACCEL_CUTOFF_HZ: [linear_hz, angular_hz] low-pass cutoff on
         #   the trajectory feedforward accel; <= 0 disables the filter
         "TRACKING_FF_ACCEL_CUTOFF_HZ": [20.0, 20.0],
+        # TRACKING_VEL_LOOKAHEAD_S: lookahead (s) for the tracking body velocity
+        #   (wheel velocity setpoint) output; 0.001 = one tick
+        "TRACKING_VEL_LOOKAHEAD_S": 0.001,
         "POSE_FB_PIDII_LINEAR": linear_pose_pid,
         "POSE_FB_PIDII_ANGULAR": angular_pose_pid,
     }
