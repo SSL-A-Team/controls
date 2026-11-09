@@ -284,7 +284,7 @@ class InertiaRoutine(BaseTuneNode):
                 f"[inertia][theta] iter {i} [{phase}]: iz={x:.5f} err={e:+.4f}"
             ),
         )
-        self._apply_candidate(best_x)
+        self._params = self._apply_candidate(best_x)
         result = {
             "axis": "theta", "mode": "search",
             "iz": float(best_x),

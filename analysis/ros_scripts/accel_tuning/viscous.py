@@ -330,7 +330,7 @@ class ViscousRoutine(BaseTuneNode):
         )
         # Push the winning candidate one more time so the firmware is left
         # in the converged-state friction model.
-        self._apply_candidate(best_x)
+        self._params = self._apply_candidate(best_x)
 
         result = {
             "axis": self.axis,

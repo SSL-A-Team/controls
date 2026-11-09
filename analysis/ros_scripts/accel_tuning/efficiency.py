@@ -303,7 +303,7 @@ class EfficiencyRoutine(BaseTuneNode):
             ),
         )
         # Push the winner.
-        self._apply_candidate(best_x)
+        self._params = self._apply_candidate(best_x)
         result = {
             "axis": self.axis, "mode": "search",
             "eta": float(best_x),
