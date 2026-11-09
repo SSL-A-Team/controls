@@ -109,6 +109,10 @@ PARAM_MAP = {
         "param_id": 18,
         "fields": [],
     },
+    "TRACKING_WHEEL_VEL_FB": {
+        "param_id": 19,
+        "fields": [],
+    },
     "POSE_FB_PIDII_LINEAR": {
         "param_id": 10,
         "fields": [],
@@ -240,6 +244,10 @@ def default_controller_params_dict() -> dict:
         # TRACKING_VEL_LOOKAHEAD_S: lookahead (s) for the tracking body velocity
         #   (wheel velocity setpoint) output; 0.001 = one tick
         "TRACKING_VEL_LOOKAHEAD_S": 0.001,
+        # TRACKING_WHEEL_VEL_FB: [hold_vel_loop_off, kv_linear, kv_angular]
+        #   hold_vel_loop_off != 0 runs wheels current-only while the trajectory
+        #   holds; kv_* add pose feedback to the wheel velocity setpoint (0 = off)
+        "TRACKING_WHEEL_VEL_FB": [0.0, 0.0, 0.0],
         "POSE_FB_PIDII_LINEAR": linear_pose_pid,
         "POSE_FB_PIDII_ANGULAR": angular_pose_pid,
     }
