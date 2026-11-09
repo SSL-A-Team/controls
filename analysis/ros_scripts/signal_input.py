@@ -205,7 +205,8 @@ class SignalInputNode(Node):
         cmd.limit_acc_angular = float(a.limit_acc_angular)
         cmd.kick_request = RobotMotionCommand.KR_DISABLE
         cmd.kick_speed = 0.0
-        cmd.dribbler_speed = 0.0
+        cmd.dribbler_setpoint = 0.0
+        cmd.dribbler_mode = RobotMotionCommand.DC_DISABLE
         return cmd
 
     def make_command(self, signal: float) -> RobotMotionCommand:
@@ -220,7 +221,8 @@ class SignalInputNode(Node):
         cmd.limit_acc_angular = float(a.limit_acc_angular)
         cmd.kick_request = RobotMotionCommand.KR_DISABLE
         cmd.kick_speed = 0.0
-        cmd.dribbler_speed = 0.0
+        cmd.dribbler_setpoint = 0.0
+        cmd.dribbler_mode = RobotMotionCommand.DC_DISABLE
 
         if a.control_mode == "position":
             cmd.body_control_mode = RobotMotionCommand.BCM_GLOBAL_POSITION
