@@ -159,6 +159,19 @@ impl BangBangTraj3D {
             eval_1d_accel_at(self.z, t)?,
         ))
     }
+
+    /// Mean acceleration over `[0, dt]`, i.e. `(v(dt) - v(0)) / dt`.
+    ///
+    /// Unlike `accel_at(0)`, this blends segments when a switch falls inside
+    /// the tick, so a trajectory replanned every tick from the switching curve
+    /// doesn't chatter between `+a_max` and `-a_max`.
+    pub fn mean_accel(&self, dt: f32) -> Result<Vector3f, ControlsError> {
+        if dt <= 0.0 {
+            return self.accel_at(0.0);
+        }
+        let next = self.state_at(dt)?;
+        Ok((next.fixed_rows::<3>(3) - self.state.fixed_rows::<3>(3)) / dt)
+    }
 }
 
 impl Trajectory for BangBangTraj3D {
@@ -479,6 +492,29 @@ mod tests {
         assert!(accel.x.abs() < 1e-6);
         assert!(accel.y.abs() < 1e-6);
         assert!(accel.z.abs() < 1e-6);
+    }
+
+    #[test]
+    fn mean_accel_matches_instantaneous_away_from_switch() {
+        let traj = BangBangTraj3D::from_target_pose(Vector6f::zeros(), Vector3f::new(1.0, 0.0, 0.0), test_params()).unwrap();
+        let mean = traj.mean_accel(0.001).unwrap();
+        let inst = traj.accel_at(0.0).unwrap();
+        assert!((mean - inst).norm() < 1e-2);
+    }
+
+    #[test]
+    fn mean_accel_blends_switch_within_tick() {
+        let dt = 0.001;
+        let mut traj = BangBangTraj3D::from_target_pose(Vector6f::zeros(), Vector3f::new(1.0, 0.0, 0.0), test_params()).unwrap();
+        // Advance until the accel -> decel switch lands inside the next tick
+        while traj.x.t3 > dt {
+            traj.tick(dt);
+        }
+        let a = traj.accel_at(0.0).unwrap().x;
+        let t_sw = traj.x.t3;
+        let expected = (t_sw * a + (dt - t_sw) * traj.x.sdd3) / dt;
+        let mean = traj.mean_accel(dt).unwrap().x;
+        assert!((mean - expected).abs() < 1e-2, "mean {mean} expected {expected}");
     }
 
     #[test]

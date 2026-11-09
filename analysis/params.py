@@ -97,6 +97,10 @@ PARAM_MAP = {
         "param_id": 9,
         "fields": [],
     },
+    "TRACKING_FF_ACCEL_CUTOFF_HZ": {
+        "param_id": 16,
+        "fields": [],
+    },
     "POSE_FB_PIDII_LINEAR": {
         "param_id": 10,
         "fields": [],
@@ -217,6 +221,9 @@ def default_controller_params_dict() -> dict:
         #   [ERROR_POS_LINEAR, ERROR_POS_ANGULAR, ERROR_VEL_LINEAR, ERROR_VEL_ANGULAR]
         #   tracking errors that trigger divergence recovery
         "TRACKING_DIVERGENCE_THRESHOLD": [1.0, 1.57, 5.0, 10.0],
+        # TRACKING_FF_ACCEL_CUTOFF_HZ: [linear_hz, angular_hz] low-pass cutoff on
+        #   the trajectory feedforward accel; <= 0 disables the filter
+        "TRACKING_FF_ACCEL_CUTOFF_HZ": [20.0, 20.0],
         "POSE_FB_PIDII_LINEAR": linear_pose_pid,
         "POSE_FB_PIDII_ANGULAR": angular_pose_pid,
     }
