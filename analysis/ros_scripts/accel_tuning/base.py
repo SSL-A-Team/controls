@@ -293,6 +293,9 @@ class BaseTuneNode(Node):
         self.axis = axis
         self.dry_run = bool(dry_run)
         self.skip_turnaround = bool(skip_turnaround)
+        # Triangular-profile timing overrides (seconds); None → triangular.py defaults.
+        self.t_pulse: Optional[float] = None
+        self.t_coast: Optional[float] = None
         self.is_diagnostic_only = axis in DIAGNOSTIC_ONLY_AXES
 
         self._trial_t0 = self.get_clock().now()

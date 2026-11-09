@@ -82,6 +82,12 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
                               "baseline params before running. Use to start "
                               "the viscous/efficiency search at a non-default "
                               "η (e.g. 0.8) instead of editing JSON by hand.")
+    parser.add_argument("--t-pulse", type=float, default=None,
+                         help="Triangular profile: seconds per accel/decel "
+                              "pulse (default 0.5).")
+    parser.add_argument("--t-coast", type=float, default=None,
+                         help="Triangular profile: seconds of zero accel "
+                              "between pulses (default 0.5).")
     parser.add_argument("--no-turnaround", action="store_true",
                          help="Skip the manual-rotation prompt between trials "
                               "(linear axes only). Useful when the robot has "
@@ -227,6 +233,7 @@ def _dispatch_viscous(args, ckpt: CheckpointDir) -> dict:
         amplitude=amp, dry_run=args.dry_run,
         skip_turnaround=args.no_turnaround,
     )
+    node.t_pulse, node.t_coast = args.t_pulse, args.t_coast
     try:
         params = _load_baseline_params(args)
         if args.mode == "single":
@@ -258,6 +265,7 @@ def _dispatch_efficiency(args, ckpt: CheckpointDir) -> dict:
         amplitude=amp, dry_run=args.dry_run,
         skip_turnaround=args.no_turnaround,
     )
+    node.t_pulse, node.t_coast = args.t_pulse, args.t_coast
     try:
         params = _load_baseline_params(args)
         if args.mode == "single":
@@ -289,6 +297,7 @@ def _dispatch_inertia(args, ckpt: CheckpointDir) -> dict:
         robot_id=args.robot_id, amplitude=amp, dry_run=args.dry_run,
         skip_turnaround=args.no_turnaround,
     )
+    node.t_pulse, node.t_coast = args.t_pulse, args.t_coast
     try:
         params = _load_baseline_params(args)
         if args.mode == "single":
@@ -330,6 +339,7 @@ def _dispatch_verify(args, ckpt: CheckpointDir) -> dict:
         dry_run=args.dry_run,
         skip_turnaround=args.no_turnaround,
     )
+    node.t_pulse, node.t_coast = args.t_pulse, args.t_coast
     try:
         params = _load_baseline_params(args)
         if not params:

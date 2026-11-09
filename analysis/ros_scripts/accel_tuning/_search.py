@@ -31,7 +31,7 @@ from .base import (
 # After this many consecutive trials lose vision the routine aborts.
 MAX_VISION_RETRIES = 3
 from .checkpoint import CheckpointDir, TrialRecord, save_trial
-from .triangular import T_PULSE, TriangularPulseRunner, default_pulse_accel
+from .triangular import T_COAST, T_PULSE, TriangularPulseRunner, default_pulse_accel
 
 
 @dataclass
@@ -49,7 +49,7 @@ def run_triangular_trial(node: BaseTuneNode, amplitude: float,
                           err_fn: Optional[Callable[
                               [Optional[SlopeFit], Optional[SlopeFit], float],
                               float]] = None,
-                          t_pulse: float = T_PULSE,
+                          t_pulse: Optional[float] = None,
                           ) -> TrialOutcome:
     """Execute one triangular trial and return fit/score metrics.
 
@@ -59,11 +59,15 @@ def run_triangular_trial(node: BaseTuneNode, amplitude: float,
     the trial is discarded and redone after a turnaround; only vision-active
     samples enter the fits.
     """
+    if t_pulse is None:
+        t_pulse = node.t_pulse if node.t_pulse is not None else T_PULSE
+    t_coast = node.t_coast if node.t_coast is not None else T_COAST
     scored_phases = (PHASE_PULSE_POS, PHASE_COAST, PHASE_PULSE_NEG)
     for attempt in range(MAX_VISION_RETRIES + 1):
         node.wait_for_vision()
         node.begin_trial()
-        runner = TriangularPulseRunner(node, amplitude=amplitude)
+        runner = TriangularPulseRunner(node, amplitude=amplitude,
+                                       t_pulse=t_pulse, t_coast=t_coast)
 
         # Hook the runner into the node's ticking. Save/restore on_tick so
         # multiple trials can be run sequentially without leaking state.
