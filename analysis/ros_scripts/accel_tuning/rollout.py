@@ -55,6 +55,7 @@ DEFAULT_T_REST = 0.5            # s at BCM_OFF after the coast
 DEFAULT_V_FIT_MIN_LIN = 0.02    # m/s, ignore slower coast samples
 DEFAULT_V_FIT_MIN_ANG = 0.2     # rad/s
 DEFAULT_DERIV_HALF_WINDOW_S = 0.04  # s, half-width of the local slope fit
+DEFAULT_COAST_SKIP_S = 0.1      # s, skip the start of the coast (spin-up torque decaying)
 DEFAULT_STRIBECK_GRID = 40      # v_stribeck candidates in the fit
 # ===================
 
@@ -102,6 +103,26 @@ def local_slope(t: np.ndarray, v: np.ndarray, half_window_s: float) -> np.ndarra
         if m.sum() >= 3:
             a[i] = np.polyfit(t[m], v[m], 1)[0]
     return a
+
+
+def coast_friction_samples(t: np.ndarray, v: np.ndarray, t_coast_start: float,
+                           direction: float, v_fit_min: float,
+                           skip_s: float = DEFAULT_COAST_SKIP_S,
+                           half_window_s: float = DEFAULT_DERIV_HALF_WINDOW_S,
+                           ) -> tuple[np.ndarray, np.ndarray]:
+    """(speed, deceleration) samples from one coast.
+
+    Drops the first ``skip_s`` of the coast, where motor torque from the
+    spin-up is still decaying and the slope window would straddle the
+    spin-up. ``direction`` is the sign of the spin-up.
+    """
+    keep = t >= t_coast_start + skip_s
+    t, v = t[keep], v[keep]
+    if t.size < 3:
+        return np.zeros(0), np.zeros(0)
+    a = local_slope(t, v, half_window_s)
+    moving = (direction * v > v_fit_min) & np.isfinite(a)
+    return direction * v[moving], -direction * a[moving]
 
 
 def _nonneg_lstsq(cols: list[np.ndarray], y: np.ndarray) -> tuple[np.ndarray, float]:
@@ -211,15 +232,12 @@ class RolloutRoutine(BaseTuneNode):
 
     def _coast_samples(self) -> tuple[np.ndarray, np.ndarray]:
         """(speed, friction force) samples from this trial's coast."""
-        t, v = self.buffer.axis_velocity(PHASE_COAST, self.axis)
-        if t.size < 3:
+        coast = self.buffer.phase_slice(PHASE_COAST)
+        if not coast:
             return np.zeros(0), np.zeros(0)
-        a = local_slope(t, v, DEFAULT_DERIV_HALF_WINDOW_S)
-        direction = math.copysign(1.0, self.amplitude)
-        moving = (direction * v > self.v_fit_min) & np.isfinite(a)
-        speed = direction * v[moving]
-        decel = -direction * a[moving]
-        return speed, decel
+        t, v = self.buffer.axis_velocity(PHASE_COAST, self.axis)
+        return coast_friction_samples(
+            t, v, coast[0].t, math.copysign(1.0, self.amplitude), self.v_fit_min)
 
     def run(self, ckpt: CheckpointDir, params: dict) -> dict:
         params = dict(params)
