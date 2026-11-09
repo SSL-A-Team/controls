@@ -42,6 +42,8 @@ ANGULAR_AXES = ("theta",)
 # All axes push params to firmware. x and y both tune the single linear
 # friction pair (defined along +x, direction-scaled by wheel geometry).
 DIAGNOSTIC_ONLY_AXES: set[str] = set()
+# (coulomb_linear, viscous_linear) indices into PHYS_FRICTION_MODEL.
+LINEAR_FRICTION_INDICES = (0, 2)
 
 
 PHASE_REST = "rest"
@@ -583,6 +585,14 @@ class BaseTuneNode(Node):
 
         params_dict = {**params_dict,
                        "VISION_SEED_SAMPLES": [float(TUNING_VISION_SEED_SAMPLES)]}
+        if self.axis in ANGULAR_AXES and "PHYS_FRICTION_MODEL" in params_dict:
+            # Angular trials: no linear friction compensation on the robot, so
+            # incidental xy motion doesn't push the robot. Only the uploaded
+            # copy is changed; results keep the tuned linear coefficients.
+            fric = list(params_dict["PHYS_FRICTION_MODEL"])
+            fric[LINEAR_FRICTION_INDICES[0]] = 0.0
+            fric[LINEAR_FRICTION_INDICES[1]] = 0.0
+            params_dict["PHYS_FRICTION_MODEL"] = fric
         keys = (list(only_keys) if only_keys is not None
                 else [k for k in params_dict])
         if "VISION_SEED_SAMPLES" not in keys:
