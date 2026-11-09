@@ -111,10 +111,6 @@ PARAM_MAP = {
         "param_id": 14,
         "fields": [],
     },
-    "TRACKING_VEL_GAIN": {
-        "param_id": 15,
-        "fields": [],
-    },
 }
 
 
@@ -210,8 +206,6 @@ def default_controller_params_dict() -> dict:
         "FRICTION_COMP_VEL_THRESHOLD": [0.01, 0.001],
         # TRACKING_ACCEL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for the tracking accel path
         "TRACKING_ACCEL_GAIN": [1.0, 1.0],
-        # TRACKING_VEL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for the tracking velocity path
-        "TRACKING_VEL_GAIN": [1.0, 1.0],
         # TRACKING_DIVERGENCE_THRESHOLD:
         #   [ERROR_POS_LINEAR, ERROR_POS_ANGULAR, ERROR_VEL_LINEAR, ERROR_VEL_ANGULAR]
         #   tracking errors that trigger divergence recovery
@@ -229,7 +223,7 @@ def default_params_dict() -> dict:
         (the Rust controls library defaults).
       * Controller-side firmware defaults from
         ``default_controller_params_dict()`` (PID gains, friction-comp
-        vel thresholds, tracking divergence thresholds, tracking gains).
+        vel thresholds, tracking divergence thresholds, tracking accel gain).
     """
     return {
         **phys_params_to_json_dict(default_phys_params()),
