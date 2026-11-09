@@ -330,7 +330,7 @@ class CoulombRoutine(BaseTuneNode):
         """Mean local-frame body velocity along the active axis during the
         last pulse.
 
-        The KF state is in the global frame; ``BCM_LOCAL_ACCEL`` commands and
+        The KF state is in the global frame; ``BCM_LOCAL_ACCEL_OPEN_LOOP`` commands and
         ``v_min`` are local-frame quantities, so for linear axes we rotate
         ``(vx_g, vy_g)`` by ``−θ`` per sample. Uses the vision-active samples in
         the trailing half of the pulse to skip motor rise-time samples.

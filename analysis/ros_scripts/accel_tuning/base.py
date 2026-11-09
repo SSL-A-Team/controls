@@ -3,7 +3,7 @@ acceleration-model tuning toolkit.
 
 Every concrete tuning routine subclasses :class:`BaseTuneNode` to inherit:
 
-* 60 Hz ``RobotMotionCommand`` publisher with BCM_LOCAL_ACCEL / BCM_OFF helpers
+* 60 Hz ``RobotMotionCommand`` publisher with BCM_LOCAL_ACCEL_OPEN_LOOP / BCM_OFF helpers
 * ``ExtendedTelemetry`` subscriber that fills a :class:`TelemetryBuffer`
 * Phase-tagged sample collection (so per-phase slices can be extracted later)
 * ``/set_firmware_param`` push of an in-memory PARAM_MAP dict
@@ -101,7 +101,7 @@ class TelemetrySample:
     body_accel_u: tuple[float, float, float] = (0.0, 0.0, 0.0)
     body_accel_u_fric_comp: tuple[float, float, float] = (0.0, 0.0, 0.0)
     body_control_mode: int = 0
-    # Software-side BCM_LOCAL_ACCEL cmd echo (for completeness with plot_telem):
+    # Software-side local accel cmd echo (for completeness with plot_telem):
     local_acc_cmd: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 
@@ -257,7 +257,7 @@ class TelemetryBuffer:
 
         Only vision-active samples are returned (see ``VISION_ACTIVE_WINDOW_S``).
 
-        The KF state estimate is in the global frame; ``BCM_LOCAL_ACCEL``
+        The KF state estimate is in the global frame; ``BCM_LOCAL_ACCEL_OPEN_LOOP``
         commands and the slope-fit metric we compare against are in the
         robot's local frame. For linear axes (``x``, ``y``) we rotate
         ``(vx_global, vy_global)`` by ``−θ`` per sample. For ``theta`` the
@@ -359,9 +359,13 @@ class BaseTuneNode(Node):
     # ------------------------------------------------------------------
 
     def publish_accel(self, accel_value: float) -> None:
-        """Publish a BCM_LOCAL_ACCEL with ``accel_value`` on this node's axis."""
+        """Publish a BCM_LOCAL_ACCEL_OPEN_LOOP with ``accel_value`` on this node's axis.
+
+        Open loop: the firmware integrates the commanded accel into its trajectory
+        and commands that twist/accel directly, with no pose feedback.
+        """
         msg = RobotMotionCommand()
-        msg.body_control_mode = RobotMotionCommand.BCM_LOCAL_ACCEL
+        msg.body_control_mode = RobotMotionCommand.BCM_LOCAL_ACCEL_OPEN_LOOP
         ax, ay, ath = 0.0, 0.0, 0.0
         if self.axis == "x":
             ax = float(accel_value)
@@ -458,7 +462,9 @@ class BaseTuneNode(Node):
             imu_gyro = self._xyz(getattr(bct, "imu_gyro", None))
             imu_accel = self._xyz(getattr(bct, "imu_accel", None))
 
-            sla = getattr(bct, "maneuver_local_acc", None)
+            sla = getattr(bct, "maneuver_local_acc_open_loop", None)
+            if bcm != RobotMotionCommand.BCM_LOCAL_ACCEL_OPEN_LOOP:
+                sla = getattr(bct, "maneuver_local_acc", None)
             if sla is not None:
                 echo = getattr(sla, "cmd_echo", None)
                 if echo is not None:

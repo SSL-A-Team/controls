@@ -20,6 +20,7 @@ _BCM_GLOBAL_VEL = 11
 _BCM_LOCAL_VEL = 12
 _BCM_GLOBAL_ACC = 13
 _BCM_LOCAL_ACC = 14
+_BCM_LOCAL_ACC_OPEN_LOOP = 16
 
 
 state_measurement_labels = [
@@ -188,7 +189,7 @@ def plot_telem(telemetry, param_json=None):
             local_vel_global = [global_vx, global_vy, local_omega][j]
             ax.plot(t[local_vel_mask], local_vel_global[local_vel_mask], label='software_cmd (local→global)', color='purple', alpha=alpha)
     i = 2
-    local_acc_mask = bcm == _BCM_LOCAL_ACC
+    local_acc_mask = (bcm == _BCM_LOCAL_ACC) | (bcm == _BCM_LOCAL_ACC_OPEN_LOOP)
     if any(local_acc_mask):
         local_ax = telemetry["body_control_telemetry/maneuver_local_acc/cmd_echo/local_xdd"]
         local_ay = telemetry["body_control_telemetry/maneuver_local_acc/cmd_echo/local_ydd"]
