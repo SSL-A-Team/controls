@@ -216,11 +216,20 @@ impl<const L: usize> BufferedEKF<L> {
 
     pub fn get_vel(&self) -> SVector<f32, 3> {
         let frame_reck = &self.buff[self.idx_reck];
+        let mut vel = self.get_vel_local();
+        // vx, vy rotate local to global
+        let vel_xy = Self::rotate_xy(&vel.fixed_rows::<2>(0).into(), frame_reck.x_reck.z);
+        vel.fixed_rows_mut::<2>(0).copy_from(&vel_xy);
+
+        vel
+    }
+
+    /// Dead-reckoned velocity in the robot's local frame: [vx, vy, vw].
+    pub fn get_vel_local(&self) -> SVector<f32, 3> {
+        let frame_reck = &self.buff[self.idx_reck];
         let mut vel = SVector::<f32, 3>::zeros();
-        // vx, vy come from dead reckoned state, rotate local to global
-        vel.fixed_rows_mut::<2>(0).copy_from(
-            &Self::rotate_xy(&frame_reck.x_reck.fixed_rows::<2>(3).into(), frame_reck.x_reck.z)
-        );
+        // vx, vy come from dead reckoned state (local frame)
+        vel.fixed_rows_mut::<2>(0).copy_from(&frame_reck.x_reck.fixed_rows::<2>(3));
         // vw comes from input
         vel[2] = frame_reck.u[2];
 
@@ -236,11 +245,19 @@ impl<const L: usize> BufferedEKF<L> {
     }
 
     pub fn get_vel_buff(&self) -> SVector<f32, 3> {
+        let mut vel = self.get_vel_buff_local();
+        // vx, vy rotate local to global
+        let vel_xy = Self::rotate_xy(&vel.fixed_rows::<2>(0).into(), self.x_ekf.z);
+        vel.fixed_rows_mut::<2>(0).copy_from(&vel_xy);
+
+        vel
+    }
+
+    /// EKF (buffer horizon) velocity in the robot's local frame: [vx, vy, vw].
+    pub fn get_vel_buff_local(&self) -> SVector<f32, 3> {
         let mut vel = SVector::<f32, 3>::zeros();
-        // vx, vy come from dead reckoned state, rotate local to global
-        vel.fixed_rows_mut::<2>(0).copy_from(
-            &Self::rotate_xy(&self.x_ekf.fixed_rows::<2>(3).into(), self.x_ekf.z)
-        );
+        // vx, vy come from the EKF state (local frame)
+        vel.fixed_rows_mut::<2>(0).copy_from(&self.x_ekf.fixed_rows::<2>(3));
         // vw comes from input
         vel[2] = self.buff[self.idx_ekf].u[2];
 
@@ -1064,6 +1081,16 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
 
     pub fn get_vel_buff(&self) -> SVector<f32, 3> {
         self.ekf.get_vel_buff()
+    }
+
+    /// Dead-reckoned velocity in the robot's local frame: [vx, vy, vw].
+    pub fn get_vel_local(&self) -> SVector<f32, 3> {
+        self.ekf.get_vel_local()
+    }
+
+    /// EKF (buffer horizon) velocity in the robot's local frame: [vx, vy, vw].
+    pub fn get_vel_buff_local(&self) -> SVector<f32, 3> {
+        self.ekf.get_vel_buff_local()
     }
 
     /// Vision measurement applied to the EKF at its horizon this tick, if any.
