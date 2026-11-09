@@ -330,25 +330,17 @@ class CoulombRoutine(BaseTuneNode):
         """Mean local-frame body velocity along the active axis during the
         last pulse.
 
-        The KF state is in the global frame; ``BCM_LOCAL_ACCEL_OPEN_LOOP`` commands and
-        ``v_min`` are local-frame quantities, so for linear axes we rotate
-        ``(vx_g, vy_g)`` by ``−θ`` per sample. Uses the vision-active samples in
-        the trailing half of the pulse to skip motor rise-time samples.
+        The firmware reports the KF velocity in the robot's local frame,
+        matching ``BCM_LOCAL_ACCEL_OPEN_LOOP`` commands and ``v_min``. Uses the
+        vision-active samples in the trailing half of the pulse to skip motor
+        rise-time samples.
         """
         pulse_samples = self.buffer.phase_slice(PHASE_PULSE)
         tail = [s for s in pulse_samples[len(pulse_samples) // 2:] if s.vision_active]
         if not tail:
             return 0.0
-        if self.axis == "theta":
-            return float(np.mean([s.kf_vel[2] for s in tail]))
-        vx_g = np.array([s.kf_vel[0] for s in tail])
-        vy_g = np.array([s.kf_vel[1] for s in tail])
-        theta = np.array([s.kf_pos[2] for s in tail])
-        c, s_ = np.cos(theta), np.sin(theta)
-        vx_l = c * vx_g + s_ * vy_g
-        vy_l = -s_ * vx_g + c * vy_g
-        local = vx_l if self.axis == "x" else vy_l
-        return float(np.mean(local))
+        idx = AXIS_TO_COMPONENT[self.axis]
+        return float(np.mean([s.kf_vel[idx] for s in tail]))
 
     # ------------------------------------------------------------------
     # Checkpoint writing

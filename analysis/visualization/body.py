@@ -103,6 +103,11 @@ def plot_telem(telemetry, param_json=None):
         telemetry['body_control_telemetry/kf_body_vel_estimate'],
         axis=1
     )
+    # KF velocities arrive in the robot's local frame; rotate X/Y to global by
+    # the estimate heading so they plot alongside the global pose/trajectory.
+    theta_est = state_est[:, 2]
+    for state in (state_est, state_pred):
+        state[:, 3], state[:, 4] = local_to_global_xy(theta_est, state[:, 3], state[:, 4])
     state_meas = compute_all_state_measurements(state_est, sensor_meas, param_json=param_json)
     cmd = telemetry['body_control_telemetry/body_accel_u']
     cmd_meas = telemetry['body_control_telemetry/imu_accel'][:, :2]

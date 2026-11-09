@@ -253,31 +253,19 @@ class TelemetryBuffer:
 
     def axis_velocity(self, phase: str, axis: str) -> tuple[np.ndarray, np.ndarray]:
         """Return ``(t, v)`` arrays from the KF velocity estimate for one
-        phase/axis, **projected into the robot's local frame**.
+        phase/axis, in the robot's local frame.
 
         Only vision-active samples are returned (see ``VISION_ACTIVE_WINDOW_S``).
 
-        The KF state estimate is in the global frame; ``BCM_LOCAL_ACCEL_OPEN_LOOP``
-        commands and the slope-fit metric we compare against are in the
-        robot's local frame. For linear axes (``x``, ``y``) we rotate
-        ``(vx_global, vy_global)`` by ``−θ`` per sample. For ``theta`` the
-        scalar angular velocity is frame-invariant.
+        The firmware reports ``kf_body_vel_estimate`` in the robot's local
+        frame, matching ``BCM_LOCAL_ACCEL_OPEN_LOOP`` commands, so no rotation
+        is needed.
         """
         sl = [s for s in self.phase_slice(phase) if s.vision_active]
         if not sl:
             return np.zeros(0), np.zeros(0)
         t = np.array([s.t for s in sl])
-        if axis == "theta":
-            v = np.array([s.kf_vel[2] for s in sl])
-            return t, v
-        # Linear axis: rotate global velocity into local frame.
-        vx_g = np.array([s.kf_vel[0] for s in sl])
-        vy_g = np.array([s.kf_vel[1] for s in sl])
-        theta = np.array([s.kf_pos[2] for s in sl])
-        c, s_ = np.cos(theta), np.sin(theta)
-        vx_l = c * vx_g + s_ * vy_g
-        vy_l = -s_ * vx_g + c * vy_g
-        v = vx_l if axis == "x" else vy_l
+        v = np.array([s.kf_vel[AXIS_TO_COMPONENT[axis]] for s in sl])
         return t, v
 
 
