@@ -31,17 +31,19 @@ pub const DEFAULT_PHYS_BETA: f32 = PI / 4.0;             // 45 deg, back wheel a
 pub const DEFAULT_PHYS_L: f32 = 0.0814;                  // m, wheel distance to center
 pub const DEFAULT_PHYS_R: f32 = 0.030;                   // m, wheel radius
 pub const DEFAULT_PHYS_MASS: f32 = 2.7;                  // kg
-pub const DEFAULT_PHYS_IZ: f32 = 0.008;                  // kg*m^2, moment of inertia
+pub const DEFAULT_PHYS_IZ: f32 = 0.010;                  // kg*m^2, moment of inertia (accel-tuned, robot 2)
 pub const DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT: f32 = 0.0335;       // N*m/A
-// 1.0 with CS_SYNC_SAMPLING on the wheel-torque image: the current loop regulates
-// real phase current, so torque = Kt * I. 17.36 compensated the old D * I feedback.
-pub const DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR: f32 = 1.0;
+// Accel-tuned on robot 2 (open-loop x efficiency search). With CS_SYNC_SAMPLING
+// on the wheel-torque image the current loop regulates real phase current, so
+// values below 1.0 are real losses.
+pub const DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR: f32 = 0.808;
 // Linear friction coefficients are for motion along local +x; other directions
-// are scaled by RobotModel::friction_direction_factor.
-pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR: f32 = 0.0;
-pub const DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR: f32 = 0.0;
-pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR: f32 = 0.0;
-pub const DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR: f32 = 0.0;
+// are scaled by RobotModel::friction_direction_factor. Accel-tuned on robot 2:
+// linear from x coulomb/viscous/efficiency, angular from triangular pulses.
+pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR: f32 = 2.47;   // N
+pub const DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR: f32 = 0.065; // N*m
+pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR: f32 = 0.27;   // N/(m/s)
+pub const DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR: f32 = 0.0;   // N*m/(rad/s)
 // Stribeck (static) friction: disabled by default (stribeck vel 0).
 pub const DEFAULT_PHYS_STATIC_FRICTION_LINEAR: f32 = 0.0;
 pub const DEFAULT_PHYS_STATIC_FRICTION_ANGULAR: f32 = 0.0;
