@@ -78,15 +78,15 @@ PARAM_MAP = {
         ],
     },
     # Parameters used only for upload (no ctypes struct mapping):
-    "FRICTION_COMP_GATING": {
+    "FRICTION_COMP_VEL_THRESHOLD": {
         "param_id": 7,
         "fields": [],
     },
-    "POSE_CONTROL_GAIN": {
+    "TRACKING_ACCEL_GAIN": {
         "param_id": 8,
         "fields": [],
     },
-    "TRAJ_RECOMPUTE_ERROR": {
+    "TRACKING_DIVERGENCE_THRESHOLD": {
         "param_id": 9,
         "fields": [],
     },
@@ -109,6 +109,10 @@ PARAM_MAP = {
     # [SEED_SAMPLES] vision samples needed to (re)seed the firmware vision filter
     "VISION_SEED_SAMPLES": {
         "param_id": 14,
+        "fields": [],
+    },
+    "TRACKING_VEL_GAIN": {
+        "param_id": 15,
         "fields": [],
     },
 }
@@ -201,15 +205,17 @@ def default_controller_params_dict() -> dict:
     linear_pose_pid = [300.0, 0.0, 7.0, 0.0, 0.0]
     angular_pose_pid = [400.0, 0.0, 30.0, 0.0, 0.0]
     return {
-        # FRICTION_COMP_GATING:
-        #   [lin_vel_thresh, lin_accel_thresh (unused), ang_vel_thresh, ang_accel_thresh (unused)]
-        #   gated on commanded velocity
-        "FRICTION_COMP_GATING": [0.01, 0.0, 0.001, 0.0],
-        # POSE_CONTROL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for accel path
-        "POSE_CONTROL_GAIN": [1.0, 1.0],
-        # TRAJ_RECOMPUTE_ERROR:
+        # FRICTION_COMP_VEL_THRESHOLD: [lin_vel_thresh, ang_vel_thresh]
+        #   friction comp is off below these commanded speeds
+        "FRICTION_COMP_VEL_THRESHOLD": [0.01, 0.001],
+        # TRACKING_ACCEL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for the tracking accel path
+        "TRACKING_ACCEL_GAIN": [1.0, 1.0],
+        # TRACKING_VEL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for the tracking velocity path
+        "TRACKING_VEL_GAIN": [1.0, 1.0],
+        # TRACKING_DIVERGENCE_THRESHOLD:
         #   [ERROR_POS_LINEAR, ERROR_POS_ANGULAR, ERROR_VEL_LINEAR, ERROR_VEL_ANGULAR]
-        "TRAJ_RECOMPUTE_ERROR": [1.0, 1.57, 5.0, 10.0],
+        #   tracking errors that trigger divergence recovery
+        "TRACKING_DIVERGENCE_THRESHOLD": [1.0, 1.57, 5.0, 10.0],
         "POSE_FB_PIDII_LINEAR": linear_pose_pid,
         "POSE_FB_PIDII_ANGULAR": angular_pose_pid,
     }
@@ -223,7 +229,7 @@ def default_params_dict() -> dict:
         (the Rust controls library defaults).
       * Controller-side firmware defaults from
         ``default_controller_params_dict()`` (PID gains, friction-comp
-        gating, trajectory recompute thresholds, pose control gain).
+        vel thresholds, tracking divergence thresholds, tracking gains).
     """
     return {
         **phys_params_to_json_dict(default_phys_params()),
