@@ -38,9 +38,9 @@ class SafetyLimits:
     heading_abs = math.radians(80.0)
     speed = 0.6            # m/s, KF estimate
     ang_speed = 4.0        # rad/s, gyro
-    wheel_current = 2.3    # A, motor current setpoint
+    wheel_current = 4.2    # A, motor current setpoint (4 A boost cap)
     wheel_speed = 60.0     # rad/s, encoder
-    telem_stale_s = 0.15
+    telem_stale_s = 0.4    # radio telemetry gaps up to ~0.35 s observed; firmware stops at 0.5 s without commands
     vision_stale_s = 0.4
 
 
@@ -58,6 +58,7 @@ class SmallMoveTest(Node):
         self.last_vision = None
         self.pose = None
         self.start = None
+        self.latest_wheel_vel = None
         self.target = None
         self.t0 = time.monotonic()
         self.log = []
@@ -101,6 +102,7 @@ class SmallMoveTest(Node):
         wv = np.array([getattr(msg, m).velocity_telemetry.wheel_vel_rads for m in MOTORS])
         err = any(getattr(msg, m).master_error for m in MOTORS)
         self.pose = pos
+        self.latest_wheel_vel = wv
         traj = np.array(b.body_traj_pos[:3], dtype=float)
         self.log.append(np.concatenate([[now - self.t0], pos, vel, [gyro], cur, wv, traj,
                                         np.array(b.body_vel_u[:3]), np.array(b.body_accel_u_fric_comp[:3]),

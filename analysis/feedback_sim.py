@@ -33,8 +33,8 @@ DT = 0.001
 class Gains:
     pose_fb_xy: tuple = (8.0, 0.3, 0.01)            # K, MAX, ANTI_JITTER (firmware defaults)
     pose_fb_w: tuple = (8.0, 2.0, 0.01, 2.0)        # POS_K, POS_MAX, ANTI_JITTER, VEL_K
-    wheel_vel_fb: tuple = (500.0, 0.0, 1.5, 2.0)    # KP mA/(rad/s), KI, AJ rad/s, MAX_CURRENT A
-    ff_current_limit: float = 2.0
+    wheel_vel_fb: tuple = (500.0, 0.0, 1.5, 4.0)    # KP mA/(rad/s), KI, AJ rad/s, MAX_CURRENT A
+    ff_current_limit: float = 3.0
     slope_a_per_s: float = 500.0
     accel_clamp: tuple = (20.0, 100.0)
     divergence: tuple = (1.0, 1.57, 5.0, 10.0)      # pos lin, pos ang, vel lin, vel ang
@@ -56,7 +56,7 @@ class Plant:
     mass: float = 2.7
     iz: float = 0.008
     kt: float = 0.0335
-    coulomb_xy: float = 1.5      # along local y (direction-scaled like the model)
+    coulomb_xy: float = 5.0      # along local y (direction-scaled like the model); ~measured, incl. tether
     viscous_xy: float = 0.5
     coulomb_w: float = 0.05
     viscous_w: float = 0.005
@@ -135,7 +135,8 @@ def aj_scale(err: float, thresh: float) -> float:
 
 
 def hw_current_limit(w_rads: float) -> float:
-    return 2.16 if abs(w_rads) < 2.0 * math.pi else 6.3
+    # Wheel-torque firmware: 4 A stall boost (I2T budget not modeled; tests are short).
+    return 4.0 if abs(w_rads) < 2.0 * math.pi else 6.3
 
 
 def simulate(waypoints, durations, traj_params, gains=Gains(), model=Model(), plant=Plant(),
@@ -279,7 +280,7 @@ AWAY = (0.175, 0.0, math.radians(15.0))
 SMALL_MOVE = ([HOME, AWAY] * 4, [1.5] * 8)
 
 
-def summarize(name, r: Result, current_bound=2.0 + 1e-6, rest_window=0.3) -> bool:
+def summarize(name, r: Result, current_bound=4.0 + 1e-6, rest_window=0.3) -> bool:
     i_max = float(np.max(np.abs(r.current)))
     v_max = float(np.max(np.hypot(r.vel_cmd[:, 0], r.vel_cmd[:, 1])))
     w_max = float(np.max(np.abs(r.vel_cmd[:, 2])))
@@ -308,8 +309,12 @@ def main():
     small = r
 
     r = simulate(*SMALL_MOVE, tp, gains=test_gains,
-                 model=Model(1.5, 0.5, 0.05, 0.005, 0.75, 0.7))
+                 model=Model(5.0, 0.5, 0.05, 0.005, 0.8, 0.75))
     all_ok &= summarize("small move, model = plant", r)
+    r = simulate(*SMALL_MOVE, tp, gains=test_gains, model=Model(coulomb_xy=4.0))
+    all_ok &= summarize("small move, coulomb_xy 4 N only", r)
+    r = simulate(*SMALL_MOVE, tp, gains=test_gains, model=Model(coulomb_xy=7.0))
+    all_ok &= summarize("small move, coulomb_xy 7 N (over)", r)
 
     for kp in (100.0, 500.0, 1000.0, 2000.0):
         g = replace(test_gains, wheel_vel_fb=(kp, 0.0, 1.5, 2.0))
