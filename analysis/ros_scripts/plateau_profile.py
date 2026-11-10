@@ -53,7 +53,8 @@ class PlateauTest(SmallMoveTest):
     def on_telem(self, msg):
         super().on_telem(msg)
         if self.log:
-            self.log[-1] = np.append(self.log[-1], 1.0 if self.phase == "plateau" else 0.0)
+            vis = np.array(msg.body_control_telemetry.vision_pose[:3], dtype=float)
+            self.log[-1] = np.concatenate([self.log[-1], vis, [1.0 if self.phase == "plateau" else 0.0]])
 
 
 def parse_dir(token):
@@ -121,9 +122,18 @@ def main():
                         cur = seg[:, 8:12].mean(axis=0)
                         vel = seg[:, 4:7].mean(axis=0)
                         F = W @ (cur * KT / R * EFF)
+                        # slip check: vision velocity (local frame) vs encoder-implied velocity
+                        vrows = seg[np.any(seg[:, -4:-1] != 0.0, axis=1)]
+                        t, vis = vrows[:, 0], vrows[:, -4:-1]
+                        th = np.unwrap(vis[:, 2])
+                        gvx, gvy, gvw = (np.polyfit(t, c, 1)[0] for c in (vis[:, 0], vis[:, 1], th))
+                        c, s_ = math.cos(th.mean()), math.sin(th.mean())
+                        vis_vel = np.array([c * gvx + s_ * gvy, -s_ * gvx + c * gvy, gvw])
+                        enc_vel = R * np.linalg.pinv(W.T) @ seg[:, 12:16].mean(axis=0)
                         rec = dict(dir=token, sign=sign, speed=speed, cmd=(round(vx, 3), round(vy, 3), round(vw, 3)),
                                    vel=np.round(vel, 3).tolist(), I=np.round(cur, 2).tolist(),
-                                   F=np.round(F, 3).tolist(), I_std=np.round(seg[:, 8:12].std(axis=0), 2).tolist())
+                                   F=np.round(F, 3).tolist(), I_std=np.round(seg[:, 8:12].std(axis=0), 2).tolist(),
+                                   vis_vel=np.round(vis_vel, 3).tolist(), enc_vel=np.round(enc_vel, 3).tolist())
                         results.append(rec)
                         node.get_logger().info(str(rec))
                     time.sleep(args.rest)
