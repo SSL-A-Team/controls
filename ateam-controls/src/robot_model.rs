@@ -2,10 +2,14 @@ use libm::{sinf, cosf};
 use nalgebra::{SMatrix, SVector};
 use crate::{z_rotation_mat, ControlsError};
 
-/// Commanded linear speed (m/s) at or below which linear friction compensation is off (TIGERs: 0.01).
-pub const FRICTION_XY_VEL_THRESHOLD_MPS: f32 = 0.01;
-/// Commanded angular speed (rad/s) at or below which angular friction compensation is off (TIGERs: 1e-3).
-pub const FRICTION_W_VEL_THRESHOLD_RADPS: f32 = 1e-3;
+/// Commanded linear speed (m/s) at which the linear Coulomb compensation reaches full
+/// strength; it ramps linearly from zero below this. TIGERs switch it fully on above
+/// 0.01 m/s instead, which on our robot (static friction near the available force)
+/// makes the robot hunt around a held position with ~2 A current steps.
+pub const FRICTION_XY_RAMP_MPS: f32 = 0.02;
+/// Commanded angular speed (rad/s) at which the angular Coulomb compensation reaches
+/// full strength (TIGERs: step at 1e-3 rad/s).
+pub const FRICTION_W_RAMP_RADPS: f32 = 0.2;
 /// Largest accepted friction parameter (N, N*s/m, N*m, N*m*s/rad); rejects typos.
 pub const MAX_FRICTION_PARAM: f32 = 10.0;
 /// Smallest accepted output efficiency (bounds the feed-forward gain at 1/MIN_EFFICIENCY).
@@ -275,28 +279,34 @@ impl RobotModel {
     /// points *along* the motion (it is the force needed to overcome friction):
     ///
     /// ```text
-    /// dir   = v_xy / |v_xy|   if |v_xy| > 0.01 m/s, else 0
+    /// dir   = v_xy / |v_xy|
     /// k     = friction_direction_factor(dir)
-    /// F_x   = dir_x * k * (coulomb_xy + viscous_xy * |v_x|)
-    /// F_y   = dir_y * k * (coulomb_xy + viscous_xy * |v_y|)
-    /// T_z   = sign(w) * (coulomb_w + viscous_w * |w|)   with sign = 0 if |w| <= 1e-3
+    /// s_xy  = min(|v_xy| / FRICTION_XY_RAMP_MPS, 1)
+    /// F_x   = dir_x * k * (s_xy * coulomb_xy + viscous_xy * |v_x|)
+    /// F_y   = dir_y * k * (s_xy * coulomb_xy + viscous_xy * |v_y|)
+    /// T_z   = sign(w) * (min(|w| / FRICTION_W_RAMP_RADPS, 1) * coulomb_w + viscous_w * |w|)
     /// ```
+    ///
+    /// The only deviation from TIGERs is the Coulomb ramp (they step it on above
+    /// 0.01 m/s / 1e-3 rad/s).
     pub fn friction_comp_force(&self, local_vel: SVector<f32, 3>) -> SVector<f32, 3> {
         let p = &self.params;
         let speed = SVector::<f32, 2>::new(local_vel.x, local_vel.y).norm();
-        let (fx, fy) = if speed > FRICTION_XY_VEL_THRESHOLD_MPS {
+        let (fx, fy) = if speed > 0.0 {
             let dir = SVector::<f32, 2>::new(local_vel.x / speed, local_vel.y / speed);
             let k = self.friction_direction_factor(dir);
+            let coulomb = (speed / FRICTION_XY_RAMP_MPS).min(1.0) * p.coulomb_xy_n;
             (
-                dir.x * k * (p.coulomb_xy_n + p.viscous_xy_nspm * local_vel.x.abs()),
-                dir.y * k * (p.coulomb_xy_n + p.viscous_xy_nspm * local_vel.y.abs()),
+                dir.x * k * (coulomb + p.viscous_xy_nspm * local_vel.x.abs()),
+                dir.y * k * (coulomb + p.viscous_xy_nspm * local_vel.y.abs()),
             )
         } else {
             (0.0, 0.0)
         };
         let w = local_vel.z;
-        let tz = if w.abs() > FRICTION_W_VEL_THRESHOLD_RADPS {
-            w.signum() * (p.coulomb_w_nm + p.viscous_w_nmsprad * w.abs())
+        let tz = if w != 0.0 {
+            let coulomb = (w.abs() / FRICTION_W_RAMP_RADPS).min(1.0) * p.coulomb_w_nm;
+            w.signum() * (coulomb + p.viscous_w_nmsprad * w.abs())
         } else {
             0.0
         };
@@ -514,9 +524,17 @@ mod tests {
         let f = model.friction_comp_force(SVector::<f32, 3>::new(0.0, 0.0, -2.0));
         assert!((f.z + (p.coulomb_w_nm + p.viscous_w_nmsprad * 2.0)).abs() < 1e-6);
 
-        // Below the thresholds: off.
-        let f = model.friction_comp_force(SVector::<f32, 3>::new(0.005, 0.005, 5e-4));
+        // Zero velocity: off.
+        let f = model.friction_comp_force(SVector::<f32, 3>::zeros());
         assert_eq!(f, SVector::<f32, 3>::zeros());
+
+        // Below the ramp speeds: Coulomb scales linearly with speed.
+        let v = 0.25 * FRICTION_XY_RAMP_MPS;
+        let f = model.friction_comp_force(SVector::<f32, 3>::new(0.0, v, 0.0));
+        assert!((f.y - (0.25 * p.coulomb_xy_n + p.viscous_xy_nspm * v)).abs() < 1e-5);
+        let w = 0.5 * FRICTION_W_RAMP_RADPS;
+        let f = model.friction_comp_force(SVector::<f32, 3>::new(0.0, 0.0, -w));
+        assert!((f.z + (0.5 * p.coulomb_w_nm + p.viscous_w_nmsprad * w)).abs() < 1e-6);
     }
 
     #[test]
