@@ -63,23 +63,20 @@ PARAM_MAP = {
         "param_id": 5,
         "fields": [
             (0, "phys", "motor_torque_constant_nmpa"),
-            (1, "phys", "motor_efficiency_factor"),
         ],
     },
     "PHYS_FRICTION_MODEL": {
         "param_id": 6,
         "fields": [
-            (0, "phys", "coulomb_friction_linear_n"),
-            (1, "phys", "coulomb_friction_angular_nm"),
-            (2, "phys", "viscous_friction_linear_nspm"),
-            (3, "phys", "viscous_friction_angular_nmsprad"),
+            (0, "phys", "coulomb_xy_n"),
+            (1, "phys", "viscous_xy_nspm"),
+            (2, "phys", "coulomb_w_nm"),
+            (3, "phys", "viscous_w_nmsprad"),
+            (4, "phys", "efficiency_xy"),
+            (5, "phys", "efficiency_w"),
         ],
     },
     # Parameters used only for upload (no ctypes struct mapping):
-    "FRICTION_COMP_VEL_THRESHOLD": {
-        "param_id": 7,
-        "fields": [],
-    },
     "TRACKING_ACCEL_GAIN": {
         "param_id": 8,
         "fields": [],
@@ -199,9 +196,6 @@ def default_controller_params_dict() -> dict:
     linear_pose_pid = [300.0, 0.0, 7.0, 0.0, 0.0]
     angular_pose_pid = [400.0, 0.0, 30.0, 0.0, 0.0]
     return {
-        # FRICTION_COMP_VEL_THRESHOLD: [lin_vel_thresh, ang_vel_thresh]
-        #   friction comp is off below these commanded speeds
-        "FRICTION_COMP_VEL_THRESHOLD": [0.01, 0.001],
         # TRACKING_ACCEL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for the tracking accel path
         "TRACKING_ACCEL_GAIN": [1.0, 1.0],
         # TRACKING_DIVERGENCE_THRESHOLD:

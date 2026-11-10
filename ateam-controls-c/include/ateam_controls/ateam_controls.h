@@ -69,11 +69,12 @@ typedef struct RobotPhysicalParams {
     float mass_kg;
     float iz_kgm2;
     float motor_torque_constant_nmpa;
-    float motor_efficiency_factor;
-    float coulomb_friction_linear_n;
-    float coulomb_friction_angular_nm;
-    float viscous_friction_linear_nspm;
-    float viscous_friction_angular_nmsprad;
+    float coulomb_xy_n;
+    float viscous_xy_nspm;
+    float coulomb_w_nm;
+    float viscous_w_nmsprad;
+    float efficiency_xy;
+    float efficiency_w;
 } RobotPhysicalParams_t;
 
 // Opaque handle to the full RobotModel (physical matrices, kinematic transforms, etc.)

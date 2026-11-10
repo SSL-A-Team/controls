@@ -15,11 +15,12 @@ static RobotPhysicalParams_t test_phys_params() {
   phys.mass_kg = 2.7f;
   phys.iz_kgm2 = 0.008f;
   phys.motor_torque_constant_nmpa = 0.0335f;
-  phys.motor_efficiency_factor = 13.0f;
-  phys.coulomb_friction_linear_n = 2.058f;
-  phys.coulomb_friction_angular_nm = 0.05f;
-  phys.viscous_friction_linear_nspm = 5.0f;
-  phys.viscous_friction_angular_nmsprad = 0.0063f;
+  phys.coulomb_xy_n = 2.65f;
+  phys.viscous_xy_nspm = 0.5f;
+  phys.coulomb_w_nm = 0.097f;
+  phys.viscous_w_nmsprad = 0.002f;
+  phys.efficiency_xy = 0.72f;
+  phys.efficiency_w = 0.6f;
   return phys;
 }
 
@@ -47,7 +48,8 @@ TEST(RobotModelBindings, NewWithCustomParams) {
   phys.mass_kg = 2.5f;
   phys.iz_kgm2 = 0.01f;
   phys.motor_torque_constant_nmpa = 0.02f;
-  phys.motor_efficiency_factor = 0.85f;
+  phys.efficiency_xy = 1.0f;
+  phys.efficiency_w = 1.0f;
 
   RobotModel_t* model = nullptr;
   ASSERT_EQ(ateam_controls_robot_model_new(phys, &model), ATEAM_CONTROLS_OK);

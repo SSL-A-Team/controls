@@ -2,6 +2,11 @@ use libm::{sinf, cosf};
 use nalgebra::{SMatrix, SVector};
 use crate::{z_rotation_mat, ControlsError};
 
+/// Commanded linear speed (m/s) at or below which linear friction compensation is off (TIGERs: 0.01).
+pub const FRICTION_XY_VEL_THRESHOLD_MPS: f32 = 0.01;
+/// Commanded angular speed (rad/s) at or below which angular friction compensation is off (TIGERs: 1e-3).
+pub const FRICTION_W_VEL_THRESHOLD_RADPS: f32 = 1e-3;
+
 
 /// Frames:
 ///     local  - robot frame, +x forward, +y left, +z up
@@ -35,11 +40,15 @@ pub struct RobotPhysicalParams {
     pub mass_kg: f32,  // Robot body mass in kilograms
     pub iz_kgm2: f32,  // Robot body moment of inertia around z axis in kg*m^2
     pub motor_torque_constant_nmpa: f32,  // Motor torque constant in N*m/A
-    pub motor_efficiency_factor: f32,  // Unitless scale between commanded and realized wheel torque
-    pub coulomb_friction_linear_n: f32,  // Linear Coulomb friction in N, for motion along local +x (scaled by the direction factor otherwise)
-    pub coulomb_friction_angular_nm: f32,  // Angular Coulomb friction in N*m
-    pub viscous_friction_linear_nspm: f32,  // Linear viscous friction in N/(m/s), for motion along local +x (scaled by the direction factor otherwise)
-    pub viscous_friction_angular_nmsprad: f32,  // Angular viscous friction in N*m/(rad/s)
+    // Friction / output model after TIGERs Mannheim (Firmware src/robot/model_fric.h,
+    // ModelFricConfig). Linear terms are for motion along local +-y (sideways) and are
+    // scaled by `friction_direction_factor` otherwise.
+    pub coulomb_xy_n: f32,  // Linear Coulomb friction in N
+    pub viscous_xy_nspm: f32,  // Linear viscous friction in N/(m/s), applied per local axis
+    pub coulomb_w_nm: f32,  // Angular Coulomb friction in N*m
+    pub viscous_w_nmsprad: f32,  // Angular viscous friction in N*m/(rad/s)
+    pub efficiency_xy: f32,  // Realized / commanded linear force (0, 1]
+    pub efficiency_w: f32,  // Realized / commanded torque about z (0, 1]
 }
 
 impl Default for RobotPhysicalParams {
@@ -53,11 +62,12 @@ impl Default for RobotPhysicalParams {
             mass_kg: DEFAULT_PHYS_MASS,
             iz_kgm2: DEFAULT_PHYS_IZ,
             motor_torque_constant_nmpa: DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT,
-            motor_efficiency_factor: DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR,
-            coulomb_friction_linear_n: DEFAULT_PHYS_COULOMB_FRICTION_LINEAR,
-            coulomb_friction_angular_nm: DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR,
-            viscous_friction_linear_nspm: DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR,
-            viscous_friction_angular_nmsprad: DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR,
+            coulomb_xy_n: DEFAULT_PHYS_COULOMB_XY,
+            viscous_xy_nspm: DEFAULT_PHYS_VISCOUS_XY,
+            coulomb_w_nm: DEFAULT_PHYS_COULOMB_W,
+            viscous_w_nmsprad: DEFAULT_PHYS_VISCOUS_W,
+            efficiency_xy: DEFAULT_PHYS_EFFICIENCY_XY,
+            efficiency_w: DEFAULT_PHYS_EFFICIENCY_W,
         }
     }
 }
@@ -71,7 +81,7 @@ pub struct RobotModel {
     accel2wheel: SMatrix<f32, 4, 3>,  // Local accel -> wheel torque (N*m)
     inertia_inv: SMatrix<f32, 3, 3>,  // Force -> accel
     wheel_drive_dirs: SMatrix<f32, 2, 4>,  // Unit drive direction D_i of each wheel (local frame)
-    roller_speed_x: f32,  // Sum of roller speeds for unit motion along local +x
+    roller_speed_ref: f32,  // Sum of roller speeds for unit motion along local +y (friction reference)
 }
 
 impl RobotModel {
@@ -86,7 +96,7 @@ impl RobotModel {
             accel2wheel: SMatrix::zeros(),
             inertia_inv: SMatrix::zeros(),
             wheel_drive_dirs: SMatrix::zeros(),
-            roller_speed_x: 1.0,
+            roller_speed_ref: 1.0,
         };
         model.update_params(params)?;
         Ok(model)
@@ -118,8 +128,11 @@ impl RobotModel {
         let inertia_inv = inertia.try_inverse().ok_or(ControlsError::SingularMatrix)?;
 
         let wheel_drive_dirs: SMatrix<f32, 2, 4> = wheel_mat.fixed_rows::<2>(0).into();
-        let roller_speed_x = Self::roller_speed(&wheel_drive_dirs, SVector::<f32, 2>::new(1.0, 0.0));
-        if roller_speed_x < 1e-6 {
+        let roller_speed_ref = Self::roller_speed(&wheel_drive_dirs, SVector::<f32, 2>::new(0.0, 1.0));
+        if roller_speed_ref < 1e-6 {
+            return Err(ControlsError::InvalidInput);
+        }
+        if !(params.efficiency_xy > 0.0) || !(params.efficiency_w > 0.0) || !(params.motor_torque_constant_nmpa > 0.0) {
             return Err(ControlsError::InvalidInput);
         }
 
@@ -130,7 +143,7 @@ impl RobotModel {
         self.accel2wheel = linear_wheel2vel.transpose() * inertia * params.r_m;
         self.inertia_inv = inertia_inv;
         self.wheel_drive_dirs = wheel_drive_dirs;
-        self.roller_speed_x = roller_speed_x;
+        self.roller_speed_ref = roller_speed_ref;
         Ok(())
     }
 
@@ -145,11 +158,12 @@ impl RobotModel {
     }
 
     /// Linear friction direction factor k(dir): total roller speed for unit
-    /// motion along the local unit vector `dir`, normalized so motion along
-    /// local +x gives 1. Linear Coulomb/viscous friction is assumed to come
-    /// from the omni-wheel rollers, so it scales with this factor.
+    /// motion along the local unit vector `dir`, normalized so sideways motion
+    /// (local +-y) gives 1. Linear friction is assumed to come from the
+    /// omni-wheel rollers, so it scales with this factor. Equivalent to TIGERs'
+    /// `getFrictionFactor` (whose local X axis is our sideways y axis).
     pub fn friction_direction_factor(&self, dir: SVector<f32, 2>) -> f32 {
-        Self::roller_speed(&self.wheel_drive_dirs, dir) / self.roller_speed_x
+        Self::roller_speed(&self.wheel_drive_dirs, dir) / self.roller_speed_ref
     }
 
     pub fn get_params(&self) -> RobotPhysicalParams {
@@ -242,43 +256,60 @@ impl RobotModel {
 
     /// Convert wheel torques (N*m) to wheel currents (A)
     pub fn torques_to_currents(&self, torques: SVector<f32, 4>) -> SVector<f32, 4> {
-        torques / self.params.motor_torque_constant_nmpa / self.params.motor_efficiency_factor
+        torques / self.params.motor_torque_constant_nmpa
     }
 
-    /// Compute the local friction-only force that opposes a local vel.
+    /// Friction compensation force for a commanded local velocity, after
+    /// TIGERs' `ModelFricGetXY` / `ModelFricGetW` (Firmware src/robot/model_fric.c).
     ///
-    /// **Frame assumption:** the input ``local_vel`` must be in the robot's
-    /// **local frame** ``[vx_mps, vy_mps, vw_radps]``. The output is also in
-    /// the local frame ``[Fx_n, Fy_n, Tz_nm]``. Callers operating in the
-    /// global frame must rotate the vel by ``R_z(-theta)`` before calling and
-    /// rotate the returned force by ``R_z(theta)`` after.
-    ///
-    /// Linear friction opposes the direction of linear motion, with a magnitude
-    /// scaled by the wheel-geometry direction factor `k(dir)` (see
-    /// `friction_direction_factor`; 1 along local +x). Angular friction is
-    /// independent:
+    /// Input and output are in the robot's local frame. The returned force
+    /// points *along* the motion (it is the force needed to overcome friction):
     ///
     /// ```text
-    /// dir   = v_xy / |v_xy|
-    /// F_xy  = -k(dir) * (c_coul_lin + c_visc_lin * |v_xy|) * dir
-    /// Tz    = -c_visc_ang * vw - c_coul_ang * sign(vw)
+    /// dir   = v_xy / |v_xy|   if |v_xy| > 0.01 m/s, else 0
+    /// k     = friction_direction_factor(dir)
+    /// F_x   = dir_x * k * (coulomb_xy + viscous_xy * |v_x|)
+    /// F_y   = dir_y * k * (coulomb_xy + viscous_xy * |v_y|)
+    /// T_z   = sign(w) * (coulomb_w + viscous_w * |w|)   with sign = 0 if |w| <= 1e-3
     /// ```
-    pub fn compute_local_friction_force(&self, local_vel: SVector<f32, 3>) -> SVector<f32, 3> {
-        let sign = |v: f32| if v > 0.0 { 1.0 } else if v < 0.0 { -1.0 } else { 0.0 };
+    pub fn friction_comp_force(&self, local_vel: SVector<f32, 3>) -> SVector<f32, 3> {
         let p = &self.params;
-        let v_xy = SVector::<f32, 2>::new(local_vel.x, local_vel.y);
-        let speed = v_xy.norm();
-        let f_xy = if speed > 0.0 {
-            let dir = v_xy / speed;
+        let speed = SVector::<f32, 2>::new(local_vel.x, local_vel.y).norm();
+        let (fx, fy) = if speed > FRICTION_XY_VEL_THRESHOLD_MPS {
+            let dir = SVector::<f32, 2>::new(local_vel.x / speed, local_vel.y / speed);
             let k = self.friction_direction_factor(dir);
-            -k * (p.coulomb_friction_linear_n + p.viscous_friction_linear_nspm * speed) * dir
+            (
+                dir.x * k * (p.coulomb_xy_n + p.viscous_xy_nspm * local_vel.x.abs()),
+                dir.y * k * (p.coulomb_xy_n + p.viscous_xy_nspm * local_vel.y.abs()),
+            )
         } else {
-            SVector::<f32, 2>::zeros()
+            (0.0, 0.0)
         };
+        let w = local_vel.z;
+        let tz = if w.abs() > FRICTION_W_VEL_THRESHOLD_RADPS {
+            w.signum() * (p.coulomb_w_nm + p.viscous_w_nmsprad * w.abs())
+        } else {
+            0.0
+        };
+        SVector::<f32, 3>::new(fx, fy, tz)
+    }
+
+    /// Feed-forward output acceleration, after TIGERs' `CtrlPantheraUpdate`
+    /// (Firmware src/robot/ctrl_panthera.c): add the friction compensation
+    /// acceleration for the commanded local velocity to the commanded local
+    /// acceleration, then divide by the output efficiency. The result is fed to
+    /// `transform_accel2wheel_local` to get wheel torques.
+    pub fn feedforward_local_accel(
+        &self,
+        local_vel: SVector<f32, 3>,
+        local_accel: SVector<f32, 3>,
+    ) -> SVector<f32, 3> {
+        let p = &self.params;
+        let acc = local_accel + self.inertia_inv * self.friction_comp_force(local_vel);
         SVector::<f32, 3>::new(
-            f_xy.x,
-            f_xy.y,
-            -p.viscous_friction_angular_nmsprad * local_vel.z - p.coulomb_friction_angular_nm * sign(local_vel.z),
+            acc.x / p.efficiency_xy,
+            acc.y / p.efficiency_xy,
+            acc.z / p.efficiency_w,
         )
     }
 }
@@ -304,11 +335,12 @@ mod tests {
             mass_kg: 2.7,
             iz_kgm2: 0.008,
             motor_torque_constant_nmpa: 0.0335,
-            motor_efficiency_factor: 13.0,
-            coulomb_friction_linear_n: 2.058,
-            coulomb_friction_angular_nm: 0.05,
-            viscous_friction_linear_nspm: 5.0,
-            viscous_friction_angular_nmsprad: 0.0063,
+            coulomb_xy_n: 2.65,
+            viscous_xy_nspm: 0.5,
+            coulomb_w_nm: 0.097,
+            viscous_w_nmsprad: 0.002,
+            efficiency_xy: 0.72,
+            efficiency_w: 0.6,
         }
     }
 
@@ -432,48 +464,74 @@ mod tests {
 
     #[test]
     fn friction_direction_factor_matches_geometry() {
-        // alpha = 30 deg, beta = 45 deg: sum |D_y| = 2 sin a + 2 sin b along x,
-        // sum |D_x| = 2 cos a + 2 cos b along y.
+        // alpha = 30 deg, beta = 45 deg: roller speed along x is sum |D_y| =
+        // 2 sin a + 2 sin b, along y it is sum |D_x| = 2 cos a + 2 cos b. The
+        // reference direction is sideways (local y), as TIGERs' X axis.
         let model = RobotModel::new(RobotPhysicalParams::default()).unwrap();
         let (a, b) = (PI / 6.0, PI / 4.0);
         let k_x = model.friction_direction_factor(SVector::<f32, 2>::new(1.0, 0.0));
         let k_y = model.friction_direction_factor(SVector::<f32, 2>::new(0.0, 1.0));
-        let k_neg_y = model.friction_direction_factor(SVector::<f32, 2>::new(0.0, -1.0));
-        assert!((k_x - 1.0).abs() < 1e-6);
-        let expected_y = (a.cos() + b.cos()) / (a.sin() + b.sin());
-        assert!((k_y - expected_y).abs() < 1e-5);
-        assert!((k_neg_y - k_y).abs() < 1e-6);
+        let k_neg_x = model.friction_direction_factor(SVector::<f32, 2>::new(-1.0, 0.0));
+        assert!((k_y - 1.0).abs() < 1e-6);
+        let expected_x = (a.sin() + b.sin()) / (a.cos() + b.cos());
+        assert!((k_x - expected_x).abs() < 1e-5);
+        assert!((k_neg_x - k_x).abs() < 1e-6);
     }
 
     #[test]
-    fn friction_force_opposes_motion_direction() {
+    fn friction_comp_force_matches_tigers_model() {
         let model = test_model();
         let p = model.get_params();
 
-        // Pure +y motion: no x force, y force scaled by k(+y).
-        let f = model.compute_local_friction_force(SVector::<f32, 3>::new(0.0, 0.5, 0.0));
-        let k_y = model.friction_direction_factor(SVector::<f32, 2>::new(0.0, 1.0));
+        // Pure sideways motion: k = 1, force along motion.
+        let f = model.friction_comp_force(SVector::<f32, 3>::new(0.0, -0.5, 0.0));
         assert_eq!(f.x, 0.0);
-        let expected_y = -k_y * (p.coulomb_friction_linear_n + p.viscous_friction_linear_nspm * 0.5);
-        assert!((f.y - expected_y).abs() < 1e-4);
+        assert!((f.y + (p.coulomb_xy_n + p.viscous_xy_nspm * 0.5)).abs() < 1e-5);
 
-        // Pure -x motion: k = 1.
-        let f = model.compute_local_friction_force(SVector::<f32, 3>::new(-0.2, 0.0, 0.0));
-        let expected_x = p.coulomb_friction_linear_n + p.viscous_friction_linear_nspm * 0.2;
-        assert!((f.x - expected_x).abs() < 1e-4);
-        assert_eq!(f.y, 0.0);
+        // Pure forward motion: scaled by k(+x).
+        let f = model.friction_comp_force(SVector::<f32, 3>::new(0.4, 0.0, 0.0));
+        let k_x = model.friction_direction_factor(SVector::<f32, 2>::new(1.0, 0.0));
+        assert!((f.x - k_x * (p.coulomb_xy_n + p.viscous_xy_nspm * 0.4)).abs() < 1e-5);
 
-        // Diagonal motion: force anti-parallel to velocity.
+        // Diagonal motion: per-axis viscous term, Coulomb along the direction.
         let v = SVector::<f32, 3>::new(0.3, -0.4, 0.0);
-        let f = model.compute_local_friction_force(v);
-        let cross = f.x * v.y - f.y * v.x;
-        assert!(cross.abs() < 1e-5);
-        assert!(f.x * v.x + f.y * v.y < 0.0);
+        let f = model.friction_comp_force(v);
+        let dir = SVector::<f32, 2>::new(0.6, -0.8);
+        let k = model.friction_direction_factor(dir);
+        assert!((f.x - dir.x * k * (p.coulomb_xy_n + p.viscous_xy_nspm * 0.3)).abs() < 1e-5);
+        assert!((f.y - dir.y * k * (p.coulomb_xy_n + p.viscous_xy_nspm * 0.4)).abs() < 1e-5);
 
-        // At rest: no linear friction.
-        let f = model.compute_local_friction_force(SVector::<f32, 3>::zeros());
-        assert_eq!(f.x, 0.0);
-        assert_eq!(f.y, 0.0);
+        // Angular.
+        let f = model.friction_comp_force(SVector::<f32, 3>::new(0.0, 0.0, -2.0));
+        assert!((f.z + (p.coulomb_w_nm + p.viscous_w_nmsprad * 2.0)).abs() < 1e-6);
+
+        // Below the thresholds: off.
+        let f = model.friction_comp_force(SVector::<f32, 3>::new(0.005, 0.005, 5e-4));
+        assert_eq!(f, SVector::<f32, 3>::zeros());
+    }
+
+    #[test]
+    fn feedforward_local_accel_adds_friction_and_divides_by_efficiency() {
+        let model = test_model();
+        let p = model.get_params();
+        let v = SVector::<f32, 3>::new(0.0, 1.0, 3.0);
+        let a = SVector::<f32, 3>::new(1.0, 0.5, -2.0);
+        let out = model.feedforward_local_accel(v, a);
+        let f = model.friction_comp_force(v);
+        assert!((out.x - a.x / p.efficiency_xy).abs() < 1e-5);
+        assert!((out.y - (a.y + f.y / p.mass_kg) / p.efficiency_xy).abs() < 1e-5);
+        assert!((out.z - (a.z + f.z / p.iz_kgm2) / p.efficiency_w).abs() < 1e-4);
+    }
+
+    #[test]
+    fn update_params_rejects_nonpositive_efficiency() {
+        let mut model = test_model();
+        let mut params = test_params();
+        params.efficiency_xy = 0.0;
+        assert_eq!(model.update_params(params).err(), Some(ControlsError::InvalidInput));
+        let mut params = test_params();
+        params.efficiency_w = -1.0;
+        assert_eq!(model.update_params(params).err(), Some(ControlsError::InvalidInput));
     }
 
     #[test]
@@ -487,11 +545,12 @@ mod tests {
             mass_kg: 3.0,
             iz_kgm2: 0.015,
             motor_torque_constant_nmpa: 0.025,
-            motor_efficiency_factor: 0.9,
-            coulomb_friction_linear_n: 0.0,
-            coulomb_friction_angular_nm: 0.0,
-            viscous_friction_linear_nspm: 0.0,
-            viscous_friction_angular_nmsprad: 0.0,
+            coulomb_xy_n: 0.0,
+            viscous_xy_nspm: 0.0,
+            coulomb_w_nm: 0.0,
+            viscous_w_nmsprad: 0.0,
+            efficiency_xy: 1.0,
+            efficiency_w: 1.0,
         };
         model.update_params(params).unwrap();
         assert_eq!(model.get_params().mass_kg, 3.0);

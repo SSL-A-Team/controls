@@ -33,15 +33,16 @@ pub const DEFAULT_PHYS_R: f32 = 0.030;                   // m, wheel radius
 pub const DEFAULT_PHYS_MASS: f32 = 2.7;                  // kg
 pub const DEFAULT_PHYS_IZ: f32 = 0.008;                  // kg*m^2, moment of inertia
 pub const DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT: f32 = 0.0335;       // N*m/A
-// 1.0 with CS_SYNC_SAMPLING on the wheel-torque image: the current loop regulates
-// real phase current, so torque = Kt * I. 17.36 compensated the old D * I feedback.
-pub const DEFAULT_PHYS_MOTOR_EFFICIENCY_FACTOR: f32 = 1.0;
-// Linear friction coefficients are for motion along local +x; other directions
-// are scaled by RobotModel::friction_direction_factor.
-pub const DEFAULT_PHYS_COULOMB_FRICTION_LINEAR: f32 = 0.0;
-pub const DEFAULT_PHYS_COULOMB_FRICTION_ANGULAR: f32 = 0.0;
-pub const DEFAULT_PHYS_VISCOUS_FRICTION_LINEAR: f32 = 0.0;
-pub const DEFAULT_PHYS_VISCOUS_FRICTION_ANGULAR: f32 = 0.0;
+// Friction / output efficiency model after TIGERs Mannheim (model_fric.h). Linear
+// terms are for sideways (local y) motion and scaled by
+// RobotModel::friction_direction_factor otherwise. Identified by roll-out; see
+// analysis/ros_scripts/accel_tuning (rollout routine).
+pub const DEFAULT_PHYS_COULOMB_XY: f32 = 0.0;     // N
+pub const DEFAULT_PHYS_VISCOUS_XY: f32 = 0.0;     // N/(m/s)
+pub const DEFAULT_PHYS_COULOMB_W: f32 = 0.0;      // N*m
+pub const DEFAULT_PHYS_VISCOUS_W: f32 = 0.0;      // N*m/(rad/s)
+pub const DEFAULT_PHYS_EFFICIENCY_XY: f32 = 1.0;
+pub const DEFAULT_PHYS_EFFICIENCY_W: f32 = 1.0;
 
 
 
