@@ -36,8 +36,8 @@ class SafetyLimits:
     """Tether box relative to the start pose, plus the absolute field box below."""
     xy_abs = 0.25
     heading_abs = math.radians(95.0)
-    field_x = (0.0, 0.25)  # m, absolute
-    field_y_abs = 0.25     # m, absolute
+    field_x = (0.0, 1.0)   # m, absolute (x > 0; the start-relative box above is the tether limit)
+    field_y_abs = 1.0      # m, absolute
     speed = 0.6            # m/s, KF estimate
     ang_speed = 4.0        # rad/s, gyro
     wheel_current = 4.2    # A, motor current setpoint (4 A boost cap)
