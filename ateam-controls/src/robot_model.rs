@@ -5,8 +5,9 @@ use crate::{z_rotation_mat, ControlsError};
 /// Commanded linear speed (m/s) at which the linear Coulomb compensation reaches full
 /// strength; it ramps linearly from zero below this. TIGERs switch it fully on above
 /// 0.01 m/s instead, which on our robot (static friction near the available force)
-/// makes the robot hunt around a held position with ~2 A current steps.
-pub const FRICTION_XY_RAMP_MPS: f32 = 0.02;
+/// makes the robot hunt around a held position with ~2 A current steps. 0.02 m/s still
+/// swung the full force around with the feedback velocity near targets (yaw kicks).
+pub const FRICTION_XY_RAMP_MPS: f32 = 0.05;
 /// Commanded angular speed (rad/s) at which the angular Coulomb compensation reaches
 /// full strength (TIGERs: step at 1e-3 rad/s).
 pub const FRICTION_W_RAMP_RADPS: f32 = 0.2;
