@@ -182,6 +182,8 @@ def main():
                     help="absolute heading (rad) the +/-95 deg tether limit is measured from; default: start heading")
     ap.add_argument("--home", type=str, default=None,
                     help="absolute home pose 'x,y,theta' to move to (and hold) before the cycles; default: current pose")
+    ap.add_argument("--square", action="store_true",
+                    help="drive the square home -> +dx -> +dx+dy -> +dy -> home (heading fixed), --cycles laps")
     ap.add_argument("--sine-period", type=float, default=0.0,
                     help="if > 0: sweep the target home -> away -> home sinusoidally (period s) for --cycles periods")
     ap.add_argument("--out", type=str, default="analysis/data/small_move")
@@ -212,12 +214,22 @@ def main():
                 or not all(L.field_x[0] + 0.01 < p[0] < L.field_x[1] - 0.01 and abs(p[1]) < L.field_y_abs - 0.01
                            for p in (home, away))
                 or np.any(np.abs((np.array([home, away]) - node.start)[:, :2]) > L.xy_abs - 0.01)
-                or any(abs(math.remainder(p[2] - node.heading_ref, 2 * math.pi)) > math.radians(91) for p in (home, away))):
+                or any(abs(math.remainder(p[2] - node.heading_ref, 2 * math.pi)) > math.radians(91) for p in (home, away))
+                or (args.square and np.any(np.abs(home[:2] + np.array([args.dx, args.dy]) - node.start[:2]) > L.xy_abs - 0.01))):
             node.get_logger().error("move too large for the tether box")
             return 1
         node.get_logger().info(f"home {home}, away {away}")
         node.target = home
         ok = spin_for(node, args.hold if args.home is None else max(args.hold, 4.0))
+        if args.square:
+            corners = [home + np.array(c) for c in ((args.dx, 0.0, 0.0), (args.dx, args.dy, 0.0), (0.0, args.dy, 0.0), (0.0, 0.0, 0.0))]
+            for lap in range(args.cycles):
+                for i, c in enumerate(corners):
+                    if not ok:
+                        break
+                    node.get_logger().info(f"lap {lap + 1} corner {i + 1}: {c}")
+                    node.target = c
+                    ok = spin_for(node, args.hold)
         if args.sine_period > 0:
             node.get_logger().info(f"sine sweep: {args.cycles} x {args.sine_period} s")
             delta = away - home
@@ -228,7 +240,7 @@ def main():
                 ok = spin_for(node, 0.01)
             node.target = home
             ok = ok and spin_for(node, args.hold)
-        for i in range(args.cycles if args.sine_period <= 0 else 0):
+        for i in range(args.cycles if args.sine_period <= 0 and not args.square else 0):
             if not ok:
                 break
             node.get_logger().info(f"cycle {i + 1}: -> away")
