@@ -109,7 +109,8 @@ class SmallMoveTest(Node):
                                         self.target if self.target is not None else np.full(3, np.nan),
                                         [float(b.vision_update), float(b.body_control_mode)],
                                         [getattr(msg, m).velocity_telemetry.vel_setpoint_rads for m in MOTORS],
-                                        [getattr(msg, m).motion_control_type for m in MOTORS]]))
+                                        [getattr(msg, m).motion_control_type for m in MOTORS],
+                                        [((msg.timestamp_us_hi << 32) | msg.timestamp_us_lo) * 1e-6]]))
         if self.target is None or self.tripped:
             return
         L = self.lim
