@@ -41,8 +41,9 @@ pub const DEFAULT_PHYS_COULOMB_XY: f32 = 0.0;     // N
 pub const DEFAULT_PHYS_VISCOUS_XY: f32 = 0.0;     // N/(m/s)
 pub const DEFAULT_PHYS_COULOMB_W: f32 = 0.0;      // N*m
 pub const DEFAULT_PHYS_VISCOUS_W: f32 = 0.0;      // N*m/(rad/s)
-pub const DEFAULT_PHYS_EFFICIENCY_XY: f32 = 1.0;
-pub const DEFAULT_PHYS_EFFICIENCY_W: f32 = 1.0;
+// ~0.8 measured with the previous model; starting point until identified.
+pub const DEFAULT_PHYS_EFFICIENCY_XY: f32 = 0.8;
+pub const DEFAULT_PHYS_EFFICIENCY_W: f32 = 0.8;
 
 
 

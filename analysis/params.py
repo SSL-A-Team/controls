@@ -77,33 +77,33 @@ PARAM_MAP = {
         ],
     },
     # Parameters used only for upload (no ctypes struct mapping):
-    "TRACKING_ACCEL_GAIN": {
-        "param_id": 8,
-        "fields": [],
-    },
     "TRACKING_DIVERGENCE_THRESHOLD": {
         "param_id": 9,
-        "fields": [],
-    },
-    "POSE_FB_PIDII_LINEAR": {
-        "param_id": 10,
-        "fields": [],
-    },
-    "POSE_FB_PIDII_ANGULAR": {
-        "param_id": 11,
-        "fields": [],
-    },
-    "TWIST_FB_PIDII_LINEAR": {
-        "param_id": 12,
-        "fields": [],
-    },
-    "TWIST_FB_PIDII_ANGULAR": {
-        "param_id": 13,
         "fields": [],
     },
     # [SEED_SAMPLES] vision samples needed to (re)seed the firmware vision filter
     "VISION_SEED_SAMPLES": {
         "param_id": 14,
+        "fields": [],
+    },
+    # [K, MAX, ANTI_JITTER] XY position P feedback into the velocity setpoint
+    "POSE_FB_XY": {
+        "param_id": 15,
+        "fields": [],
+    },
+    # [POS_K, POS_MAX, ANTI_JITTER, VEL_K] angular feedback
+    "POSE_FB_W": {
+        "param_id": 16,
+        "fields": [],
+    },
+    # [KP, KI, ANTI_JITTER, MAX_CURRENT] wheel velocity loop on the motors
+    "WHEEL_VEL_FB": {
+        "param_id": 17,
+        "fields": [],
+    },
+    # [MAX_CURRENT] feed-forward wheel current limit (A)
+    "WHEEL_FF_CURRENT_LIMIT": {
+        "param_id": 18,
         "fields": [],
     },
 }
@@ -192,18 +192,15 @@ def default_controller_params_dict() -> dict:
         them would be silently rejected. Add them here if/when the firmware
         wires them up.
     """
-    # PID gains: [P, I, D, I_min, I_max]
-    linear_pose_pid = [300.0, 0.0, 7.0, 0.0, 0.0]
-    angular_pose_pid = [400.0, 0.0, 30.0, 0.0, 0.0]
     return {
-        # TRACKING_ACCEL_GAIN: [FEEDFORWARD_GAIN, FEEDBACK_GAIN] for the tracking accel path
-        "TRACKING_ACCEL_GAIN": [1.0, 1.0],
         # TRACKING_DIVERGENCE_THRESHOLD:
         #   [ERROR_POS_LINEAR, ERROR_POS_ANGULAR, ERROR_VEL_LINEAR, ERROR_VEL_ANGULAR]
         #   tracking errors that trigger divergence recovery
         "TRACKING_DIVERGENCE_THRESHOLD": [1.0, 1.57, 5.0, 10.0],
-        "POSE_FB_PIDII_LINEAR": linear_pose_pid,
-        "POSE_FB_PIDII_ANGULAR": angular_pose_pid,
+        "POSE_FB_XY": [8.0, 0.3, 0.01],
+        "POSE_FB_W": [8.0, 2.0, 0.01, 2.0],
+        "WHEEL_VEL_FB": [500.0, 0.0, 1.5, 2.0],
+        "WHEEL_FF_CURRENT_LIMIT": [2.0],
     }
 
 

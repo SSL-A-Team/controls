@@ -6,6 +6,10 @@ use crate::{z_rotation_mat, ControlsError};
 pub const FRICTION_XY_VEL_THRESHOLD_MPS: f32 = 0.01;
 /// Commanded angular speed (rad/s) at or below which angular friction compensation is off (TIGERs: 1e-3).
 pub const FRICTION_W_VEL_THRESHOLD_RADPS: f32 = 1e-3;
+/// Largest accepted friction parameter (N, N*s/m, N*m, N*m*s/rad); rejects typos.
+pub const MAX_FRICTION_PARAM: f32 = 10.0;
+/// Smallest accepted output efficiency (bounds the feed-forward gain at 1/MIN_EFFICIENCY).
+pub const MIN_EFFICIENCY: f32 = 0.2;
 
 
 /// Frames:
@@ -132,7 +136,12 @@ impl RobotModel {
         if roller_speed_ref < 1e-6 {
             return Err(ControlsError::InvalidInput);
         }
-        if !(params.efficiency_xy > 0.0) || !(params.efficiency_w > 0.0) || !(params.motor_torque_constant_nmpa > 0.0) {
+        let friction = [params.coulomb_xy_n, params.viscous_xy_nspm, params.coulomb_w_nm, params.viscous_w_nmsprad];
+        if friction.iter().any(|f| !(f.is_finite() && *f >= 0.0 && *f <= MAX_FRICTION_PARAM))
+            || !(params.efficiency_xy >= MIN_EFFICIENCY && params.efficiency_xy <= 1.0)
+            || !(params.efficiency_w >= MIN_EFFICIENCY && params.efficiency_w <= 1.0)
+            || !(params.motor_torque_constant_nmpa > 0.0 && params.motor_torque_constant_nmpa.is_finite())
+        {
             return Err(ControlsError::InvalidInput);
         }
 
@@ -524,13 +533,19 @@ mod tests {
     }
 
     #[test]
-    fn update_params_rejects_nonpositive_efficiency() {
+    fn update_params_rejects_invalid_friction_model() {
         let mut model = test_model();
         let mut params = test_params();
         params.efficiency_xy = 0.0;
         assert_eq!(model.update_params(params).err(), Some(ControlsError::InvalidInput));
         let mut params = test_params();
-        params.efficiency_w = -1.0;
+        params.efficiency_w = 1.5;
+        assert_eq!(model.update_params(params).err(), Some(ControlsError::InvalidInput));
+        let mut params = test_params();
+        params.coulomb_xy_n = f32::NAN;
+        assert_eq!(model.update_params(params).err(), Some(ControlsError::InvalidInput));
+        let mut params = test_params();
+        params.viscous_w_nmsprad = -0.1;
         assert_eq!(model.update_params(params).err(), Some(ControlsError::InvalidInput));
     }
 
