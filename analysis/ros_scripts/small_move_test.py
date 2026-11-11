@@ -185,6 +185,8 @@ def main():
                     help="absolute heading (rad) the +/-95 deg tether limit is measured from; default: start heading")
     ap.add_argument("--home", type=str, default=None,
                     help="absolute home pose 'x,y,theta' to move to (and hold) before the cycles; default: current pose")
+    ap.add_argument("--box", type=float, default=0.25,
+                    help="absolute tether box half-width (m) in field x and y")
     ap.add_argument("--square", action="store_true",
                     help="drive the square home -> +dx -> +dx+dy -> +dy -> home (heading fixed), --cycles laps")
     ap.add_argument("--sine-period", type=float, default=0.0,
@@ -213,7 +215,11 @@ def main():
         away = home + np.array([args.dx, args.dy, math.radians(args.dtheta_deg)])
         away[2] = math.remainder(away[2], 2 * math.pi)
         L = node.lim
-        if (abs(args.dx) > 0.21 or abs(args.dy) > 0.21 or abs(args.dtheta_deg) > 91 or args.hold > 10
+        L.field_x = (-args.box, args.box)
+        L.field_y_abs = args.box
+        L.xy_abs = 2.0 * args.box
+        max_step = 2.0 * args.box - 0.04
+        if (abs(args.dx) > max_step or abs(args.dy) > max_step or abs(args.dtheta_deg) > 91 or args.hold > 10
                 or not all(L.field_x[0] + 0.01 < p[0] < L.field_x[1] - 0.01 and abs(p[1]) < L.field_y_abs - 0.01
                            for p in (home, away))
                 or np.any(np.abs((np.array([home, away]) - node.start)[:, :2]) > L.xy_abs - 0.01)
