@@ -199,8 +199,8 @@ def default_controller_params_dict() -> dict:
         "TRACKING_DIVERGENCE_THRESHOLD": [1.0, 1.57, 5.0, 10.0],
         "POSE_FB_XY": [8.0, 0.3, 0.01],
         "POSE_FB_W": [8.0, 2.0, 0.01, 2.0],
-        "WHEEL_VEL_FB": [200.0, 0.0, 1.5, 2.5],
-        "WHEEL_FF_CURRENT_LIMIT": [2.5],
+        "WHEEL_VEL_FB": [200.0, 0.0, 1.5, 3.0],
+        "WHEEL_FF_CURRENT_LIMIT": [2.7],
     }
 
 
