@@ -36,8 +36,8 @@ class SafetyLimits:
     """Tether box relative to the start pose, plus the absolute field box below."""
     xy_abs = 0.25
     heading_abs = math.radians(95.0)
-    field_x = (0.0, 1.0)   # m, absolute (x > 0; the start-relative box above is the tether limit)
-    field_y_abs = 1.0      # m, absolute
+    field_x = (-0.25, 0.25)  # m, absolute tether box
+    field_y_abs = 0.25     # m, absolute tether box
     speed = 0.6            # m/s, KF estimate
     ang_speed = 4.0        # rad/s, gyro
     wheel_current = 4.2    # A, motor current setpoint (4 A boost cap)
@@ -60,6 +60,8 @@ class SmallMoveTest(Node):
         self.last_vision = None
         self.pose = None
         self.start = None
+        # absolute heading the tether heading limit is measured from (None: start heading)
+        self.heading_ref = None
         self.latest_wheel_vel = None
         self.target = None
         self.t0 = time.monotonic()
@@ -120,7 +122,8 @@ class SmallMoveTest(Node):
         if (not L.field_x[0] < pos[0] < L.field_x[1] or abs(pos[1]) >= L.field_y_abs
                 or abs(d[0]) > L.xy_abs or abs(d[1]) > L.xy_abs):
             self.trip(f"pose out of box {pos[:2]} (start {self.start[:2]})")
-        elif abs(dh := math.remainder(pos[2] - self.heading_ref, 2 * math.pi)) > L.heading_abs:
+        elif abs(dh := math.remainder(pos[2] - (self.start[2] if self.heading_ref is None else self.heading_ref),
+                                      2 * math.pi)) > L.heading_abs:
             self.trip(f"heading {math.degrees(dh):.1f} deg from reference")
         elif math.hypot(vel[0], vel[1]) > L.speed:
             self.trip(f"speed {math.hypot(vel[0], vel[1]):.2f} m/s")
