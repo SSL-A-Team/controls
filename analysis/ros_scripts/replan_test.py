@@ -34,6 +34,7 @@ def main():
     ap.add_argument("--noise-xy", type=float, default=0.01, help="per-packet target noise std (m)")
     ap.add_argument("--noise-th", type=float, default=1.0, help="per-packet heading noise std (deg)")
     ap.add_argument("--reversals", type=int, default=8)
+    ap.add_argument("--pre-hold", type=float, default=4.0, help="hold at home before moving (s)")
     ap.add_argument("--vmax", type=float, default=0.3)
     ap.add_argument("--amax", type=float, default=2.0)
     ap.add_argument("--wmax", type=float, default=3.0)
@@ -60,7 +61,7 @@ def main():
         node.start = home.copy()
         node.heading_ref = args.heading_ref
         node.target = home
-        ok = spin_for(node, 4.0)
+        ok = spin_for(node, args.pre_hold)
 
         k = 0 if args.axis == "x" else 1
         rng = np.random.default_rng(0)
