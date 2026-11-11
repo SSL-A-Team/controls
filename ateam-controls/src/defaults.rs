@@ -35,16 +35,18 @@ pub const DEFAULT_PHYS_IZ: f32 = 0.008;                  // kg*m^2, moment of in
 pub const DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT: f32 = 0.0335;       // N*m/A
 // Friction / output efficiency model after TIGERs Mannheim (model_fric.h). Linear
 // terms are for sideways (local y) motion and scaled by
-// RobotModel::friction_direction_factor otherwise. Robot 2 on carpet: breakaway
-// (friction_profile.py) ~4.1-4.7 N sideways-normalized, ~0.2 N*m rotation; plateau
-// (plateau_profile.py) rotation ~0.15 N*m. Coulomb at breakaway gave 2-4 mm / 0.5 deg
-// holds on 5 cm / 15 deg moves (small_move_test.py). Viscous = 0 as TIGERs.
+// RobotModel::friction_direction_factor otherwise. Robot 2 on carpet, after the
+// wheel-speed and commutation fixes (motor-side force, i.e. friction / efficiency):
+// kinetic (plateau_profile.py) ~5.3 N sideways-normalized (fwd 3.6-4.4, side
+// 5.6-6.4, diag 2.6-3.8 N), speed independent 0.1-0.2 m/s (viscous = 0, as TIGERs);
+// rotation 0.12 N*m kinetic, 0.21-0.26 N*m breakaway. Efficiency from open-loop
+// acceleration steps (accel_steps.py): ~0.8-1.0 linear, ~0.8 rotation (TIGERs: 0.72).
+// Coulomb terms below are efficiency * motor-side friction.
 pub const DEFAULT_PHYS_COULOMB_XY: f32 = 4.5;     // N
 pub const DEFAULT_PHYS_VISCOUS_XY: f32 = 0.0;     // N/(m/s)
-pub const DEFAULT_PHYS_COULOMB_W: f32 = 0.15;     // N*m
+pub const DEFAULT_PHYS_COULOMB_W: f32 = 0.1;      // N*m
 pub const DEFAULT_PHYS_VISCOUS_W: f32 = 0.0;      // N*m/(rad/s)
-// ~0.8 measured with the previous model; starting point until identified.
-pub const DEFAULT_PHYS_EFFICIENCY_XY: f32 = 0.8;
+pub const DEFAULT_PHYS_EFFICIENCY_XY: f32 = 0.85;
 pub const DEFAULT_PHYS_EFFICIENCY_W: f32 = 0.8;
 
 
