@@ -106,6 +106,11 @@ PARAM_MAP = {
         "param_id": 18,
         "fields": [],
     },
+    # [K] wheel slip feed-forward: wheel velocity setpoint += K * FF current ((rad/s)/A)
+    "WHEEL_SLIP_COMP": {
+        "param_id": 19,
+        "fields": [],
+    },
 }
 
 
@@ -201,6 +206,7 @@ def default_controller_params_dict() -> dict:
         "POSE_FB_W": [8.0, 2.0, 0.01, 2.0],
         "WHEEL_VEL_FB": [400.0, 0.0, 1.5, 4.0],
         "WHEEL_FF_CURRENT_LIMIT": [3.5],
+        "WHEEL_SLIP_COMP": [1.2],
     }
 
 
