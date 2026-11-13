@@ -41,12 +41,14 @@ pub const DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT: f32 = 0.0335;       // N*m/A
 // 5.6-6.4, diag 2.6-3.8 N), speed independent 0.1-0.2 m/s (viscous = 0, as TIGERs);
 // rotation 0.12 N*m kinetic, 0.21-0.26 N*m breakaway. Efficiency from open-loop
 // acceleration steps (accel_steps.py): ~0.8-1.0 linear, ~0.8 rotation (TIGERs: 0.72).
+// Nov 12, closed-loop 0.2 m moves at 3.5 A (least squares m*a = eff*F - fric):
+// 0.78 forward, 0.73 sideways -> 0.75 (tracking error -40% vs 0.85).
 // Coulomb terms below are efficiency * motor-side friction.
 pub const DEFAULT_PHYS_COULOMB_XY: f32 = 4.5;     // N
 pub const DEFAULT_PHYS_VISCOUS_XY: f32 = 0.0;     // N/(m/s)
 pub const DEFAULT_PHYS_COULOMB_W: f32 = 0.1;      // N*m
 pub const DEFAULT_PHYS_VISCOUS_W: f32 = 0.0;      // N*m/(rad/s)
-pub const DEFAULT_PHYS_EFFICIENCY_XY: f32 = 0.85;
+pub const DEFAULT_PHYS_EFFICIENCY_XY: f32 = 0.75;
 pub const DEFAULT_PHYS_EFFICIENCY_W: f32 = 0.8;
 
 
