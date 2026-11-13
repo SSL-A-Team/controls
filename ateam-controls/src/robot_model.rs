@@ -9,8 +9,12 @@ use crate::{z_rotation_mat, ControlsError};
 /// swung the full force around with the feedback velocity near targets (yaw kicks).
 pub const FRICTION_XY_RAMP_MPS: f32 = 0.05;
 /// Commanded angular speed (rad/s) at which the angular Coulomb compensation reaches
-/// full strength (TIGERs: step at 1e-3 rad/s).
-pub const FRICTION_W_RAMP_RADPS: f32 = 0.2;
+/// full strength (TIGERs: step at 1e-3 rad/s). The commanded rate includes the
+/// angular-rate feedback, which dithers ~+/-0.3 rad/s around zero when the robot
+/// holds or creeps; at 0.2 the compensation flipped sign with it (+/-15 rad/s^2
+/// torque steps that fed the wobble). At 0.6 it varies continuously instead
+/// (angular command chatter -55% on streamed position targets, robot 2).
+pub const FRICTION_W_RAMP_RADPS: f32 = 0.6;
 /// Largest accepted friction parameter (N, N*s/m, N*m, N*m*s/rad); rejects typos.
 pub const MAX_FRICTION_PARAM: f32 = 10.0;
 /// Smallest accepted output efficiency (bounds the feed-forward gain at 1/MIN_EFFICIENCY).
