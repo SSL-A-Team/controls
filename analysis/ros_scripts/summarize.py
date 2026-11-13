@@ -1,6 +1,6 @@
 """Generic summary of a small_move_test-family log (.npz with `data` rows).
 
-Row layout (small_move_test.on_telem): 0 t, 1-3 KF pose, 4-6 KF vel (global xy, w),
+Row layout (small_move_test.on_telem): 0 t, 1-3 KF pose, 4-6 KF vel (robot-local),
 7 gyro, 8-11 wheel current setpoints, 12-15 wheel vel, 16-18 traj pos, 19-21 vel_u,
 22-24 accel_u_fric_comp, 25-27 target (pose, NaN when velocity mode), 28 vision_update,
 29 body_control_mode, 30-33 wheel vel setpoints. vel_test-family files also carry
@@ -65,9 +65,7 @@ def main():
                   f"p95 {np.percentile(sxy, 95):.1f} mm, th median {np.median(sth):.2f} p95 {np.percentile(sth, 95):.2f} deg, "
                   f"I std {I[settled].std(0).mean():.2f}")
     if vel_mode.any():
-        th = a[:, 3]
-        c, s = np.cos(th), np.sin(th)
-        vl = np.stack([c * a[:, 4] + s * a[:, 5], -s * a[:, 4] + c * a[:, 5], a[:, 7]], 1)
+        vl = np.stack([a[:, 4], a[:, 5], a[:, 7]], 1)  # KF velocity is already robot-local
         e = vl[vel_mode] - vt[vel_mode]
         print(f"  VEL cmd-vs-actual(local, gyro) rms: vx {np.sqrt((e[:,0]**2).mean()):.3f} vy {np.sqrt((e[:,1]**2).mean()):.3f} "
               f"w {np.sqrt((e[:,2]**2).mean()):.3f}; max |w err| {np.abs(e[:,2]).max():.2f}")
