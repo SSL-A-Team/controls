@@ -38,12 +38,12 @@ class SafetyLimits:
     heading_abs = math.radians(95.0)
     field_x = (-0.25, 0.25)  # m, absolute tether box
     field_y_abs = 0.25     # m, absolute tether box
-    speed = 0.6            # m/s, KF estimate
+    speed = 0.8            # m/s, KF estimate (0.2 m moves peak ~0.6)
     ang_speed = 4.0        # rad/s, gyro
     wheel_current = 4.2    # A, motor current setpoint (4 A boost cap)
     wheel_speed = 60.0     # rad/s, encoder
-    telem_stale_s = 0.4    # radio telemetry gaps up to ~0.35 s observed; firmware stops at 0.5 s without commands
-    vision_stale_s = 0.4
+    telem_stale_s = 0.8    # robot radio TX stalls ~0.5 s every 1-2 min; firmware stops itself at 0.5 s without commands
+    vision_stale_s = 0.8   # from telemetry vision_update, so it sees the same radio stalls; firmware holds at 0.5 s
 
 
 class SmallMoveTest(Node):
