@@ -40,9 +40,10 @@ def main():
     ap.add_argument("--jitter", type=float, default=0.002, help="per-packet stick jitter (creep mode)")
     # trajectory limits sent with the command; 0 = firmware defaults (like the joystick)
     ap.add_argument("--vmax", type=float, default=0.0)
-    ap.add_argument("--amax", type=float, default=0.0)
+    # xbox_joy_config.yaml max_accel_linear / max_accel_angular (0 = firmware default)
+    ap.add_argument("--amax", type=float, default=2.0)
     ap.add_argument("--wmax", type=float, default=0.0)
-    ap.add_argument("--alphamax", type=float, default=0.0)
+    ap.add_argument("--alphamax", type=float, default=10.0)
     ap.add_argument("--out", type=str, default="analysis/data/joy_pos_test")
     args = ap.parse_args()
     if args.stick_xy * args.linear_range > 0.15 or args.stick_th * args.angular_range > math.radians(80):
