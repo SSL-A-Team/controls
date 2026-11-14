@@ -59,8 +59,12 @@ pub const DEFAULT_EKF_BUFF_LEN: usize = 192;
 pub const EKF_STATE_LEN: usize = 5;
 pub const EKF_INPUT_LEN: usize = 3;
 pub const EKF_MEAS_LEN: usize = 3;
-const DEFAULT_EKF_VISION_VAR_M: f32 = 0.05*0.05;
-const DEFAULT_EKF_VISION_VAR_RAD: f32 = 0.1*0.1;
+// Vision is ~0.2 mm / 0.09 deg std at rest on our field; these also absorb motion blur
+// and timing jitter. Real-time estimate vs vision while moving (Nov 13, robot 2):
+// 50 mm / 0.1 rad 7.6 mm, 10 mm / 0.03 rad 5.4 mm, 3 mm / 0.01 rad 5.3 mm / 0.36 deg;
+// no change in command jitter. Kept at 10 mm for noisier multi-camera vision.
+const DEFAULT_EKF_VISION_VAR_M: f32 = 0.01*0.01;
+const DEFAULT_EKF_VISION_VAR_RAD: f32 = 0.01*0.01;
 // Defines the measurement covariance matrix for the EKF
 pub const DEFAULT_EKF_R: SMatrix<f32, EKF_MEAS_LEN, EKF_MEAS_LEN> = SMatrix::<f32, EKF_MEAS_LEN, EKF_MEAS_LEN>::new(
     DEFAULT_EKF_VISION_VAR_M, 0.,                       0.,
