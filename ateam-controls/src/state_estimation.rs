@@ -1,5 +1,5 @@
 #![allow(unused)]
-use libm::{cosf, roundf, sinf};
+use libm::{cosf, fabsf, roundf, sinf};
 use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector, Rotation2};
 
@@ -988,10 +988,17 @@ impl Default for Odometer {
     }
 }
 
+const ACCEL_BIAS_TAU_S: f32 = 1.0;
+const ACCEL_BIAS_MAX_GYRO_RADPS: f32 = 0.05;
+
 pub struct StateEstimator<const L: usize, const K: usize> {
     pub ekf: BufferedEKF<L>,
     pub vision_filter: VisionFilter<K>,
     pub odometer: Odometer,
+    /// Accelerometer [x, y] bias, learned at standstill and removed from the EKF input.
+    /// Unremoved, the dead reckoning from the EKF horizon to now integrates it into a
+    /// standing velocity and position offset (0.05 m/s^2 gave ~16 mm/s and ~4 mm).
+    accel_bias: SVector<f32, 2>,
 }
 
 impl<const L: usize, const K: usize> StateEstimator<L, K> {
@@ -1007,6 +1014,7 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
             ekf,
             vision_filter,
             odometer,
+            accel_bias: SVector::zeros(),
         }
     }
 
@@ -1071,8 +1079,19 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
 
         let standstill = encoder_vel.fixed_rows::<2>(0).norm() < DEFAULT_ENCODER_STANDSTILL_MPS;
 
+        // Learn the bias only when not rotating either (an off-center IMU sees centripetal accel)
+        if standstill && fabsf(imu_accel.z) < ACCEL_BIAS_MAX_GYRO_RADPS {
+            let alpha = self.ekf.params.dt_us as f32 * 1e-6 / ACCEL_BIAS_TAU_S;
+            self.accel_bias += (imu_accel.fixed_rows::<2>(0) - self.accel_bias) * alpha;
+        }
+        let u = SVector::<f32, EKF_INPUT_LEN>::new(
+            imu_accel.x - self.accel_bias.x,
+            imu_accel.y - self.accel_bias.y,
+            imu_accel.z,
+        );
+
         self.ekf.tick(
-            *imu_accel,
+            u,
             z,
             z_age_us as u32,
             z_src,
