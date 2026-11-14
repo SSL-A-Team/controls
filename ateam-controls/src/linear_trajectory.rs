@@ -95,10 +95,11 @@ pub struct LinearTrajectory {
     /// Angular acceleration limit (rad/s²) used by the line-of-sight servo in
     /// [`LinearHeadingMode::FacePoint`]. Baked into `traj_theta` for `Fixed`.
     pub heading_max_accel: f32,
-    /// Internal time at which the heading axis is considered settled. For
-    /// `Fixed` this is `traj_theta.t4`; for `FacePoint` it is the time the
-    /// angular servo finishes acquiring the line-of-sight (computed once at
-    /// construction). Drives `end_time` along with the position profiles.
+    /// Internal time at which the heading axis is considered settled in
+    /// `Fixed` mode (`traj_theta.t4`). Unused in `FacePoint` mode, where the
+    /// acquisition time is simulated on demand by
+    /// [`heading_settle_time`](Self::heading_settle_time) to keep construction
+    /// cheap enough to replan every control tick.
     pub heading_end_time: f32,
     /// A point the line passes through (m). Fixed at construction.
     pub start_point: Vector2f,
@@ -187,8 +188,6 @@ impl LinearTrajectory {
         let mut traj = Self::build_position(init_state, start_point, line_dir, line_vel, params)?;
         traj.heading_mode = LinearHeadingMode::FacePoint;
         traj.target_point = target_point;
-        // Find when the angular servo finishes acquiring the line-of-sight.
-        traj.heading_end_time = traj.compute_heading_acquire_end(params);
         Ok(traj)
     }
 
@@ -270,8 +269,19 @@ impl LinearTrajectory {
     pub fn end_time(&self) -> f32 {
         self.traj_perp
             .t4
-            .max(self.heading_end_time)
+            .max(self.heading_settle_time())
             .max(self.traj_colinear_accel.t4)
+    }
+
+    /// Time at which the heading axis is settled: `traj_theta.t4` in `Fixed`
+    /// mode, or the simulated line-of-sight acquisition time in `FacePoint`
+    /// mode. The latter integrates the servo at the control rate, so it is
+    /// expensive and must not be called from the control loop.
+    pub fn heading_settle_time(&self) -> f32 {
+        match self.heading_mode {
+            LinearHeadingMode::Fixed => self.heading_end_time,
+            LinearHeadingMode::FacePoint => self.compute_heading_acquire_end(),
+        }
     }
 
     /// Evaluate the full robot state `[x, y, θ, ẋ, ẏ, θ̇]` at time `t`.
@@ -392,10 +402,10 @@ impl LinearTrajectory {
     /// Integrate the servo from the seed state to find when it has acquired the
     /// line-of-sight (both heading error and rate error within tolerance). Capped
     /// at the translational end time plus a margin.
-    fn compute_heading_acquire_end(&self, params: LinearParams) -> f32 {
+    fn compute_heading_acquire_end(&self) -> f32 {
         let lim = AngularLimits {
-            max_vel: params.max_vel_angular,
-            max_accel: params.max_accel_angular,
+            max_vel: self.heading_max_vel,
+            max_accel: self.heading_max_accel,
         };
         const E_TOL: f32 = 1e-3;       // rad
         const EDOT_TOL: f32 = 1e-2;    // rad/s
@@ -813,7 +823,7 @@ mod tests {
         ).unwrap();
 
         // Acquisition completes within the horizon.
-        let acq = traj.heading_end_time;
+        let acq = traj.heading_settle_time();
         assert!(acq > 0.0 && acq.is_finite());
 
         // After acquisition the heading tracks the line-of-sight lag-free.
