@@ -55,7 +55,7 @@ pub const DEFAULT_PHYS_EFFICIENCY_W: f32 = 0.8;
 
 
 // Defines how far back in time the EKF should run within the buffered EKF
-pub const DEFAULT_EKF_BUFF_LEN: usize = 64;
+pub const DEFAULT_EKF_BUFF_LEN: usize = 192;
 pub const EKF_STATE_LEN: usize = 5;
 pub const EKF_INPUT_LEN: usize = 3;
 pub const EKF_MEAS_LEN: usize = 3;
@@ -94,8 +94,14 @@ pub const DEFAULT_VISION_SEED_SAMPLES: usize = 20;
 // clock skew between the robot and the vision host. This is then used to place
 // the vision measurement at the correct instant in the EKF buffer and throw out
 // old measurements.
-pub const DEFAULT_VISION_MIN_LATENCY_US: u64 = 15_000;  // 15 ms
-pub const DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US: u64 = 62_000;  // 63 ms
+// Includes the camera pipeline before SSL-Vision stamps t_capture: t_capture -> PC
+// is only 8-12 ms (+ up to 17 ms for the 60 Hz bridge, + radio), yet the image is
+// older. Measured by aligning vision heading, at its EKF placement time, with gyro-
+// and encoder-integrated heading during fast rotation (Nov 13, robot 2): 15 ms put
+// vision 42 ms late, 87 ms 32 ms early, 97 ms 42 ms early -> 56 ms.
+pub const DEFAULT_VISION_MIN_LATENCY_US: u64 = 56_000;  // 56 ms
+// Applied ages then run ~60-120 ms (30 fps vision, 60 Hz commands)
+pub const DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US: u64 = 130_000;  // 130 ms
 // Timeout to consider vision as "inactive". This may stop the robot if the
 // active control mode requires absolute vision positioning.
 pub const DEFAULT_VISION_INACTIVE_THRESHOLD_US: u64 = 500_000;  // 500 ms

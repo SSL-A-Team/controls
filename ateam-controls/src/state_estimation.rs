@@ -1157,7 +1157,7 @@ mod tests {
         let bias = SVector::<f32, 3>::new(0.05, -0.03, 0.0);
         let mut ekf = BufferedEKF::<DEFAULT_EKF_BUFF_LEN>::new(BufferedEKFParams::default(), SVector::zeros(), bias);
         // Well past the EKF delay plus several correction time constants
-        tick_ekf_n(&mut ekf, 500, true);
+        tick_ekf_n(&mut ekf, 1000, true);
         let v = ekf.get_vel_local();
         assert!(v.x.abs() < 1e-3 && v.y.abs() < 1e-3, "residual vel {:?}", v);
     }
