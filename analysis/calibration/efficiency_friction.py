@@ -9,12 +9,12 @@
    (ground force for sideways motion, N).
 2. Validate (--validate): the fit only covers the model's terms; on robot 2 the fitted
    3.7 N tracked worse than 4.5 N. A/B candidate PHYS_FRICTION_MODEL values (radio
-   parameter 6: [coulomb_xy, viscous_xy, coulomb_w, viscous_w, eff_xy, eff_w]) on the
+   parameter 5: [coulomb_lin, coulomb_ang, viscous_lin, viscous_ang, eff_lin, eff_ang]) on the
    move set and keep the one with the lowest tracking error.
 
     python analysis/calibration/efficiency_friction.py --home=0,0,3.14 --heading-ref 3.14
     python analysis/calibration/efficiency_friction.py --home=0,0,3.14 --heading-ref 3.14 \
-        --skip-fit --validate 4.5,0,0.1,0,0.75,0.8 3.7,0,0.1,0,0.75,0.8
+        --skip-fit --validate 4.5,0.1,0,0,0.75,0.8 3.7,0.1,0,0,0.75,0.8
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def main():
     ap.add_argument("--mass", type=float, default=2.7, help="robot mass (kg), DEFAULT_PHYS_MASS")
     ap.add_argument("--no-run", action="store_true", help="fit an existing --out recording")
     ap.add_argument("--validate", nargs="*", default=[],
-                    help="PHYS_FRICTION_MODEL candidates 'coul_xy,visc_xy,coul_w,visc_w,eff_xy,eff_w' to A/B")
+                    help="PHYS_FRICTION_MODEL candidates 'coul_lin,coul_ang,visc_lin,visc_ang,eff_lin,eff_ang' to A/B")
     ap.add_argument("--repeats", type=int, default=2, help="move-set repeats per validation candidate")
     ap.add_argument("--skip-fit", action="store_true", help="only run --validate")
     args = ap.parse_args()
@@ -97,7 +97,7 @@ def main():
             print("\nnext: --validate with the current values and fitted variants, e.g.\n  --validate "
                   f"4.5,0,0.1,0,0.75,0.8 {coulomb:.2f},0,0.1,0,{eff:.2f},0.8 4.5,0,0.1,0,{eff:.2f},0.8")
     if args.validate:
-        validate(args, 6, args.validate, "PHYS_FRICTION_MODEL")
+        validate(args, 5, args.validate, "PHYS_FRICTION_MODEL")
 
 
 if __name__ == "__main__":

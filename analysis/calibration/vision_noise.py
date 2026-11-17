@@ -5,8 +5,8 @@
    real-time estimate error: each applied vision sample compared with the KF estimate
    the robot had at that capture time. At rest this should be ~1 mm; a larger constant
    offset means a bias (e.g. accelerometer) rather than R.
-3. With --r-values, repeats step 2 for each R (radio parameter KF_MEASUREMENT_STD, id 1,
-   [std_lin_m, std_ang_rad, 0, 0]). Pick the largest R that is close to the best moving
+3. With --r-values, repeats step 2 for each R (radio parameter EKF_MEASUREMENT_STD, id 1,
+   [std_lin_m, std_ang_rad]). Pick the largest R that is close to the best moving
    error; smaller R trusts vision more, which hurts with noisy multi-camera vision.
 
 Run vision_latency.py first: with a wrong latency, small R makes the estimate worse.
@@ -64,7 +64,7 @@ def main():
     moves = [move(args, 0, 0.2), move(args, 0.15, 0.15, 90)]
     for r in args.r_values or [None]:
         if r is not None:
-            if not set_param(args.robot, 1, f"{r},0,0"):
+            if not set_param(args.robot, 1, r):
                 print(f"R {r}: could not set parameter")
                 continue
         print(f"  R = {r or 'as flashed'}:")

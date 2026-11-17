@@ -5,7 +5,7 @@ Runs alongside a test script; stop with Ctrl-C or --duration.
     python analysis/ros_scripts/telem_record.py -r 2 --duration 20 --out /tmp/rec.npz
 
 Columns (see COLUMNS): robot time, gyro z, vision position (0 when no update this frame),
-KF position and local velocity, body control mode, age (s) of the vision measurement the
+position and local velocity estimate, body control mode, age (s) of the vision measurement the
 EKF applied this frame and whether it was too old to use, then per motor (FL, BL, BR, FR):
 encoder speed, hall speed, speed setpoint, current setpoint, measured current (mean
 of the 20 samples, unsigned), bus voltage, motor voltage command, motion type,
@@ -38,9 +38,9 @@ class Recorder(Node):
 
     def cb(self, m):
         b = m.body_control_telemetry
-        row = [time.monotonic(), ((m.timestamp_us_hi << 32) | m.timestamp_us_lo) * 1e-6, b.imu_gyro[2],
-               *b.vision_pose[:3], float(b.vision_update), *b.kf_body_pos_estimate[:3],
-               *b.kf_body_vel_estimate[:3], float(b.body_control_mode),
+        row = [time.monotonic(), ((m.timestamp_us_hi << 32) | m.timestamp_us_lo) * 1e-6, b.imu_gyro_w,
+               *b.vision_pos[:3], float(b.vision_update), *b.pos_est[:3],
+               *b.vel_est[:3], float(b.body_control_mode),
                b.vision_insert_age_us * 1e-6, float(b.vision_old)]
         for name in MOTORS:
             mot = getattr(m, name)

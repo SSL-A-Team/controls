@@ -11,7 +11,7 @@ K * (linear part of its feed-forward current).
    removed. Also runs two fast theta ramps and reports the same fit against the
    rotation current, which should be ~0 (rotation does not slip; the firmware only
    compensates the linear part).
-2. Validate (--validate): A/B candidate K values (radio parameter WHEEL_SLIP_COMP, id 19)
+2. Validate (--validate): A/B candidate K values (radio parameter FF_WHEEL_SLIP_COMP, id 10)
    on the move set; on robot 2 the fit gave ~1.0 and 1.2 tracked best.
 
     python analysis/calibration/wheel_slip.py --home=0,0,3.14 --heading-ref 3.14
@@ -61,7 +61,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     add_common_args(ap)
     ap.add_argument("--skip-fit", action="store_true", help="only run --validate")
-    ap.add_argument("--validate", nargs="*", default=[], help="WHEEL_SLIP_COMP candidates to A/B")
+    ap.add_argument("--validate", nargs="*", default=[], help="FF_WHEEL_SLIP_COMP candidates to A/B")
     ap.add_argument("--repeats", type=int, default=2, help="move-set repeats per validation candidate")
     args = ap.parse_args()
 
@@ -79,7 +79,7 @@ def main():
         if not args.validate:
             print(f"\nnext: --skip-fit --validate 0 {k_lin:.1f} {k_lin + 0.4:.1f} (the fitted K and neighbours)")
     if args.validate:
-        validate(args, 19, args.validate, "WHEEL_SLIP_COMP")
+        validate(args, 10, args.validate, "FF_WHEEL_SLIP_COMP")
 
 
 if __name__ == "__main__":

@@ -77,10 +77,10 @@ python3 analysis/calibration/vision_noise.py --home=0,0,3.14 --heading-ref 3.14 
     --r-values 0.05,0.1 0.01,0.01 0.003,0.005
 ```
 
-Prints vision noise at rest, then for each R (radio parameter `KF_MEASUREMENT_STD`) the
-real-time estimate error against vision while moving and at rest. Choose the largest R
-whose moving error is close to the best: smaller R trusts vision more, which hurts with
-noisy or multi-camera vision. The at-rest error should be about 1 mm with a near-zero
+Prints vision noise at rest, then for each R (radio parameter `EKF_MEASUREMENT_STD`,
+`lin_m,ang_rad`) the real-time estimate error against vision while moving and at rest.
+Choose the largest R whose moving error is close to the best: smaller R trusts vision
+more, which hurts with noisy or multi-camera vision. The at-rest error should be about 1 mm with a near-zero
 mean offset; a constant offset points at a bias, not R. Set the two variances
 (std squared) in `defaults.rs`.
 
@@ -89,7 +89,7 @@ mean offset; a constant offset points at a bias, not R. Set the two variances
 ```
 python3 analysis/calibration/efficiency_friction.py --home=0,0,3.14 --heading-ref 3.14
 python3 analysis/calibration/efficiency_friction.py --home=0,0,3.14 --heading-ref 3.14 \
-    --skip-fit --validate 4.5,0,0.1,0,0.75,0.8 3.9,0,0.1,0,0.75,0.8
+    --skip-fit --validate 4.5,0.1,0,0,0.75,0.8 3.9,0.1,0,0,0.75,0.8
 ```
 
 The fit uses forward, sideways and diagonal moves:
@@ -97,7 +97,7 @@ The fit uses forward, sideways and diagonal moves:
 fitted Coulomb force covers only what the model captures: on robot 2 it fits 3.7-3.9 N,
 but 4.5 N tracked as well or better. So validate it. `--validate` sets each
 `PHYS_FRICTION_MODEL` candidate
-(`coulomb_xy, viscous_xy, coulomb_w, viscous_w, efficiency_xy, efficiency_w`)
+(`coulomb_lin, coulomb_ang, viscous_lin, viscous_ang, efficiency_lin, efficiency_ang`)
 and reports trajectory tracking over the move set; use the default `--repeats 2` or
 more, and treat differences under ~1 mm as noise.
 
@@ -111,7 +111,7 @@ python3 analysis/calibration/wheel_slip.py --home=0,0,3.14 --heading-ref 3.14 \
 
 Fits how much faster each wheel spins than the body moves, per amp of linear wheel
 current (robot 2: K ≈ 1.0). It also checks rotation, which should show no slip (|K| <
-~0.3); the firmware compensates only the linear part. Validate around the fitted K
+~0.3); the firmware compensates only the linear part. Validate around the fitted K (radio parameter `FF_WHEEL_SLIP_COMP`)
 (robot 2: 0 → 10.0 mm, 1.2 → 7.3 mm tracking RMS) and set `WHEEL_SLIP_COMP`.
 
 ## Rolling out

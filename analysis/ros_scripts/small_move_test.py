@@ -99,17 +99,17 @@ class SmallMoveTest(Node):
         b = msg.body_control_telemetry
         if b.vision_update:
             self.last_vision = now
-        pos = np.array(b.kf_body_pos_estimate[:3], dtype=float)
-        vel = np.array(b.kf_body_vel_estimate[:3], dtype=float)
-        gyro = float(b.imu_gyro[2])
+        pos = np.array(b.pos_est[:3], dtype=float)
+        vel = np.array(b.vel_est[:3], dtype=float)
+        gyro = float(b.imu_gyro_w)
         cur = np.array([getattr(msg, m).current_telemetry.current_setpoint_ma for m in MOTORS]) / 1000.0
         wv = np.array([getattr(msg, m).velocity_telemetry.wheel_vel_rads for m in MOTORS])
         err = any(getattr(msg, m).master_error for m in MOTORS)
         self.pos = pos
         self.latest_wheel_vel = wv
-        traj = np.array(b.body_traj_pos[:3], dtype=float)
+        traj = np.array(b.traj_pos[:3], dtype=float)
         self.log.append(np.concatenate([[now - self.t0], pos, vel, [gyro], cur, wv, traj,
-                                        np.array(b.body_vel_u[:3]), np.array(b.body_accel_u_fric_comp[:3]),
+                                        np.array(b.vel_u[:3]), np.array(b.accel_u[:3]),
                                         self.target if self.target is not None else np.full(3, np.nan),
                                         [float(b.vision_update), float(b.body_control_mode)],
                                         [getattr(msg, m).velocity_telemetry.vel_setpoint_rads for m in MOTORS],
