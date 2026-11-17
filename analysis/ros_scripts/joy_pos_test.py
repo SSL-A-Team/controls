@@ -56,9 +56,9 @@ def main():
     threading.Thread(target=ex.spin, daemon=True).start()
     try:
         t_end = time.monotonic() + 10.0
-        while (node.pose is None or node.last_vision is None) and time.monotonic() < t_end:
+        while (node.pos is None or node.last_vision is None) and time.monotonic() < t_end:
             time.sleep(0.01)
-        if node.pose is None or node.last_vision is None:
+        if node.pos is None or node.last_vision is None:
             node.get_logger().error("no telemetry/vision")
             return 1
         spin_for(node, 0.5)

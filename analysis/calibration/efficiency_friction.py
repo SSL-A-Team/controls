@@ -4,7 +4,7 @@
 1. Fit: records forward, sideways and diagonal position moves, then least-squares fits
        m * a_local = eff * F_motor_local - k(dir) * coulomb * dir
    over moving samples, where F_motor comes from the wheel current setpoints, a_local
-   from the KF pose (Savitzky-Golay second derivative), and k(dir) is the firmware's
+   from the KF position (Savitzky-Golay second derivative), and k(dir) is the firmware's
    roller direction factor (1 sideways). The coulomb printed is in the firmware's units
    (ground force for sideways motion, N).
 2. Validate (--validate): the fit only covers the model's terms; on robot 2 the fitted
@@ -42,7 +42,7 @@ def direction_factor(dx, dy):
 
 
 def fit(t, g, mass):
-    # uniform 100 Hz resample of the KF pose and current setpoints
+    # uniform 100 Hz resample of the KF position and current setpoints
     T = np.arange(t[0], t[-1], 0.01)
     x, y = np.interp(T, t, g("x")), np.interp(T, t, g("y"))
     th = np.interp(T, t, np.unwrap(g("th")))

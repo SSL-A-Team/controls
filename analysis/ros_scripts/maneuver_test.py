@@ -148,12 +148,12 @@ def main():
     ex.add_node(node)
     threading.Thread(target=ex.spin, daemon=True).start()
     end = time.monotonic() + 5
-    while (node.pose is None or node.last_vision is None) and time.monotonic() < end:
+    while (node.pos is None or node.last_vision is None) and time.monotonic() < end:
         time.sleep(0.05)
-    if node.pose is None or node.last_vision is None:
+    if node.pos is None or node.last_vision is None:
         print("no telemetry/vision")
         return
-    node.start = node.pose.copy()
+    node.start = node.pos.copy()
     node.heading_ref = a.heading_ref
     tests = ("heading_pivot", "point_pivot", "heading_line", "point_line") if a.test == "all" else (a.test,)
     ok = True

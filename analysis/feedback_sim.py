@@ -1,7 +1,6 @@
 """Closed-loop safety sim of the firmware motion output stage.
 
-Mirrors control-board `ControlContext::calc_tracking_setpoints` (TIGERs-style
-position P into the velocity setpoint, anti-jitter fade) and the
+Mirrors control-board `ControlContext::calc_tracking_setpoints` (position P into the velocity setpoint, anti-jitter fade) and the
 `BodyController` output stage (friction compensation, output efficiency, accel
 clamp, uniform feed-forward current scaling, current slope limit), plus the
 wheel-torque motor firmware's P velocity loop and current limits. Trajectories
@@ -31,8 +30,8 @@ DT = 0.001
 
 @dataclass
 class Gains:
-    pose_fb_xy: tuple = (8.0, 0.3, 0.01)            # K, MAX, ANTI_JITTER (firmware defaults)
-    pose_fb_w: tuple = (8.0, 2.0, 0.01, 2.0)        # POS_K, POS_MAX, ANTI_JITTER, VEL_K
+    pos_fb_xy: tuple = (8.0, 0.3, 0.01)             # K, MAX, ANTI_JITTER (firmware defaults)
+    pos_fb_w: tuple = (8.0, 2.0, 0.01, 2.0)         # POS_K, POS_MAX, ANTI_JITTER, VEL_K
     wheel_vel_fb: tuple = (500.0, 0.0, 1.5, 4.0)    # KP mA/(rad/s), KI, AJ rad/s, MAX_CURRENT A
     ff_current_limit: float = 3.0
     slope_a_per_s: float = 500.0
@@ -67,8 +66,8 @@ class Plant:
 @dataclass
 class Result:
     t: np.ndarray
-    pose: np.ndarray
-    traj_pose: np.ndarray
+    pos: np.ndarray
+    traj_pos: np.ndarray
     vel_cmd: np.ndarray
     current: np.ndarray
     wheel_vel: np.ndarray
@@ -107,7 +106,7 @@ def direction_factor(dirs: np.ndarray, d: np.ndarray) -> float:
 
 
 def friction_force(dirs, v, c_xy, b_xy, c_w, b_w, smooth=0.0) -> np.ndarray:
-    """TIGERs ModelFricGetXY/W (smooth > 0 gives a tanh Coulomb for the plant)."""
+    """Friction compensation force (smooth > 0 gives a tanh Coulomb for the plant)."""
     f = np.zeros(3)
     speed = math.hypot(v[0], v[1])
     if smooth > 0.0 or speed > 0.01:
@@ -150,7 +149,7 @@ def simulate(waypoints, durations, traj_params, gains=Gains(), model=Model(), pl
     dirs = wheel_drive_dirs(phys)
     inertia = np.array([plant.mass, plant.mass, plant.iz])
 
-    pose = np.array(start, dtype=float)
+    pos = np.array(start, dtype=float)
     vel = np.zeros(3)                     # global
     traj = None
     target = None
@@ -161,7 +160,7 @@ def simulate(waypoints, durations, traj_params, gains=Gains(), model=Model(), pl
     kp, ki, aj_w, i_max = gains.wheel_vel_fb
 
     n = int(round(sum(durations) / DT))
-    log = {k: [] for k in ("t", "pose", "traj", "vel_cmd", "cur", "wv")}
+    log = {k: [] for k in ("t", "pos", "traj", "vel_cmd", "cur", "wv")}
     res_notes, diverged_at = [], None
     seg_ends = np.cumsum(durations)
 
@@ -169,23 +168,23 @@ def simulate(waypoints, durations, traj_params, gains=Gains(), model=Model(), pl
         t = k * DT
         seg = int(np.searchsorted(seg_ends, t, side="right"))
         seg = min(seg, len(waypoints) - 1)
-        est_pose = pose.copy()
+        est_pos = pos.copy()
         if estimate_jump is not None and t >= estimate_jump[0]:
-            est_pose += np.array(estimate_jump[1])
+            est_pos += np.array(estimate_jump[1])
         est_vel = vel.copy()
 
         # --- maneuver: plan on command change, seed from traj state if any ---
         if target is None or tuple(waypoints[seg]) != target:
             target = tuple(waypoints[seg])
             seed = (_sample(traj)[0] if traj is not None
-                    else np.concatenate([est_pose, est_vel]))
-            traj = ac.traj_from_target_pose(_v6(seed), _v3(target), traj_params)
+                    else np.concatenate([est_pos, est_vel]))
+            traj = ac.traj_from_target_pos(_v6(seed), _v3(target), traj_params)
         tstate, taccel = _sample(traj)
         ac.traj_tick(traj, DT)
 
         # --- divergence check (firmware brakes; sim stops here) ---
-        e_pos = math.hypot(*(tstate[:2] - est_pose[:2]))
-        e_ang = abs(math.remainder(tstate[2] - est_pose[2], 2 * math.pi))
+        e_pos = math.hypot(*(tstate[:2] - est_pos[:2]))
+        e_ang = abs(math.remainder(tstate[2] - est_pos[2], 2 * math.pi))
         e_vel = math.hypot(*(tstate[3:5] - est_vel[:2]))
         e_w = abs(tstate[5] - est_vel[2])
         dv = gains.divergence
@@ -194,31 +193,31 @@ def simulate(waypoints, durations, traj_params, gains=Gains(), model=Model(), pl
             res_notes.append(f"divergence recovery at t={t:.3f}s")
 
         if diverged_at is not None:
-            twist_out = np.zeros(3)
+            vel_out = np.zeros(3)
             accel_out = np.zeros(3)
         else:
             # --- tracking law (ControlContext::calc_tracking_setpoints) ---
-            k_xy, max_xy, aj_xy = gains.pose_fb_xy
-            err = tstate[:2] - est_pose[:2]
+            k_xy, max_xy, aj_xy = gains.pos_fb_xy
+            err = tstate[:2] - est_pos[:2]
             fb = err * k_xy
             nfb = float(np.linalg.norm(fb))
             if nfb > max_xy:
                 fb *= max_xy / nfb
             s_xy = aj_scale(float(np.linalg.norm(err)), aj_xy)
-            k_w, max_w, aj_ww, kv_w = gains.pose_fb_w
-            err_w = math.remainder(tstate[2] - est_pose[2], 2 * math.pi)
+            k_w, max_w, aj_ww, kv_w = gains.pos_fb_w
+            err_w = math.remainder(tstate[2] - est_pos[2], 2 * math.pi)
             fb_w = min(max(err_w * k_w, -max_w), max_w) + (tstate[5] - est_vel[2]) * kv_w
             s_w = aj_scale(abs(err_w), aj_ww)
-            twist_out = np.array([tstate[3] + fb[0] * s_xy, tstate[4] + fb[1] * s_xy,
+            vel_out = np.array([tstate[3] + fb[0] * s_xy, tstate[4] + fb[1] * s_xy,
                                   tstate[5] + fb_w * s_w])
             accel_out = np.array([taccel[0] * s_xy, taccel[1] * s_xy, taccel[2] * s_w])
 
         # --- output stage (BodyController::control_update) ---
-        heading = est_pose[2] + est_vel[2] * DT * 0.5
+        heading = est_pos[2] + est_vel[2] * DT * 0.5
         to_local = rot(-heading)
-        tw_l = to_local @ twist_out
+        vel_cmd_l = to_local @ vel_out
         ac_l = to_local @ accel_out
-        ff = ac_l + friction_force(dirs, tw_l, model.coulomb_xy, model.viscous_xy,
+        ff = ac_l + friction_force(dirs, vel_cmd_l, model.coulomb_xy, model.viscous_xy,
                                    model.coulomb_w, model.viscous_w) / inertia
         ff = ff / np.array([model.eff_xy, model.eff_xy, model.eff_w])
         ff = np.clip(ff, [-gains.accel_clamp[0]] * 2 + [-gains.accel_clamp[1]],
@@ -229,14 +228,14 @@ def simulate(waypoints, durations, traj_params, gains=Gains(), model=Model(), pl
             target_cur *= gains.ff_current_limit / m
         step = gains.slope_a_per_s * DT
         cur_out += np.clip(target_cur - cur_out, -step, step)
-        w_set = vel2wheel @ tw_l
+        w_set = vel2wheel @ vel_cmd_l
         if diverged_at is not None:
             w_set = np.zeros(4)  # active brake approximated as vel-hold at zero
 
         # --- motor firmware (previous tick's command) ---
         i_ff, w_cmd = motor_cmd
         motor_cmd = (cur_out.copy(), w_set.copy())
-        w_true = vel2wheel @ (rot(-pose[2]) @ vel)
+        w_true = vel2wheel @ (rot(-pos[2]) @ vel)
         w_filt += alpha * (w_true - w_filt)
         e = w_cmd - w_filt
         corr = kp * e / 1000.0
@@ -246,24 +245,24 @@ def simulate(waypoints, durations, traj_params, gains=Gains(), model=Model(), pl
         i_tot = np.clip(i_tot, -lim, lim)
 
         # --- plant ---
-        v_l = rot(-pose[2]) @ vel
+        v_l = rot(-pos[2]) @ vel
         torque = i_tot * plant.kt * np.array([plant.eff_xy] * 4)
         a_l = wheel2accel @ torque
         a_l[2] *= plant.eff_w / plant.eff_xy
         a_l -= friction_force(dirs, v_l, plant.coulomb_xy, plant.viscous_xy,
                               plant.coulomb_w, plant.viscous_w, smooth=0.005) / inertia
-        vel = vel + (rot(pose[2]) @ a_l) * DT
-        pose = pose + vel * DT
+        vel = vel + (rot(pos[2]) @ a_l) * DT
+        pos = pos + vel * DT
 
         log["t"].append(t)
-        log["pose"].append(pose.copy())
+        log["pos"].append(pos.copy())
         log["traj"].append(tstate[:3].copy())
-        log["vel_cmd"].append(twist_out.copy())
+        log["vel_cmd"].append(vel_out.copy())
         log["cur"].append(i_tot.copy())
         log["wv"].append(w_true.copy())
 
     ac.robot_model_free(rm)
-    return Result(np.array(log["t"]), np.array(log["pose"]), np.array(log["traj"]),
+    return Result(np.array(log["t"]), np.array(log["pos"]), np.array(log["traj"]),
                   np.array(log["vel_cmd"]), np.array(log["cur"]), np.array(log["wv"]),
                   diverged_at, res_notes)
 
@@ -286,7 +285,7 @@ def summarize(name, r: Result, current_bound=4.0 + 1e-6, rest_window=0.3) -> boo
     w_max = float(np.max(np.abs(r.vel_cmd[:, 2])))
     rest = r.t >= r.t[-1] - rest_window
     i_rest = float(np.max(np.abs(r.current[rest])))
-    final_err = r.pose[-1] - r.traj_pose[-1]
+    final_err = r.pos[-1] - r.traj_pos[-1]
     ok = i_max <= current_bound and np.all(np.isfinite(r.current))
     print(f"{name:42s} |I|max={i_max:5.2f}A  |v_cmd|max={v_max:5.2f}m/s  |w_cmd|max={w_max:5.2f}rad/s  "
           f"|I|rest={i_rest:5.3f}A  final err=({final_err[0]*1e3:+.1f}mm,{final_err[1]*1e3:+.1f}mm,"
@@ -325,9 +324,9 @@ def main():
     r = simulate(*SMALL_MOVE, tp, gains=test_gains, model=bad)
     all_ok &= summarize("worst accepted params (fric 10, eff 0.2)", r)
 
-    r = simulate(*SMALL_MOVE, tp, gains=Gains(pose_fb_xy=(8.0, 2.0, 0.01), pose_fb_w=(8.0, 8.0, 0.01, 2.0)),
+    r = simulate(*SMALL_MOVE, tp, gains=Gains(pos_fb_xy=(8.0, 2.0, 0.01), pos_fb_w=(8.0, 8.0, 0.01, 2.0)),
                  estimate_jump=(2.0, (0.3, 0.0, 0.0)))
-    all_ok &= summarize("vision jump 0.3m, TIGERs fb limits", r)
+    all_ok &= summarize("vision jump 0.3m, wide fb limits", r)
     r = simulate(*SMALL_MOVE, tp, gains=test_gains, estimate_jump=(2.0, (0.3, 0.0, 0.0)))
     all_ok &= summarize("vision jump 0.3m, test gains + divergence", r)
     r = simulate(*SMALL_MOVE, tp, gains=replace(test_gains, divergence=Gains().divergence),
@@ -338,8 +337,8 @@ def main():
     if args.plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots(3, 1, sharex=True)
-        ax[0].plot(small.t, small.pose[:, 0], label="x"); ax[0].plot(small.t, small.traj_pose[:, 0], "--", label="traj x")
-        ax[1].plot(small.t, np.degrees(small.pose[:, 2]), label="theta"); ax[1].plot(small.t, np.degrees(small.traj_pose[:, 2]), "--")
+        ax[0].plot(small.t, small.pos[:, 0], label="x"); ax[0].plot(small.t, small.traj_pos[:, 0], "--", label="traj x")
+        ax[1].plot(small.t, np.degrees(small.pos[:, 2]), label="theta"); ax[1].plot(small.t, np.degrees(small.traj_pos[:, 2]), "--")
         ax[2].plot(small.t, small.current); ax[2].set_ylabel("A")
         for a in ax:
             a.grid(); a.legend()

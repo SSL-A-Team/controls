@@ -267,10 +267,10 @@ def _setup_signatures(lib):
     lib.ateam_controls_robot_model_transform_accel2wheel_global.restype = Matrix4x3C
     lib.ateam_controls_robot_model_torques_to_currents.argtypes = [ctypes.c_void_p, Vector4C]
     lib.ateam_controls_robot_model_torques_to_currents.restype = Vector4C
-    lib.ateam_controls_traj_from_target_pose.argtypes = [Vector6C, Vector3C, TrajectoryParams, ctypes.POINTER(BangBangTraj3D)]
-    lib.ateam_controls_traj_from_target_pose.restype = ctypes.c_int32
-    lib.ateam_controls_traj_from_target_twist.argtypes = [Vector6C, Vector3C, TrajectoryParams, ctypes.POINTER(BangBangTraj3D)]
-    lib.ateam_controls_traj_from_target_twist.restype = ctypes.c_int32
+    lib.ateam_controls_traj_from_target_pos.argtypes = [Vector6C, Vector3C, TrajectoryParams, ctypes.POINTER(BangBangTraj3D)]
+    lib.ateam_controls_traj_from_target_pos.restype = ctypes.c_int32
+    lib.ateam_controls_traj_from_target_vel.argtypes = [Vector6C, Vector3C, TrajectoryParams, ctypes.POINTER(BangBangTraj3D)]
+    lib.ateam_controls_traj_from_target_vel.restype = ctypes.c_int32
     lib.ateam_controls_traj_1d_time_shift.argtypes = [ctypes.POINTER(BangBangTraj1D), ctypes.c_float]
     lib.ateam_controls_traj_1d_time_shift.restype = None
     lib.ateam_controls_traj_3d_time_shift.argtypes = [ctypes.POINTER(BangBangTraj3D), ctypes.c_float]
@@ -387,16 +387,16 @@ def robot_model_transform_accel2wheel_global(model, theta):
 def robot_model_torques_to_currents(model, torques):
     return _lib().ateam_controls_robot_model_torques_to_currents(model, torques)
 
-def traj_from_target_pose(init_state, target_pose, params):
+def traj_from_target_pos(init_state, target_pos, params):
     _out = BangBangTraj3D()
-    _rc = _lib().ateam_controls_traj_from_target_pose(init_state, target_pose, params, ctypes.byref(_out))
-    _check_rc(_rc, 'ateam_controls_traj_from_target_pose')
+    _rc = _lib().ateam_controls_traj_from_target_pos(init_state, target_pos, params, ctypes.byref(_out))
+    _check_rc(_rc, 'ateam_controls_traj_from_target_pos')
     return _out
 
-def traj_from_target_twist(init_state, target_twist, params):
+def traj_from_target_vel(init_state, target_vel, params):
     _out = BangBangTraj3D()
-    _rc = _lib().ateam_controls_traj_from_target_twist(init_state, target_twist, params, ctypes.byref(_out))
-    _check_rc(_rc, 'ateam_controls_traj_from_target_twist')
+    _rc = _lib().ateam_controls_traj_from_target_vel(init_state, target_vel, params, ctypes.byref(_out))
+    _check_rc(_rc, 'ateam_controls_traj_from_target_vel')
     return _out
 
 def traj_1d_time_shift(traj, dt):

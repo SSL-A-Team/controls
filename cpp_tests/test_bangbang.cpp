@@ -22,22 +22,22 @@ static Vector6C_t make_state(float x, float y, float z, float dx, float dy, floa
   return s;
 }
 
-TEST(BangBangBindings, FromTargetPoseRoundTrip) {
+TEST(BangBangBindings, FromTargetPosRoundTrip) {
   Vector6C_t init = make_state(0, 0, 0, 0, 0, 0);
   Vector3C_t target = {1.0f, 0.0f, 0.0f};
   TrajectoryParams_t params = test_traj_params();
   BangBangTraj3D_t traj = {};
-  ASSERT_EQ(ateam_controls_traj_from_target_pose(init, target, params, &traj), ATEAM_CONTROLS_OK);
+  ASSERT_EQ(ateam_controls_traj_from_target_pos(init, target, params, &traj), ATEAM_CONTROLS_OK);
   float end = ateam_controls_traj_end_time(traj);
   EXPECT_GT(end, 0.0f);
 }
 
-TEST(BangBangBindings, FromTargetTwistRoundTrip) {
+TEST(BangBangBindings, FromTargetVelRoundTrip) {
   Vector6C_t init = make_state(0, 0, 0, 0, 0, 0);
-  Vector3C_t target_twist = {0.3f, 0.0f, 0.0f};
+  Vector3C_t target_vel = {0.3f, 0.0f, 0.0f};
   TrajectoryParams_t params = test_traj_params();
   BangBangTraj3D_t traj = {};
-  ASSERT_EQ(ateam_controls_traj_from_target_twist(init, target_twist, params, &traj), ATEAM_CONTROLS_OK);
+  ASSERT_EQ(ateam_controls_traj_from_target_vel(init, target_vel, params, &traj), ATEAM_CONTROLS_OK);
   float end = ateam_controls_traj_end_time(traj);
   EXPECT_GT(end, 0.0f);
 }
@@ -47,7 +47,7 @@ TEST(BangBangBindings, StateAtRoundTrip) {
   Vector3C_t target = {1.0f, 0.0f, 0.0f};
   TrajectoryParams_t params = test_traj_params();
   BangBangTraj3D_t traj = {};
-  ASSERT_EQ(ateam_controls_traj_from_target_pose(init, target, params, &traj), ATEAM_CONTROLS_OK);
+  ASSERT_EQ(ateam_controls_traj_from_target_pos(init, target, params, &traj), ATEAM_CONTROLS_OK);
   float end = ateam_controls_traj_end_time(traj);
   Vector6C_t final_state = {};
   ASSERT_EQ(ateam_controls_traj_state_at(traj, end, &final_state), ATEAM_CONTROLS_OK);
@@ -59,7 +59,7 @@ TEST(BangBangBindings, AccelAtRoundTrip) {
   Vector3C_t target = {1.0f, 0.0f, 0.0f};
   TrajectoryParams_t params = test_traj_params();
   BangBangTraj3D_t traj = {};
-  ASSERT_EQ(ateam_controls_traj_from_target_pose(init, target, params, &traj), ATEAM_CONTROLS_OK);
+  ASSERT_EQ(ateam_controls_traj_from_target_pos(init, target, params, &traj), ATEAM_CONTROLS_OK);
   Vector3C_t accel = {};
   ASSERT_EQ(ateam_controls_traj_accel_at(traj, 0.0f, &accel), ATEAM_CONTROLS_OK);
   EXPECT_GT(std::fabs(accel.x), 0.0f);
@@ -70,7 +70,7 @@ TEST(BangBangBindings, TimeShift) {
   Vector3C_t target = {1.0f, 0.0f, 0.0f};
   TrajectoryParams_t params = test_traj_params();
   BangBangTraj3D_t traj = {};
-  ASSERT_EQ(ateam_controls_traj_from_target_pose(init, target, params, &traj), ATEAM_CONTROLS_OK);
+  ASSERT_EQ(ateam_controls_traj_from_target_pos(init, target, params, &traj), ATEAM_CONTROLS_OK);
   float initial_end = ateam_controls_traj_end_time(traj);
   ateam_controls_traj_3d_time_shift(&traj, 2.5f);
   float shifted_end = ateam_controls_traj_end_time(traj);
@@ -82,7 +82,7 @@ TEST(BangBangBindings, SampleMatchesStateAtZero) {
   Vector3C_t target = {1.0f, 0.0f, 0.0f};
   TrajectoryParams_t params = test_traj_params();
   BangBangTraj3D_t traj = {};
-  ASSERT_EQ(ateam_controls_traj_from_target_pose(init, target, params, &traj), ATEAM_CONTROLS_OK);
+  ASSERT_EQ(ateam_controls_traj_from_target_pos(init, target, params, &traj), ATEAM_CONTROLS_OK);
   Vector6C_t state = {};
   Vector3C_t accel = {};
   ateam_controls_traj_sample(traj, &state, &accel);
@@ -101,7 +101,7 @@ TEST(BangBangBindings, TickAdvancesToTarget) {
   Vector3C_t target = {1.0f, 0.0f, 0.0f};
   TrajectoryParams_t params = test_traj_params();
   BangBangTraj3D_t traj = {};
-  ASSERT_EQ(ateam_controls_traj_from_target_pose(init, target, params, &traj), ATEAM_CONTROLS_OK);
+  ASSERT_EQ(ateam_controls_traj_from_target_pos(init, target, params, &traj), ATEAM_CONTROLS_OK);
   float end = ateam_controls_traj_end_time(traj);
   const float dt = 0.001f;
   int steps = static_cast<int>(end / dt) + 10;

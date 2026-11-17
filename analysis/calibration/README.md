@@ -25,7 +25,7 @@ Not calibrated by these scripts:
 ## Setup
 
 1. Robot on the field, tethered or free, with room to move ±0.2 m and turn ±60°
-   around its home pose. Every test stops the robot if it leaves ±0.25 m / ±95° of
+   around its home position. Every test stops the robot if it leaves ±0.25 m / ±95° of
    home, goes too fast, or loses telemetry or vision.
 2. **Extended telemetry on** (control board DIP switch 0). The scripts record the
    extended telemetry stream.
@@ -44,7 +44,7 @@ Not calibrated by these scripts:
    cd controls
    ```
 
-Every script takes `--home=x,y,theta` (an absolute pose to move from and return to)
+Every script takes `--home=x,y,theta` (an absolute position to move from and return to)
 and `--heading-ref theta` (the heading the ±95° limit is measured from, normally the
 home heading), plus `-r ROBOT_ID` (default 2). Examples below use home (0, 0, π).
 A script run takes 1-3 minutes; each validation candidate takes about 1 minute per repeat.

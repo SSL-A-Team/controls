@@ -1,5 +1,5 @@
 use libm::{atan2f, fabsf, sqrtf};
-use crate::bangbang_trajectory::{BangBangTraj1D, solve_1d_pose, solve_1d_twist, eval_1d_state_at, eval_1d_accel_at};
+use crate::bangbang_trajectory::{BangBangTraj1D, solve_1d_pos, solve_1d_vel, eval_1d_state_at, eval_1d_accel_at};
 use crate::defaults::DEFAULT_CONTROL_DT_US;
 use crate::{ControlsError, Vector2f, Vector3f, Vector6f, wrap_angle};
 use crate::trajectory::Trajectory;
@@ -137,7 +137,7 @@ impl LinearTrajectory {
         let theta0 = init_state[2];
         let thetad0 = init_state[5];
         let theta_target = theta0 + wrap_angle(target_theta - theta0);
-        traj.traj_theta = solve_1d_pose(theta0, thetad0, theta_target, params.max_vel_angular, params.max_accel_angular)?;
+        traj.traj_theta = solve_1d_pos(theta0, thetad0, theta_target, params.max_vel_angular, params.max_accel_angular)?;
         traj.heading_mode = LinearHeadingMode::Fixed;
         traj.heading_end_time = traj.traj_theta.t4;
         Ok(traj)
@@ -222,10 +222,10 @@ impl LinearTrajectory {
         let (s0, vs0, d0, vd0) = project(init_state, start_point, line_dir, perp_dir);
 
         // Perpendicular: drive onto the line (target perp position 0).
-        let traj_perp = solve_1d_pose(d0, vd0, 0.0, params.max_vel_perp, params.max_accel_perp)?;
+        let traj_perp = solve_1d_pos(d0, vd0, 0.0, params.max_vel_perp, params.max_accel_perp)?;
 
         // Colinear braking to rest during the approach.
-        let traj_colinear = solve_1d_twist(vs0, 0.0, params.max_accel_colinear)?;
+        let traj_colinear = solve_1d_vel(vs0, 0.0, params.max_accel_colinear)?;
 
         // Time at which the perpendicular distance crosses below the threshold.
         let t_start = perp_threshold_time(traj_perp, d0, vd0, params.colinear_start_thresh_linear);
@@ -233,7 +233,7 @@ impl LinearTrajectory {
         // Colinear velocity at the engagement time, seeding the accel profile so it
         // works whether or not braking has finished by then.
         let (_, vs_at_start) = eval_1d_state_at(traj_colinear, s0, vs0, 0.0, t_start)?;
-        let mut traj_colinear_accel = solve_1d_twist(vs_at_start, line_vel, params.max_accel_colinear)?;
+        let mut traj_colinear_accel = solve_1d_vel(vs_at_start, line_vel, params.max_accel_colinear)?;
         traj_colinear_accel.time_shift(t_start);
 
         Ok(LinearTrajectory {

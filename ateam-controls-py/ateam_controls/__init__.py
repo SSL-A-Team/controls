@@ -56,8 +56,8 @@ from ._bindings import (
     robot_model_transform_accel2wheel_global,
     robot_model_torques_to_currents,
     # BangBang trajectory functions
-    traj_from_target_pose,
-    traj_from_target_twist,
+    traj_from_target_pos,
+    traj_from_target_vel,
     traj_1d_time_shift,
     traj_3d_time_shift,
     traj_end_time,

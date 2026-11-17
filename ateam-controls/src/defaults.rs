@@ -33,14 +33,13 @@ pub const DEFAULT_PHYS_R: f32 = 0.030;                   // m, wheel radius
 pub const DEFAULT_PHYS_MASS: f32 = 2.7;                  // kg
 pub const DEFAULT_PHYS_IZ: f32 = 0.008;                  // kg*m^2, moment of inertia
 pub const DEFAULT_PHYS_MOTOR_TORQUE_CONSTANT: f32 = 0.0335;       // N*m/A
-// Friction / output efficiency model after TIGERs Mannheim (model_fric.h). Linear
-// terms are for sideways (local y) motion and scaled by
+// Friction / output efficiency model. Linear terms are for sideways (local y) motion and scaled by
 // RobotModel::friction_direction_factor otherwise. Robot 2 on carpet, after the
 // wheel-speed and commutation fixes (motor-side force, i.e. friction / efficiency):
 // kinetic (plateau_profile.py) ~5.3 N sideways-normalized (fwd 3.6-4.4, side
-// 5.6-6.4, diag 2.6-3.8 N), speed independent 0.1-0.2 m/s (viscous = 0, as TIGERs);
+// 5.6-6.4, diag 2.6-3.8 N), speed independent 0.1-0.2 m/s (viscous = 0);
 // rotation 0.12 N*m kinetic, 0.21-0.26 N*m breakaway. Efficiency from open-loop
-// acceleration steps (accel_steps.py): ~0.8-1.0 linear, ~0.8 rotation (TIGERs: 0.72).
+// acceleration steps (accel_steps.py): ~0.8-1.0 linear, ~0.8 rotation.
 // Nov 12, closed-loop 0.2 m moves at 3.5 A (least squares m*a = eff*F - fric):
 // 0.78 forward, 0.73 sideways -> 0.75 (tracking error -40% vs 0.85).
 // Coulomb terms below are efficiency * motor-side friction.

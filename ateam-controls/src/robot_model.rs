@@ -3,15 +3,14 @@ use nalgebra::{SMatrix, SVector};
 use crate::{z_rotation_mat, ControlsError};
 
 /// Commanded linear speed (m/s) at which the linear Coulomb compensation reaches full
-/// strength; it ramps linearly from zero below this. TIGERs switch it fully on above
-/// 0.01 m/s instead, which on our robot (static friction near the available force)
-/// makes the robot hunt around a held position with ~2 A current steps. 0.02 m/s still
-/// swung the full force around with the feedback velocity near targets (yaw kicks).
+/// strength; it ramps linearly from zero below this. Switching it fully on above
+/// 0.01 m/s instead (static friction near the available force) makes the robot hunt
+/// around a held position with ~2 A current steps. 0.02 m/s still swung the full
+/// force around with the feedback velocity near targets (yaw kicks).
 pub const FRICTION_XY_RAMP_MPS: f32 = 0.05;
 /// Commanded angular speed (rad/s) at which the angular Coulomb compensation reaches
-/// full strength (TIGERs: step at 1e-3 rad/s). Its input excludes the gyro-rate
-/// feedback (see body_controller.rs), which otherwise dithered it +/-0.3 rad/s and
-/// forced a 0.6 rad/s ramp. At 0.6 a 1 deg heading error (0.15 rad/s P command) got
+/// full strength. Its input excludes the gyro-rate feedback (see body_controller.rs),
+/// which otherwise dithered it +/-0.3 rad/s and forced a 0.6 rad/s ramp. At 0.6 a 1 deg heading error (0.15 rad/s P command) got
 /// a quarter of the compensation and stalled in stiction; 0.2 settles to the 0.57 deg
 /// anti-jitter edge, with angular accel jitter 0.9-1.4 rad/s^2 (2.1 before the
 /// feedback exclusion).
@@ -54,8 +53,7 @@ pub struct RobotPhysicalParams {
     pub mass_kg: f32,  // Robot body mass in kilograms
     pub iz_kgm2: f32,  // Robot body moment of inertia around z axis in kg*m^2
     pub motor_torque_constant_nmpa: f32,  // Motor torque constant in N*m/A
-    // Friction / output model after TIGERs Mannheim (Firmware src/robot/model_fric.h,
-    // ModelFricConfig). Linear terms are for motion along local +-y (sideways) and are
+    // Friction / output model. Linear terms are for motion along local +-y (sideways) and are
     // scaled by `friction_direction_factor` otherwise.
     pub coulomb_xy_n: f32,  // Linear Coulomb friction in N
     pub viscous_xy_nspm: f32,  // Linear viscous friction in N/(m/s), applied per local axis
@@ -179,8 +177,7 @@ impl RobotModel {
     /// Linear friction direction factor k(dir): total roller speed for unit
     /// motion along the local unit vector `dir`, normalized so sideways motion
     /// (local +-y) gives 1. Linear friction is assumed to come from the
-    /// omni-wheel rollers, so it scales with this factor. Equivalent to TIGERs'
-    /// `getFrictionFactor` (whose local X axis is our sideways y axis).
+    /// omni-wheel rollers, so it scales with this factor.
     pub fn friction_direction_factor(&self, dir: SVector<f32, 2>) -> f32 {
         Self::roller_speed(&self.wheel_drive_dirs, dir) / self.roller_speed_ref
     }
@@ -278,8 +275,7 @@ impl RobotModel {
         torques / self.params.motor_torque_constant_nmpa
     }
 
-    /// Friction compensation force for a commanded local velocity, after
-    /// TIGERs' `ModelFricGetXY` / `ModelFricGetW` (Firmware src/robot/model_fric.c).
+    /// Friction compensation force for a commanded local velocity.
     ///
     /// Input and output are in the robot's local frame. The returned force
     /// points *along* the motion (it is the force needed to overcome friction):
@@ -293,8 +289,8 @@ impl RobotModel {
     /// T_z   = sign(w) * (min(|w| / FRICTION_W_RAMP_RADPS, 1) * coulomb_w + viscous_w * |w|)
     /// ```
     ///
-    /// The only deviation from TIGERs is the Coulomb ramp (they step it on above
-    /// 0.01 m/s / 1e-3 rad/s).
+    /// The Coulomb terms ramp in linearly with commanded speed (see
+    /// `FRICTION_XY_RAMP_MPS` / `FRICTION_W_RAMP_RADPS`).
     pub fn friction_comp_force(&self, local_vel: SVector<f32, 3>) -> SVector<f32, 3> {
         let p = &self.params;
         let speed = SVector::<f32, 2>::new(local_vel.x, local_vel.y).norm();
@@ -319,8 +315,7 @@ impl RobotModel {
         SVector::<f32, 3>::new(fx, fy, tz)
     }
 
-    /// Feed-forward output acceleration, after TIGERs' `CtrlPantheraUpdate`
-    /// (Firmware src/robot/ctrl_panthera.c): add the friction compensation
+    /// Feed-forward output acceleration: add the friction compensation
     /// acceleration for the commanded local velocity to the commanded local
     /// acceleration, then divide by the output efficiency. The result is fed to
     /// `transform_accel2wheel_local` to get wheel torques.
@@ -491,7 +486,7 @@ mod tests {
     fn friction_direction_factor_matches_geometry() {
         // alpha = 30 deg, beta = 45 deg: roller speed along x is sum |D_y| =
         // 2 sin a + 2 sin b, along y it is sum |D_x| = 2 cos a + 2 cos b. The
-        // reference direction is sideways (local y), as TIGERs' X axis.
+        // reference direction is sideways (local y).
         let model = RobotModel::new(RobotPhysicalParams::default()).unwrap();
         let (a, b) = (PI / 6.0, PI / 4.0);
         let k_x = model.friction_direction_factor(SVector::<f32, 2>::new(1.0, 0.0));
@@ -504,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn friction_comp_force_matches_tigers_model() {
+    fn friction_comp_force_matches_model() {
         let model = test_model();
         let p = model.get_params();
 

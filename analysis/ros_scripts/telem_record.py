@@ -4,8 +4,8 @@ Runs alongside a test script; stop with Ctrl-C or --duration.
 
     python analysis/ros_scripts/telem_record.py -r 2 --duration 20 --out /tmp/rec.npz
 
-Columns (see COLUMNS): robot time, gyro z, vision pose (0 when no update this frame),
-KF pose and local velocity, body control mode, age (s) of the vision measurement the
+Columns (see COLUMNS): robot time, gyro z, vision position (0 when no update this frame),
+KF position and local velocity, body control mode, age (s) of the vision measurement the
 EKF applied this frame and whether it was too old to use, then per motor (FL, BL, BR, FR):
 encoder speed, hall speed, speed setpoint, current setpoint, measured current (mean
 of the 20 samples, unsigned), bus voltage, motor voltage command, motion type,

@@ -161,14 +161,14 @@ Vector4C_t ateam_controls_robot_model_torques_to_currents(
 // BangBang Trajectory
 // ============================================================================
 
-int32_t ateam_controls_traj_from_target_pose(
+int32_t ateam_controls_traj_from_target_pos(
     Vector6C_t init_state,
-    Vector3C_t target_pose,
+    Vector3C_t target_pos,
     TrajectoryParams_t params,
     BangBangTraj3D_t* out);
-int32_t ateam_controls_traj_from_target_twist(
+int32_t ateam_controls_traj_from_target_vel(
     Vector6C_t init_state,
-    Vector3C_t target_twist,
+    Vector3C_t target_vel,
     TrajectoryParams_t params,
     BangBangTraj3D_t* out);
 
