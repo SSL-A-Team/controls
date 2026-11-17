@@ -16,7 +16,7 @@ CONTROLS_ROOT = ROS_SCRIPTS.parents[1]  # the tests save to analysis/data/... re
 
 # Robot geometry (ateam-controls defaults.rs): wheel angles, wheel distance, wheel radius
 ALPHA, BETA, L, R = math.pi / 6, math.pi / 4, 0.0814, 0.030
-# Wheel forces -> local [Fx, Fy, Tz]; M.T / R maps a local twist to wheel speeds (rad/s)
+# Wheel forces -> local [Fx, Fy, Tz]; M.T / R maps a local velocity to wheel speeds (rad/s)
 M = np.array([[-math.cos(ALPHA), -math.cos(BETA), math.cos(BETA), math.cos(ALPHA)],
               [math.sin(ALPHA), -math.sin(BETA), -math.sin(BETA), math.sin(ALPHA)],
               [L, L, L, L]])
@@ -25,7 +25,7 @@ M = np.array([[-math.cos(ALPHA), -math.cos(BETA), math.cos(BETA), math.cos(ALPHA
 def add_common_args(ap):
     ap.add_argument("-r", "--robot", type=int, default=2)
     ap.add_argument("--home", type=str, required=True,
-                    help="absolute home pose 'x,y,theta' (inside the tether box)")
+                    help="absolute home position 'x,y,theta' (inside the tether box)")
     ap.add_argument("--heading-ref", type=float, required=True,
                     help="absolute heading (rad) the tests' +/-95 deg limit is measured from")
     ap.add_argument("--out", type=str, default="/tmp/calib.npz", help="telemetry recording path")

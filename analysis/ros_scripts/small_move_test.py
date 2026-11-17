@@ -1,11 +1,11 @@
 """Small precise move test with a fast safety monitor.
 
-Holds the robot at its starting pose, then moves back and forth between HOME
+Holds the robot at its starting position, then moves back and forth between HOME
 and HOME + (dx, dy, dtheta) in BCM_GLOBAL_POSITION with conservative trajectory
 limits, logging telemetry to an .npz.
 
 Safety: on every ExtendedTelemetry message (and on a 500 Hz watchdog timer) the
-monitor checks the pose box, heading, speeds, wheel current setpoints, motor
+monitor checks the position box, heading, speeds, wheel current setpoints, motor
 errors, vision freshness and telemetry staleness. On any violation it latches
 and publishes BCM_OFF at the timer rate until the script exits.
 
@@ -33,7 +33,7 @@ MOTORS = ("front_left_motor", "back_left_motor", "back_right_motor", "front_righ
 
 
 class SafetyLimits:
-    """Tether box relative to the start pose, plus the absolute field box below."""
+    """Tether box relative to the start position, plus the absolute field box below."""
     xy_abs = 0.25
     heading_abs = math.radians(95.0)
     field_x = (-0.25, 0.25)  # m, absolute tether box
@@ -58,7 +58,7 @@ class SmallMoveTest(Node):
         self.tripped: str | None = None
         self.last_telem = None
         self.last_vision = None
-        self.pose = None
+        self.pos = None
         self.start = None
         # absolute heading the tether heading limit is measured from (None: start heading)
         self.heading_ref = None
@@ -105,7 +105,7 @@ class SmallMoveTest(Node):
         cur = np.array([getattr(msg, m).current_telemetry.current_setpoint_ma for m in MOTORS]) / 1000.0
         wv = np.array([getattr(msg, m).velocity_telemetry.wheel_vel_rads for m in MOTORS])
         err = any(getattr(msg, m).master_error for m in MOTORS)
-        self.pose = pos
+        self.pos = pos
         self.latest_wheel_vel = wv
         traj = np.array(b.traj_pos[:3], dtype=float)
         self.log.append(np.concatenate([[now - self.t0], pos, vel, [gyro], cur, wv, traj,
@@ -121,7 +121,7 @@ class SmallMoveTest(Node):
         d = pos - self.start
         if (not L.field_x[0] < pos[0] < L.field_x[1] or abs(pos[1]) >= L.field_y_abs
                 or abs(d[0]) > L.xy_abs or abs(d[1]) > L.xy_abs):
-            self.trip(f"pose out of box {pos[:2]} (start {self.start[:2]})")
+            self.trip(f"position out of box {pos[:2]} (start {self.start[:2]})")
         elif abs(dh := math.remainder(pos[2] - (self.start[2] if self.heading_ref is None else self.heading_ref),
                                       2 * math.pi)) > L.heading_abs:
             self.trip(f"heading {math.degrees(dh):.1f} deg from reference")
@@ -184,7 +184,7 @@ def main():
     ap.add_argument("--heading-ref", type=float, default=None,
                     help="absolute heading (rad) the +/-95 deg tether limit is measured from; default: start heading")
     ap.add_argument("--home", type=str, default=None,
-                    help="absolute home pose 'x,y,theta' to move to (and hold) before the cycles; default: current pose")
+                    help="absolute home position 'x,y,theta' to move to (and hold) before the cycles; default: current position")
     ap.add_argument("--box", type=float, default=0.25,
                     help="absolute tether box half-width (m) in field x and y")
     ap.add_argument("--square", action="store_true",
@@ -203,15 +203,15 @@ def main():
     try:
         node.get_logger().info("waiting for telemetry + vision")
         end = time.monotonic() + 10.0
-        while (node.pose is None or node.last_vision is None) and time.monotonic() < end:
+        while (node.pos is None or node.last_vision is None) and time.monotonic() < end:
             time.sleep(0.01)
-        if node.pose is None or node.last_vision is None:
+        if node.pos is None or node.last_vision is None:
             node.get_logger().error("no telemetry/vision; aborting")
             return 1
         spin_for(node, 0.5)
-        node.start = node.pose.copy()
+        node.start = node.pos.copy()
         node.heading_ref = node.start[2] if args.heading_ref is None else args.heading_ref
-        home = node.pose.copy() if args.home is None else np.array([float(v) for v in args.home.split(",")])
+        home = node.pos.copy() if args.home is None else np.array([float(v) for v in args.home.split(",")])
         away = home + np.array([args.dx, args.dy, math.radians(args.dtheta_deg)])
         away[2] = math.remainder(away[2], 2 * math.pi)
         L = node.lim

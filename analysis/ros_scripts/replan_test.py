@@ -51,9 +51,9 @@ def main():
     threading.Thread(target=ex.spin, daemon=True).start()
     try:
         t_end = time.monotonic() + 10.0
-        while (node.pose is None or node.last_vision is None) and time.monotonic() < t_end:
+        while (node.pos is None or node.last_vision is None) and time.monotonic() < t_end:
             time.sleep(0.01)
-        if node.pose is None or node.last_vision is None:
+        if node.pos is None or node.last_vision is None:
             node.get_logger().error("no telemetry/vision")
             return 1
         spin_for(node, 0.5)
@@ -68,7 +68,7 @@ def main():
         direction, reversals = 1.0, 0
         node.get_logger().info(f"carrot {args.carrot} m along {args.axis}, flip at +/-{args.flip} m")
         while ok and reversals < args.reversals:
-            off = node.pose[k] - home[k]
+            off = node.pos[k] - home[k]
             if direction * off > args.flip:
                 direction = -direction
                 reversals += 1

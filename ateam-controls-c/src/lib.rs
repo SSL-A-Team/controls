@@ -162,13 +162,13 @@ pub unsafe extern "C" fn ateam_controls_robot_model_torques_to_currents(
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_traj_from_target_pose(
+pub unsafe extern "C" fn ateam_controls_traj_from_target_pos(
     init_state: Vector6C,
-    target_pose: Vector3C,
+    target_pos: Vector3C,
     params: TrajectoryParams,
     out: *mut BangBangTraj3D,
 ) -> i32 {
-    match BangBangTraj3D::from_target_pose(init_state.into(), target_pose.into(), params) {
+    match BangBangTraj3D::from_target_pos(init_state.into(), target_pos.into(), params) {
         Ok(traj) => {
             unsafe { *out = traj; }
             0
@@ -178,13 +178,13 @@ pub unsafe extern "C" fn ateam_controls_traj_from_target_pose(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_traj_from_target_twist(
+pub unsafe extern "C" fn ateam_controls_traj_from_target_vel(
     init_state: Vector6C,
-    target_twist: Vector3C,
+    target_vel: Vector3C,
     params: TrajectoryParams,
     out: *mut BangBangTraj3D,
 ) -> i32 {
-    match BangBangTraj3D::from_target_twist(init_state.into(), target_twist.into(), params) {
+    match BangBangTraj3D::from_target_vel(init_state.into(), target_vel.into(), params) {
         Ok(traj) => {
             unsafe { *out = traj; }
             0
