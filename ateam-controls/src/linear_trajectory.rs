@@ -1,6 +1,6 @@
 use libm::{atan2f, fabsf, sqrtf};
 use crate::bangbang_trajectory::{BangBangTraj1D, solve_1d_pose, solve_1d_twist, eval_1d_state_at, eval_1d_accel_at};
-use crate::defaults::DEFAULT_CONTROL_DT;
+use crate::defaults::DEFAULT_CONTROL_DT_US;
 use crate::{ControlsError, Vector2f, Vector3f, Vector6f, wrap_angle};
 use crate::trajectory::Trajectory;
 
@@ -344,7 +344,7 @@ impl LinearTrajectory {
         let mut theta = self.state[2];
         let mut thetad = self.state[5];
         let mut thetadd = 0.0;
-        let dt = DEFAULT_CONTROL_DT;
+        let dt = DEFAULT_CONTROL_DT_US as f32 * 1e-6;
         let mut elapsed = 0.0;
         while elapsed < t - 1e-9 {
             let h = dt.min(t - elapsed);
@@ -401,7 +401,7 @@ impl LinearTrajectory {
         const EDOT_TOL: f32 = 1e-2;    // rad/s
         let pos_end = self.traj_perp.t4.max(self.traj_colinear_accel.t4);
         let horizon = pos_end + 5.0;
-        let dt = DEFAULT_CONTROL_DT;
+        let dt = DEFAULT_CONTROL_DT_US as f32 * 1e-6;
 
         let mut theta = self.state[2];
         let mut thetad = self.state[5];
@@ -872,8 +872,8 @@ mod tests {
         let mut traj = LinearTrajectory::from_point(
             init, 2.0, 2.0, start, dir, 1.5, test_params(),
         ).unwrap();
-        let predicted = traj.state_at(DEFAULT_CONTROL_DT).unwrap();
-        traj.tick(DEFAULT_CONTROL_DT);
+        let predicted = traj.state_at(DEFAULT_CONTROL_DT_US as f32 * 1e-6).unwrap();
+        traj.tick(DEFAULT_CONTROL_DT_US as f32 * 1e-6);
         let (sampled, _) = traj.sample();
         for i in 0..6 {
             assert!((sampled[i] - predicted[i]).abs() < 1e-4, "idx {i}: {} vs {}", sampled[i], predicted[i]);
