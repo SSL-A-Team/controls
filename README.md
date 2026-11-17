@@ -8,7 +8,6 @@ The shared code is written primarily in Rust with C interface bindings.
 
 * **ateam-controls** — Primary Rust crate for control algorithms
 * **ateam-controls-c** — C-compatible library and headers
-* **ateam-controls-py** — Installable Python package with ctypes bindings (same interface as the C library)
 * **analysis** — Robot calibration routines and ROS motion test scripts
 * **cpp_tests** — Tests for the C-compatible bindings
 
@@ -70,4 +69,3 @@ and are run from the `controls` directory (logs go to `analysis/data/`).
 - `ros_scripts/telem_record.py` — record extended telemetry to an `.npz`.
 - `hf_capture_decode.py` — decode the 1 kHz control-loop capture from an RTT log
   (control board built with `--features hf-capture`).
-- `feedback_sim.py` — offline closed-loop safety simulation of the motion output stage.
