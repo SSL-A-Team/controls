@@ -61,39 +61,23 @@ typedef struct Matrix4x3C {
     float data[12];
 } Matrix4x3C_t;
 
-typedef struct KalmanFilterParams {
-    float process_noise_std_pos_linear;
-    float process_noise_std_pos_angular;
-    float process_noise_std_vel_linear;
-    float process_noise_std_vel_angular;
-    float measurement_noise_std_vision_pos_linear;
-    float measurement_noise_std_vision_pos_angular;
-    float measurement_noise_std_encoder_vel_angular;
-    float measurement_noise_std_gyro_vel_angular;
-    float max_pos_linear;
-    float max_pos_angular;
-    float max_vel_linear;
-    float max_vel_angular;
-} KalmanFilterParams_t;
-
 typedef struct RobotPhysicalParams {
-    float alpha;
-    float beta;
-    float l;
-    float r;
-    float mass;
-    float iz;
-    float motor_torque_constant;
-    float motor_efficiency_factor;
-    float coulomb_friction_coefficient_linear_x;
-    float coulomb_friction_coefficient_linear_y;
-    float coulomb_friction_coefficient_angular;
-    float viscous_friction_coefficient_linear_x;
-    float viscous_friction_coefficient_linear_y;
-    float viscous_friction_coefficient_angular;
+    float alpha_rad;
+    float beta_rad;
+    float l_m;
+    float r_m;
+    float mass_kg;
+    float iz_kgm2;
+    float motor_torque_constant_nmpa;
+    float coulomb_xy_n;
+    float viscous_xy_nspm;
+    float coulomb_w_nm;
+    float viscous_w_nmsprad;
+    float efficiency_xy;
+    float efficiency_w;
 } RobotPhysicalParams_t;
 
-// Opaque handle to the full RobotModel (includes KF state, physical matrices, etc.)
+// Opaque handle to the full RobotModel (physical matrices, kinematic transforms, etc.)
 typedef struct RobotModel RobotModel_t;
 
 typedef struct TrajectoryParams {
@@ -127,7 +111,6 @@ typedef struct BangBangTraj3D {
 // Default parameter constructors
 // ============================================================================
 
-KalmanFilterParams_t ateam_controls_default_kf_params(void);
 RobotPhysicalParams_t ateam_controls_default_phys_params(void);
 TrajectoryParams_t ateam_controls_default_traj_params(void);
 
@@ -136,37 +119,39 @@ TrajectoryParams_t ateam_controls_default_traj_params(void);
 // ============================================================================
 
 int32_t ateam_controls_robot_model_new(
-    float kf_dt,
-    KalmanFilterParams_t kf_params,
     RobotPhysicalParams_t phys_params,
     RobotModel_t** out);
 void ateam_controls_robot_model_free(RobotModel_t* model);
 
-void ateam_controls_robot_model_update_kf_params(
-    RobotModel_t* model,
-    KalmanFilterParams_t kf_params);
-int32_t ateam_controls_robot_model_update_physical_params(
+int32_t ateam_controls_robot_model_update_params(
     RobotModel_t* model,
     RobotPhysicalParams_t phys_params);
 
-void ateam_controls_robot_model_kf_predict(RobotModel_t* model, Vector3C_t accel);
-int32_t ateam_controls_robot_model_kf_update(
-    RobotModel_t* model,
-    Vector8C_t measurement,
-    bool mask_vision,
-    bool mask_encoder,
-    bool mask_gyro);
-
-Vector6C_t ateam_controls_robot_model_get_state(const RobotModel_t* model);
-void ateam_controls_robot_model_set_state(RobotModel_t* model, Vector6C_t state);
-
-Matrix3x4C_t ateam_controls_robot_model_transform_wheel2twist(
+// Wheel order is FL, BL, BR, FR (rad/s for velocities, N*m for torques).
+// local = robot frame, global = field frame rotated by robot heading theta.
+Vector3C_t ateam_controls_robot_model_wheel_to_local_vel(
+    const RobotModel_t* model, Vector4C_t encoder);
+Vector3C_t ateam_controls_robot_model_wheel_to_global_vel(
+    const RobotModel_t* model, Vector4C_t encoder, float theta);
+Vector3C_t ateam_controls_robot_model_wheel_to_local_accel(
+    const RobotModel_t* model, Vector4C_t torque);
+Vector3C_t ateam_controls_robot_model_wheel_to_global_accel(
+    const RobotModel_t* model, Vector4C_t torque, float theta);
+Matrix3x4C_t ateam_controls_robot_model_transform_wheel2vel_local(
+    const RobotModel_t* model);
+Matrix3x4C_t ateam_controls_robot_model_transform_wheel2vel_global(
     const RobotModel_t* model, float theta);
-Matrix4x3C_t ateam_controls_robot_model_transform_twist2wheel(
+Matrix4x3C_t ateam_controls_robot_model_transform_vel2wheel_local(
+    const RobotModel_t* model);
+Matrix4x3C_t ateam_controls_robot_model_transform_vel2wheel_global(
     const RobotModel_t* model, float theta);
-Matrix3x4C_t ateam_controls_robot_model_transform_wheel2accel(
+Matrix3x4C_t ateam_controls_robot_model_transform_wheel2accel_local(
+    const RobotModel_t* model);
+Matrix3x4C_t ateam_controls_robot_model_transform_wheel2accel_global(
     const RobotModel_t* model, float theta);
-Matrix4x3C_t ateam_controls_robot_model_transform_accel2wheel(
+Matrix4x3C_t ateam_controls_robot_model_transform_accel2wheel_local(
+    const RobotModel_t* model);
+Matrix4x3C_t ateam_controls_robot_model_transform_accel2wheel_global(
     const RobotModel_t* model, float theta);
 
 Vector4C_t ateam_controls_robot_model_torques_to_currents(

@@ -1,10 +1,10 @@
 #![allow(unused)]
-use libm::{cosf, roundf, sinf};
+use libm::{cosf, fabsf, roundf, sinf};
 use core::f32::consts::PI;
 use nalgebra::{SMatrix, SVector, Rotation2};
 
 use crate::defaults::{
-    DEFAULT_CONTROL_DT_US, DEFAULT_EKF_CORR_COEF, DEFAULT_EKF_Q, DEFAULT_EKF_R, DEFAULT_ENCODER_STANDSTILL_RADPS, DEFAULT_VISION_ACCEPT_RADIUS_BASE_M, DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS, DEFAULT_VISION_ACCEPT_VARIANCE_M2, DEFAULT_VISION_INACTIVE_THRESHOLD_US, DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US, DEFAULT_VISION_MIN_LATENCY_US, DEFAULT_VISION_SEED_SAMPLES, EKF_INPUT_LEN, EKF_MEAS_LEN, EKF_STATE_LEN
+    DEFAULT_CONTROL_DT_US, DEFAULT_EKF_CORR_COEF, DEFAULT_EKF_Q, DEFAULT_EKF_R, DEFAULT_EKF_ZUPT_VAR_MPS2, DEFAULT_ENCODER_STANDSTILL_MPS, DEFAULT_ENCODER_STANDSTILL_RADPS, DEFAULT_VISION_ACCEPT_RADIUS_BASE_M, DEFAULT_VISION_ACCEPT_RADIUS_RATE_MPS, DEFAULT_VISION_ACCEPT_VARIANCE_M2, DEFAULT_VISION_INACTIVE_THRESHOLD_US, DEFAULT_VISION_MAX_AGE_ACCEPTANCE_US, DEFAULT_VISION_MIN_LATENCY_US, DEFAULT_VISION_SEED_SAMPLES, EKF_INPUT_LEN, EKF_MEAS_LEN, EKF_STATE_LEN
 };
 
 
@@ -43,6 +43,8 @@ struct StateFrame {
     z_insert_age: u32,
     /// Origin of the measurement
     z_src: MeasSource,
+    /// Robot was at standstill (encoders) during this frame: apply a zero-velocity update
+    standstill: bool,
 }
 
 impl Default for StateFrame {
@@ -53,6 +55,7 @@ impl Default for StateFrame {
             z: None,
             z_insert_age: 0,
             z_src: MeasSource::Vision,
+            standstill: false,
         }
     }
 }
@@ -66,6 +69,8 @@ pub struct BufferedEKFParams {
     /// Process covariance Q
     pub q: SMatrix<f32, EKF_STATE_LEN, EKF_STATE_LEN>,
     pub corr_coef: f32,
+    /// Variance of the zero-velocity pseudo-measurement on [vx, vy] at standstill
+    pub zupt_var: f32,
 }
 
 impl Default for BufferedEKFParams {
@@ -76,6 +81,7 @@ impl Default for BufferedEKFParams {
             r: DEFAULT_EKF_R,
             q: DEFAULT_EKF_Q,
             corr_coef: DEFAULT_EKF_CORR_COEF,
+            zupt_var: DEFAULT_EKF_ZUPT_VAR_MPS2,
         }
     }
 }
@@ -189,12 +195,14 @@ impl<const L: usize> BufferedEKF<L> {
         z: Option<SVector<f32, EKF_MEAS_LEN>>,
         z_delay_us: u32,  // Microseconds elapsed since the frame that provided this measurement was taken
         z_src: MeasSource,
+        standstill: bool,  // Robot is at standstill now (applies a zero-velocity update at this frame)
     ) -> Result<(), ()> {
         // Progress buffer indices
         self.idx_ekf = Self::move_idx(self.idx_ekf, 1, true);
         self.idx_reck = Self::move_idx(self.idx_reck, 1, true);
         // Reset the new frame
         self.buff[self.idx_reck] = StateFrame::default();
+        self.buff[self.idx_reck].standstill = standstill;
 
         if let Some(meas) = z {
             self.insert_meas(meas, z_delay_us, z_src);
@@ -216,11 +224,20 @@ impl<const L: usize> BufferedEKF<L> {
 
     pub fn get_vel(&self) -> SVector<f32, 3> {
         let frame_reck = &self.buff[self.idx_reck];
+        let mut vel = self.get_vel_local();
+        // vx, vy rotate local to global
+        let vel_xy = Self::rotate_xy(&vel.fixed_rows::<2>(0).into(), frame_reck.x_reck.z);
+        vel.fixed_rows_mut::<2>(0).copy_from(&vel_xy);
+
+        vel
+    }
+
+    /// Dead-reckoned velocity in the robot's local frame: [vx, vy, vw].
+    pub fn get_vel_local(&self) -> SVector<f32, 3> {
+        let frame_reck = &self.buff[self.idx_reck];
         let mut vel = SVector::<f32, 3>::zeros();
-        // vx, vy come from dead reckoned state, rotate local to global
-        vel.fixed_rows_mut::<2>(0).copy_from(
-            &Self::rotate_xy(&frame_reck.x_reck.fixed_rows::<2>(3).into(), frame_reck.x_reck.z)
-        );
+        // vx, vy come from dead reckoned state (local frame)
+        vel.fixed_rows_mut::<2>(0).copy_from(&frame_reck.x_reck.fixed_rows::<2>(3));
         // vw comes from input
         vel[2] = frame_reck.u[2];
 
@@ -236,11 +253,19 @@ impl<const L: usize> BufferedEKF<L> {
     }
 
     pub fn get_vel_buff(&self) -> SVector<f32, 3> {
+        let mut vel = self.get_vel_buff_local();
+        // vx, vy rotate local to global
+        let vel_xy = Self::rotate_xy(&vel.fixed_rows::<2>(0).into(), self.x_ekf.z);
+        vel.fixed_rows_mut::<2>(0).copy_from(&vel_xy);
+
+        vel
+    }
+
+    /// EKF (buffer horizon) velocity in the robot's local frame: [vx, vy, vw].
+    pub fn get_vel_buff_local(&self) -> SVector<f32, 3> {
         let mut vel = SVector::<f32, 3>::zeros();
-        // vx, vy come from dead reckoned state, rotate local to global
-        vel.fixed_rows_mut::<2>(0).copy_from(
-            &Self::rotate_xy(&self.x_ekf.fixed_rows::<2>(3).into(), self.x_ekf.z)
-        );
+        // vx, vy come from the EKF state (local frame)
+        vel.fixed_rows_mut::<2>(0).copy_from(&self.x_ekf.fixed_rows::<2>(3));
         // vw comes from input
         vel[2] = self.buff[self.idx_ekf].u[2];
 
@@ -330,11 +355,9 @@ impl<const L: usize> BufferedEKF<L> {
         &mut self,
     ) -> Result<(), ()> {
         let frame = self.buff[self.idx_ekf];
-        if let Some(mut z) = frame.z {
-            // Only apply if the measurement is as recent as the ekf horizon
-            if !self.meas_should_be_used(frame.z_insert_age) {
-                return Ok(());
-            }
+        // Only apply a measurement if it is as recent as the ekf horizon
+        let z = frame.z.filter(|_| self.meas_should_be_used(frame.z_insert_age));
+        if let Some(mut z) = z {
             // Unwrap measurement theta
             z[(2, 0)] = Self::unwrap_turns(z[(2, 0)], self.x_ekf[(2, 0)]);
             // Calculate residual
@@ -350,6 +373,26 @@ impl<const L: usize> BufferedEKF<L> {
             self.p_ekf = (SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::identity() - k * self.h) * self.p_ekf;
         }
 
+        if frame.standstill {
+            self.zupt_update()?;
+        }
+
+        Ok(())
+    }
+
+    /// Zero-velocity update: at standstill the local [vx, vy] is observed as 0,
+    /// removing IMU-integrated velocity drift/bias.
+    fn zupt_update(&mut self) -> Result<(), ()> {
+        let mut h = SMatrix::<f32, 2, EKF_STATE_LEN>::zeros();
+        h[(0, 3)] = 1.0;
+        h[(1, 4)] = 1.0;
+        let y = -(h * self.x_ekf);
+        let s = h * self.p_ekf * h.transpose()
+            + SMatrix::<f32, 2, 2>::identity() * self.params.zupt_var;
+        let s_inv = s.try_inverse().ok_or(())?;
+        let k = self.p_ekf * h.transpose() * s_inv;
+        self.x_ekf += k * y;
+        self.p_ekf = (SMatrix::<f32, EKF_STATE_LEN, EKF_STATE_LEN>::identity() - k * h) * self.p_ekf;
         Ok(())
     }
 
@@ -945,10 +988,17 @@ impl Default for Odometer {
     }
 }
 
+const ACCEL_BIAS_TAU_S: f32 = 1.0;
+const ACCEL_BIAS_MAX_GYRO_RADPS: f32 = 0.05;
+
 pub struct StateEstimator<const L: usize, const K: usize> {
     pub ekf: BufferedEKF<L>,
     pub vision_filter: VisionFilter<K>,
     pub odometer: Odometer,
+    /// Accelerometer [x, y] bias, learned at standstill and removed from the EKF input.
+    /// Unremoved, the dead reckoning from the EKF horizon to now integrates it into a
+    /// standing velocity and position offset (0.05 m/s^2 gave ~16 mm/s and ~4 mm).
+    accel_bias: SVector<f32, 2>,
 }
 
 impl<const L: usize, const K: usize> StateEstimator<L, K> {
@@ -964,6 +1014,7 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
             ekf,
             vision_filter,
             odometer,
+            accel_bias: SVector::zeros(),
         }
     }
 
@@ -1026,11 +1077,25 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
             z_src = MeasSource::Odometry;
         }
 
+        let standstill = encoder_vel.fixed_rows::<2>(0).norm() < DEFAULT_ENCODER_STANDSTILL_MPS;
+
+        // Learn the bias only when not rotating either (an off-center IMU sees centripetal accel)
+        if standstill && fabsf(imu_accel.z) < ACCEL_BIAS_MAX_GYRO_RADPS {
+            let alpha = self.ekf.params.dt_us as f32 * 1e-6 / ACCEL_BIAS_TAU_S;
+            self.accel_bias += (imu_accel.fixed_rows::<2>(0) - self.accel_bias) * alpha;
+        }
+        let u = SVector::<f32, EKF_INPUT_LEN>::new(
+            imu_accel.x - self.accel_bias.x,
+            imu_accel.y - self.accel_bias.y,
+            imu_accel.z,
+        );
+
         self.ekf.tick(
-            *imu_accel,
+            u,
             z,
             z_age_us as u32,
             z_src,
+            standstill,
         )?;
 
         Ok(())
@@ -1066,6 +1131,16 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
         self.ekf.get_vel_buff()
     }
 
+    /// Dead-reckoned velocity in the robot's local frame: [vx, vy, vw].
+    pub fn get_vel_local(&self) -> SVector<f32, 3> {
+        self.ekf.get_vel_local()
+    }
+
+    /// EKF (buffer horizon) velocity in the robot's local frame: [vx, vy, vw].
+    pub fn get_vel_buff_local(&self) -> SVector<f32, 3> {
+        self.ekf.get_vel_buff_local()
+    }
+
     /// Vision measurement applied to the EKF at its horizon this tick, if any.
     /// Odometry measurements are excluded.
     pub fn applied_vision(&self) -> Option<(SVector<f32, 3>, u32, bool)> {
@@ -1088,6 +1163,32 @@ impl<const K: usize, const L: usize> Default for StateEstimator<K, L> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::defaults::DEFAULT_EKF_BUFF_LEN;
+
+    fn tick_ekf_n(ekf: &mut BufferedEKF<DEFAULT_EKF_BUFF_LEN>, n: usize, standstill: bool) {
+        for _ in 0..n {
+            ekf.tick(SVector::<f32, EKF_INPUT_LEN>::zeros(), None, 0, MeasSource::Vision, standstill).unwrap();
+        }
+    }
+
+    #[test]
+    fn zupt_removes_velocity_bias_at_standstill() {
+        let bias = SVector::<f32, 3>::new(0.05, -0.03, 0.0);
+        let mut ekf = BufferedEKF::<DEFAULT_EKF_BUFF_LEN>::new(BufferedEKFParams::default(), SVector::zeros(), bias);
+        // Well past the EKF delay plus several correction time constants
+        tick_ekf_n(&mut ekf, 1000, true);
+        let v = ekf.get_vel_local();
+        assert!(v.x.abs() < 1e-3 && v.y.abs() < 1e-3, "residual vel {:?}", v);
+    }
+
+    #[test]
+    fn no_zupt_keeps_velocity_when_moving() {
+        let vel = SVector::<f32, 3>::new(0.05, -0.03, 0.0);
+        let mut ekf = BufferedEKF::<DEFAULT_EKF_BUFF_LEN>::new(BufferedEKFParams::default(), SVector::zeros(), vel);
+        tick_ekf_n(&mut ekf, 500, false);
+        let v = ekf.get_vel_local();
+        assert!((v.x - 0.05).abs() < 1e-3 && (v.y + 0.03).abs() < 1e-3, "vel {:?}", v);
+    }
 
     #[test]
     fn odometer_integrates_encoder_vel() {
