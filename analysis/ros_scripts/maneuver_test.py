@@ -1,5 +1,5 @@
 """Exercise the pivot and line maneuvers on a tethered robot, with the small_move_test
-safety monitor and log format (so mv.py / summarize.py style tools apply).
+safety monitor and log format.
 
 Each test is a list of timed phases; a phase sends one RobotMotionCommand, or holds
 `--home` in position mode. The robot also returns home between tests.
