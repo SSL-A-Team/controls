@@ -1,0 +1,21 @@
+{
+  "_doc": "Untethered test areas for the TDP 2027 motion experiments, in vision/field coordinates (m, deg). Used by `config.py area NAME`: the kenobi play's target area and abort box, and TDP_AREA for the ROS test scripts' safety monitor. heading_deg is the default robot heading for home poses. Vision always reports the full field, including when testing on the patch.",
+  "field": {
+    "center_x_m": 0.0,
+    "center_y_m": 0.0,
+    "length_m": 4.47,
+    "width_m": 2.615,
+    "yaw_deg": 0.0,
+    "heading_deg": 180.0,
+    "note": "lab field, measured to the lines (4470 x 2615 mm)"
+  },
+  "patch": {
+    "center_x_m": null,
+    "center_y_m": null,
+    "length_m": null,
+    "width_m": null,
+    "yaw_deg": 0.0,
+    "heading_deg": 180.0,
+    "note": "TODO (2026-11-24): Will to measure the test patch: size, center in vision coordinates, and whether it is aligned with the field axes. Overlaps a defense area."
+  }
+}

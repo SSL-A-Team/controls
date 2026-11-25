@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import threading
 import time
 from pathlib import Path
@@ -33,7 +34,12 @@ MOTORS = ("front_left_motor", "back_left_motor", "back_right_motor", "front_righ
 
 
 class SafetyLimits:
-    """Tether box relative to the start pose, plus the absolute field box below."""
+    """Tether box relative to the start pose, plus the absolute field box below.
+
+    Untethered (TDP 2027 experiments): set TDP_AREA="cx,cy,length,width[,yaw_deg]" (field
+    coordinates, m; see analysis/tdp/config.py area) and the absolute box becomes that
+    rectangle, for this script and every subclass and subprocess. TDP_MAX_SPEED (m/s)
+    raises the speed trip for larger moves. Unset, behaviour is unchanged."""
     xy_abs = 0.25
     heading_abs = math.radians(95.0)
     field_x = (-0.25, 0.25)  # m, absolute tether box
@@ -44,6 +50,28 @@ class SafetyLimits:
     wheel_speed = 60.0     # rad/s, encoder
     telem_stale_s = 0.8    # robot radio TX stalls ~0.5 s every 1-2 min; firmware stops itself at 0.5 s without commands
     vision_stale_s = 0.8   # from telemetry vision_update, so it sees the same radio stalls; firmware holds at 0.5 s
+
+    def __init__(self):
+        self.area = None
+        area = os.environ.get("TDP_AREA", "").strip()
+        if area:
+            v = [float(x) for x in area.split(",")]
+            if len(v) not in (4, 5):
+                raise SystemExit(f"TDP_AREA must be 'cx,cy,length,width[,yaw_deg]', got {area!r}")
+            self.area = (v[0], v[1], v[2] / 2.0, v[3] / 2.0, math.radians(v[4]) if len(v) == 5 else 0.0)
+            self.xy_abs = 2.0 * max(v[2], v[3])  # the area itself is the limit
+        if os.environ.get("TDP_MAX_SPEED"):
+            self.speed = float(os.environ["TDP_MAX_SPEED"])
+
+    def inside(self, p, margin=0.0):
+        """Is field point p (x, y, ...) inside the absolute box (or TDP_AREA) by margin?"""
+        if self.area is not None:
+            cx, cy, hl, hw, yaw = self.area
+            dx, dy = p[0] - cx, p[1] - cy
+            lx = math.cos(yaw) * dx + math.sin(yaw) * dy
+            ly = -math.sin(yaw) * dx + math.cos(yaw) * dy
+            return abs(lx) < hl - margin and abs(ly) < hw - margin
+        return self.field_x[0] + margin < p[0] < self.field_x[1] - margin and abs(p[1]) < self.field_y_abs - margin
 
 
 class SmallMoveTest(Node):
@@ -119,9 +147,8 @@ class SmallMoveTest(Node):
             return
         L = self.lim
         d = pos - self.start
-        if (not L.field_x[0] < pos[0] < L.field_x[1] or abs(pos[1]) >= L.field_y_abs
-                or abs(d[0]) > L.xy_abs or abs(d[1]) > L.xy_abs):
-            self.trip(f"pose out of box {pos[:2]} (start {self.start[:2]})")
+        if not L.inside(pos) or abs(d[0]) > L.xy_abs or abs(d[1]) > L.xy_abs:
+            self.trip(f"pose out of {'TDP_AREA' if L.area else 'box'} {pos[:2]} (start {self.start[:2]})")
         elif abs(dh := math.remainder(pos[2] - (self.start[2] if self.heading_ref is None else self.heading_ref),
                                       2 * math.pi)) > L.heading_abs:
             self.trip(f"heading {math.degrees(dh):.1f} deg from reference")
@@ -215,17 +242,17 @@ def main():
         away = home + np.array([args.dx, args.dy, math.radians(args.dtheta_deg)])
         away[2] = math.remainder(away[2], 2 * math.pi)
         L = node.lim
-        L.field_x = (-args.box, args.box)
-        L.field_y_abs = args.box
-        L.xy_abs = 2.0 * args.box
-        max_step = 2.0 * args.box - 0.04
+        if L.area is None:  # tethered: --box around the field origin
+            L.field_x = (-args.box, args.box)
+            L.field_y_abs = args.box
+            L.xy_abs = 2.0 * args.box
+        max_step = L.xy_abs - 0.04
         if (abs(args.dx) > max_step or abs(args.dy) > max_step or abs(args.dtheta_deg) > 91 or args.hold > 10
-                or not all(L.field_x[0] + 0.01 < p[0] < L.field_x[1] - 0.01 and abs(p[1]) < L.field_y_abs - 0.01
-                           for p in (home, away))
+                or not all(L.inside(p, 0.01) for p in (home, away))
                 or np.any(np.abs((np.array([home, away]) - node.start)[:, :2]) > L.xy_abs - 0.01)
                 or any(abs(math.remainder(p[2] - node.heading_ref, 2 * math.pi)) > math.radians(91) for p in (home, away))
                 or (args.square and np.any(np.abs(home[:2] + np.array([args.dx, args.dy]) - node.start[:2]) > L.xy_abs - 0.01))):
-            node.get_logger().error("move too large for the tether box")
+            node.get_logger().error("move too large for the " + ("TDP_AREA" if L.area else "tether box"))
             return 1
         node.get_logger().info(f"home {home}, away {away}")
         node.target = home
