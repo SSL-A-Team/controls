@@ -9,6 +9,11 @@ pub const DEFAULT_MAX_VEL_LINEAR: f32 = 3.0;            // m/s
 pub const DEFAULT_MAX_VEL_ANGULAR: f32 = 5.0 * PI;      // rad/s
 pub const DEFAULT_MAX_ACCEL_LINEAR: f32 = 2.0;           // m/s^2
 pub const DEFAULT_MAX_ACCEL_ANGULAR: f32 = 10.0 * PI;     // rad/s^2
+/// Max error (rad) of the X/Y acceleration split angle found by the time-sync
+/// bisection in `BangBangTraj3D::from_target_pos`. 0.01 rad takes 8 pairs of 1D
+/// solves and keeps the accel direction step between replans to ~1% of max accel
+/// and the arrival time penalty below 1%.
+pub const DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION: f32 = 0.01;  // rad
 
 // Pivot Params
 pub const DEFAULT_PIVOT_ORBIT_MAX_VEL_ANGULAR: f32 = 10.0;                 // rad/s

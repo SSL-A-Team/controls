@@ -1,6 +1,7 @@
 use core::f32::consts::PI;
 use libm::{cosf, sinf, sqrtf};
 use crate::{ControlsError, Vector3f, Vector6f, wrap_angle};
+use crate::defaults::DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION;
 use crate::trajectory::Trajectory;
 
 
@@ -70,8 +71,8 @@ impl BangBangTraj3D {
     /// Compute optimal bang-bang trajectory to reach a target position from an initial state.
     pub fn from_target_pos(init_state: Vector6f, target_pos: Vector3f, params: TrajectoryParams) -> Result<Self, ControlsError> {
         let mut alpha = PI / 4.0;
-        let mut increment = PI / 8.0;
-        let precision = 0.1;
+        // Max angular error of `alpha` relative to the synchronizing direction.
+        let mut error_bound = PI / 4.0;
         let mut x_traj;
         let mut y_traj;
         loop {
@@ -79,15 +80,15 @@ impl BangBangTraj3D {
             let sin_alpha = sinf(alpha);
             x_traj = solve_1d_pos(init_state[0], init_state[3], target_pos[0], cos_alpha * params.max_vel_linear, cos_alpha * params.max_accel_linear)?;
             y_traj = solve_1d_pos(init_state[1], init_state[4], target_pos[1], sin_alpha * params.max_vel_linear, sin_alpha * params.max_accel_linear)?;
-            if x_traj.t4 > y_traj.t4 {
-                alpha -= increment;
-            } else {
-                alpha += increment;
-            }
-            if increment <= precision {
+            if error_bound <= DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION {
                 break
             }
-            increment *= 0.5;
+            error_bound *= 0.5;
+            if x_traj.t4 > y_traj.t4 {
+                alpha -= error_bound;
+            } else {
+                alpha += error_bound;
+            }
         }
         // Compute theta target via shortest angular path so the trajectory
         // wraps through +/- pi instead of going the long way around.
@@ -398,6 +399,17 @@ mod tests {
         assert!((final_state[0] - 1.0).abs() < 1e-3);
         assert!((final_state[1]).abs() < 1e-3);
         assert!((final_state[2]).abs() < 1e-3);
+    }
+
+    #[test]
+    fn pos_xy_sync_direction_within_precision() {
+        // From rest, X and Y finish together when accel is split along the target direction.
+        for (tx, ty) in [(2.0f32, 2.0f32), (1.0, 3.0), (3.0, 1.0), (2.0, 1.9), (-1.5, 0.4)] {
+            let traj = BangBangTraj3D::from_target_pos(Vector6f::zeros(), Vector3f::new(tx, ty, 0.0), test_params()).unwrap();
+            let alpha = traj.y.sdd1.abs().atan2(traj.x.sdd1.abs());
+            let ideal = ty.abs().atan2(tx.abs());
+            assert!(fabsf(alpha - ideal) <= DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION + 1e-4, "target ({tx}, {ty}): alpha {alpha} vs ideal {ideal}");
+        }
     }
 
     #[test]
