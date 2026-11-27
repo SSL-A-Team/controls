@@ -10,11 +10,6 @@ use ateam_controls::robot_model::*;
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ateam_controls_default_kf_params() -> KalmanFilterParams {
-    KalmanFilterParams::default()
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn ateam_controls_default_phys_params() -> RobotPhysicalParams {
     RobotPhysicalParams::default()
 }
@@ -30,12 +25,10 @@ pub extern "C" fn ateam_controls_default_traj_params() -> TrajectoryParams {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn ateam_controls_robot_model_new(
-    kf_dt: f32,
-    kf_params: KalmanFilterParams,
     phys_params: RobotPhysicalParams,
     out: *mut *mut RobotModel,
 ) -> i32 {
-    match RobotModel::new(kf_dt, kf_params, phys_params) {
+    match RobotModel::new(phys_params) {
         Ok(model) => {
             unsafe { *out = Box::into_raw(Box::new(model)); }
             0
@@ -52,91 +45,108 @@ pub unsafe extern "C" fn ateam_controls_robot_model_free(model: *mut RobotModel)
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_update_kf_params(
-    model: *mut RobotModel,
-    kf_params: KalmanFilterParams,
-) {
-    unsafe { (*model).update_kf_params(kf_params); }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_update_physical_params(
+pub unsafe extern "C" fn ateam_controls_robot_model_update_params(
     model: *mut RobotModel,
     phys_params: RobotPhysicalParams,
 ) -> i32 {
-    match unsafe { (*model).update_physical_params(phys_params) } {
+    match unsafe { (*model).update_params(phys_params) } {
         Ok(()) => 0,
         Err(e) => e as i32,
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_kf_predict(
-    model: *mut RobotModel,
-    accel: Vector3C,
-) {
-    unsafe { (*model).kf_predict(accel.into()); }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_kf_update(
-    model: *mut RobotModel,
-    measurement: Vector8C,
-    mask_vision: bool,
-    mask_encoder: bool,
-    mask_gyro: bool,
-) -> i32 {
-    match unsafe { (*model).kf_update(measurement.into(), mask_vision, mask_encoder, mask_gyro) } {
-        Ok(()) => 0,
-        Err(e) => e as i32,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_get_state(
+pub unsafe extern "C" fn ateam_controls_robot_model_wheel_to_local_vel(
     model: *const RobotModel,
-) -> Vector6C {
-    unsafe { (*model).x.into() }
+    encoder: Vector4C,
+) -> Vector3C {
+    unsafe { (*model).wheel_to_local_vel(&encoder.into()).into() }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_set_state(
-    model: *mut RobotModel,
-    state: Vector6C,
-) {
-    unsafe { (*model).x = state.into(); }
+pub unsafe extern "C" fn ateam_controls_robot_model_wheel_to_global_vel(
+    model: *const RobotModel,
+    encoder: Vector4C,
+    theta: f32,
+) -> Vector3C {
+    unsafe { (*model).wheel_to_global_vel(&encoder.into(), theta).into() }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2twist(
+pub unsafe extern "C" fn ateam_controls_robot_model_wheel_to_local_accel(
+    model: *const RobotModel,
+    torque: Vector4C,
+) -> Vector3C {
+    unsafe { (*model).wheel_to_local_accel(&torque.into()).into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_wheel_to_global_accel(
+    model: *const RobotModel,
+    torque: Vector4C,
+    theta: f32,
+) -> Vector3C {
+    unsafe { (*model).wheel_to_global_accel(&torque.into(), theta).into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2vel_local(
+    model: *const RobotModel,
+) -> Matrix3x4C {
+    unsafe { (*model).transform_wheel2vel_local().into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2vel_global(
     model: *const RobotModel,
     theta: f32,
 ) -> Matrix3x4C {
-    unsafe { (*model).transform_wheel2twist(theta).into() }
+    unsafe { (*model).transform_wheel2vel_global(theta).into() }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_transform_twist2wheel(
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_vel2wheel_local(
+    model: *const RobotModel,
+) -> Matrix4x3C {
+    unsafe { (*model).transform_vel2wheel_local().into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_vel2wheel_global(
     model: *const RobotModel,
     theta: f32,
 ) -> Matrix4x3C {
-    unsafe { (*model).transform_twist2wheel(theta).into() }
+    unsafe { (*model).transform_vel2wheel_global(theta).into() }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2accel(
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2accel_local(
+    model: *const RobotModel,
+) -> Matrix3x4C {
+    unsafe { (*model).transform_wheel2accel_local().into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_wheel2accel_global(
     model: *const RobotModel,
     theta: f32,
 ) -> Matrix3x4C {
-    unsafe { (*model).transform_wheel2accel(theta).into() }
+    unsafe { (*model).transform_wheel2accel_global(theta).into() }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_robot_model_transform_accel2wheel(
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_accel2wheel_local(
+    model: *const RobotModel,
+) -> Matrix4x3C {
+    unsafe { (*model).transform_accel2wheel_local().into() }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn ateam_controls_robot_model_transform_accel2wheel_global(
     model: *const RobotModel,
     theta: f32,
 ) -> Matrix4x3C {
-    unsafe { (*model).transform_accel2wheel(theta).into() }
+    unsafe { (*model).transform_accel2wheel_global(theta).into() }
 }
 
 #[unsafe(no_mangle)]
@@ -152,13 +162,13 @@ pub unsafe extern "C" fn ateam_controls_robot_model_torques_to_currents(
 // ============================================================================
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_traj_from_target_pose(
+pub unsafe extern "C" fn ateam_controls_traj_from_target_pos(
     init_state: Vector6C,
-    target_pose: Vector3C,
+    target_pos: Vector3C,
     params: TrajectoryParams,
     out: *mut BangBangTraj3D,
 ) -> i32 {
-    match BangBangTraj3D::from_target_pose(init_state.into(), target_pose.into(), params) {
+    match BangBangTraj3D::from_target_pos(init_state.into(), target_pos.into(), params) {
         Ok(traj) => {
             unsafe { *out = traj; }
             0
@@ -168,13 +178,13 @@ pub unsafe extern "C" fn ateam_controls_traj_from_target_pose(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn ateam_controls_traj_from_target_twist(
+pub unsafe extern "C" fn ateam_controls_traj_from_target_vel(
     init_state: Vector6C,
-    target_twist: Vector3C,
+    target_vel: Vector3C,
     params: TrajectoryParams,
     out: *mut BangBangTraj3D,
 ) -> i32 {
-    match BangBangTraj3D::from_target_twist(init_state.into(), target_twist.into(), params) {
+    match BangBangTraj3D::from_target_vel(init_state.into(), target_vel.into(), params) {
         Ok(traj) => {
             unsafe { *out = traj; }
             0

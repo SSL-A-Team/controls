@@ -1,6 +1,6 @@
 use libm::{atan2f, fabsf, sqrtf};
-use crate::bangbang_trajectory::{BangBangTraj1D, solve_1d_pose, solve_1d_twist, eval_1d_state_at, eval_1d_accel_at};
-use crate::defaults::DEFAULT_CONTROL_DT;
+use crate::bangbang_trajectory::{BangBangTraj1D, solve_1d_pos, solve_1d_vel, eval_1d_state_at, eval_1d_accel_at};
+use crate::defaults::DEFAULT_CONTROL_DT_US;
 use crate::{ControlsError, Vector2f, Vector3f, Vector6f, wrap_angle};
 use crate::trajectory::Trajectory;
 
@@ -95,10 +95,11 @@ pub struct LinearTrajectory {
     /// Angular acceleration limit (rad/s²) used by the line-of-sight servo in
     /// [`LinearHeadingMode::FacePoint`]. Baked into `traj_theta` for `Fixed`.
     pub heading_max_accel: f32,
-    /// Internal time at which the heading axis is considered settled. For
-    /// `Fixed` this is `traj_theta.t4`; for `FacePoint` it is the time the
-    /// angular servo finishes acquiring the line-of-sight (computed once at
-    /// construction). Drives `end_time` along with the position profiles.
+    /// Internal time at which the heading axis is considered settled in
+    /// `Fixed` mode (`traj_theta.t4`). Unused in `FacePoint` mode, where the
+    /// acquisition time is simulated on demand by
+    /// [`heading_settle_time`](Self::heading_settle_time) to keep construction
+    /// cheap enough to replan every control tick.
     pub heading_end_time: f32,
     /// A point the line passes through (m). Fixed at construction.
     pub start_point: Vector2f,
@@ -136,7 +137,7 @@ impl LinearTrajectory {
         let theta0 = init_state[2];
         let thetad0 = init_state[5];
         let theta_target = theta0 + wrap_angle(target_theta - theta0);
-        traj.traj_theta = solve_1d_pose(theta0, thetad0, theta_target, params.max_vel_angular, params.max_accel_angular)?;
+        traj.traj_theta = solve_1d_pos(theta0, thetad0, theta_target, params.max_vel_angular, params.max_accel_angular)?;
         traj.heading_mode = LinearHeadingMode::Fixed;
         traj.heading_end_time = traj.traj_theta.t4;
         Ok(traj)
@@ -187,8 +188,6 @@ impl LinearTrajectory {
         let mut traj = Self::build_position(init_state, start_point, line_dir, line_vel, params)?;
         traj.heading_mode = LinearHeadingMode::FacePoint;
         traj.target_point = target_point;
-        // Find when the angular servo finishes acquiring the line-of-sight.
-        traj.heading_end_time = traj.compute_heading_acquire_end(params);
         Ok(traj)
     }
 
@@ -223,10 +222,10 @@ impl LinearTrajectory {
         let (s0, vs0, d0, vd0) = project(init_state, start_point, line_dir, perp_dir);
 
         // Perpendicular: drive onto the line (target perp position 0).
-        let traj_perp = solve_1d_pose(d0, vd0, 0.0, params.max_vel_perp, params.max_accel_perp)?;
+        let traj_perp = solve_1d_pos(d0, vd0, 0.0, params.max_vel_perp, params.max_accel_perp)?;
 
         // Colinear braking to rest during the approach.
-        let traj_colinear = solve_1d_twist(vs0, 0.0, params.max_accel_colinear)?;
+        let traj_colinear = solve_1d_vel(vs0, 0.0, params.max_accel_colinear)?;
 
         // Time at which the perpendicular distance crosses below the threshold.
         let t_start = perp_threshold_time(traj_perp, d0, vd0, params.colinear_start_thresh_linear);
@@ -234,7 +233,7 @@ impl LinearTrajectory {
         // Colinear velocity at the engagement time, seeding the accel profile so it
         // works whether or not braking has finished by then.
         let (_, vs_at_start) = eval_1d_state_at(traj_colinear, s0, vs0, 0.0, t_start)?;
-        let mut traj_colinear_accel = solve_1d_twist(vs_at_start, line_vel, params.max_accel_colinear)?;
+        let mut traj_colinear_accel = solve_1d_vel(vs_at_start, line_vel, params.max_accel_colinear)?;
         traj_colinear_accel.time_shift(t_start);
 
         Ok(LinearTrajectory {
@@ -270,8 +269,19 @@ impl LinearTrajectory {
     pub fn end_time(&self) -> f32 {
         self.traj_perp
             .t4
-            .max(self.heading_end_time)
+            .max(self.heading_settle_time())
             .max(self.traj_colinear_accel.t4)
+    }
+
+    /// Time at which the heading axis is settled: `traj_theta.t4` in `Fixed`
+    /// mode, or the simulated line-of-sight acquisition time in `FacePoint`
+    /// mode. The latter integrates the servo at the control rate, so it is
+    /// expensive and must not be called from the control loop.
+    pub fn heading_settle_time(&self) -> f32 {
+        match self.heading_mode {
+            LinearHeadingMode::Fixed => self.heading_end_time,
+            LinearHeadingMode::FacePoint => self.compute_heading_acquire_end(),
+        }
     }
 
     /// Evaluate the full robot state `[x, y, θ, ẋ, ẏ, θ̇]` at time `t`.
@@ -344,7 +354,7 @@ impl LinearTrajectory {
         let mut theta = self.state[2];
         let mut thetad = self.state[5];
         let mut thetadd = 0.0;
-        let dt = DEFAULT_CONTROL_DT;
+        let dt = DEFAULT_CONTROL_DT_US as f32 * 1e-6;
         let mut elapsed = 0.0;
         while elapsed < t - 1e-9 {
             let h = dt.min(t - elapsed);
@@ -392,16 +402,16 @@ impl LinearTrajectory {
     /// Integrate the servo from the seed state to find when it has acquired the
     /// line-of-sight (both heading error and rate error within tolerance). Capped
     /// at the translational end time plus a margin.
-    fn compute_heading_acquire_end(&self, params: LinearParams) -> f32 {
+    fn compute_heading_acquire_end(&self) -> f32 {
         let lim = AngularLimits {
-            max_vel: params.max_vel_angular,
-            max_accel: params.max_accel_angular,
+            max_vel: self.heading_max_vel,
+            max_accel: self.heading_max_accel,
         };
         const E_TOL: f32 = 1e-3;       // rad
         const EDOT_TOL: f32 = 1e-2;    // rad/s
         let pos_end = self.traj_perp.t4.max(self.traj_colinear_accel.t4);
         let horizon = pos_end + 5.0;
-        let dt = DEFAULT_CONTROL_DT;
+        let dt = DEFAULT_CONTROL_DT_US as f32 * 1e-6;
 
         let mut theta = self.state[2];
         let mut thetad = self.state[5];
@@ -813,7 +823,7 @@ mod tests {
         ).unwrap();
 
         // Acquisition completes within the horizon.
-        let acq = traj.heading_end_time;
+        let acq = traj.heading_settle_time();
         assert!(acq > 0.0 && acq.is_finite());
 
         // After acquisition the heading tracks the line-of-sight lag-free.
@@ -872,8 +882,8 @@ mod tests {
         let mut traj = LinearTrajectory::from_point(
             init, 2.0, 2.0, start, dir, 1.5, test_params(),
         ).unwrap();
-        let predicted = traj.state_at(DEFAULT_CONTROL_DT).unwrap();
-        traj.tick(DEFAULT_CONTROL_DT);
+        let predicted = traj.state_at(DEFAULT_CONTROL_DT_US as f32 * 1e-6).unwrap();
+        traj.tick(DEFAULT_CONTROL_DT_US as f32 * 1e-6);
         let (sampled, _) = traj.sample();
         for i in 0..6 {
             assert!((sampled[i] - predicted[i]).abs() < 1e-4, "idx {i}: {} vs {}", sampled[i], predicted[i]);
