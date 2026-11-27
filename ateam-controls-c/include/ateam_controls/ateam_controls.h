@@ -216,12 +216,8 @@ typedef struct PivotParams {
     float max_accel_angular;
     float orbit_radius;
     // Angle (rad) between the orbit tangent vector and the heading, measured
-    // toward the orbit center; absolute-valued on use. Ignored when
-    // compute_inset_angle is true.
+    // toward the orbit center; absolute-valued on use.
     float inset_angle;
-    // When true, inset_angle is ignored and the inset is derived from a linear
-    // model of max_vel_angular (clamped to [0, pi/2]).
-    bool compute_inset_angle;
     // Whether the robot drives forward or backward around the orbit.
     PivotDirection_t direction;
 } PivotParams_t;

@@ -14,10 +14,6 @@ pub const DEFAULT_PIVOT_ORBIT_MAX_VEL_ANGULAR: f32 = 10.0;                 // ra
 pub const DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR: f32 = 7.0;                 // rad/s^2
 pub const DEFAULT_PIVOT_ORBIT_RADIUS: f32 = 0.12;                 // m
 pub const DEFAULT_PIVOT_ORBIT_INSET_ANGLE: f32 = 1.1;                 // rad
-/// Slope of the linear map from the orbit's peak angular velocity (rad/s) to the
-/// inset angle (rad) when `PivotParams::compute_inset_angle` is set. Larger peak
-/// angular velocity ⇒ larger ball centrifugal force ⇒ more inset to lean into it.
-pub const DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL: f32 = 0.35;       // rad / (rad/s)
 
 // Linear (line-following) trajectory limits
 /// Perpendicular distance from the line (m) below which the robot begins

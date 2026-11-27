@@ -1,6 +1,6 @@
 use core::f32::consts::PI;
 use libm::{atan2f, cosf, fabsf, sinf, sqrtf};
-use crate::defaults::{DEFAULT_PIVOT_ORBIT_MAX_VEL_ANGULAR, DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR, DEFAULT_PIVOT_ORBIT_RADIUS, DEFAULT_PIVOT_ORBIT_INSET_ANGLE, DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL};
+use crate::defaults::{DEFAULT_PIVOT_ORBIT_MAX_VEL_ANGULAR, DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR, DEFAULT_PIVOT_ORBIT_RADIUS, DEFAULT_PIVOT_ORBIT_INSET_ANGLE};
 use crate::{wrap_angle, ControlsError, Vector3f, Vector6f};
 use crate::bangbang_trajectory::{BangBangTraj1D, solve_1d_pose, eval_1d_state_at, eval_1d_accel_at};
 use crate::trajectory::Trajectory;
@@ -59,15 +59,7 @@ pub struct PivotParams {
     /// forward pivot); `inset_angle = π/2` points the robot straight at the orbit
     /// center. Combined with [`PivotDirection`], this also fixes whether the robot
     /// appears to drive forward or backward.
-    ///
-    /// Ignored when [`compute_inset_angle`](Self::compute_inset_angle) is set.
     pub inset_angle: f32,
-    /// When `true`, `inset_angle` is ignored and the inset is instead derived from
-    /// the orbit's peak angular velocity (`max_vel_angular`) via the linear model
-    /// `inset = DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL · max_vel_angular`,
-    /// leaning the robot into the centrifugal force the ball produces during the
-    /// pivot. The result is clamped to `[0, π/2]`.
-    pub compute_inset_angle: bool,
     /// Whether the robot drives forward or backward around the orbit.
     pub direction: PivotDirection,
 }
@@ -79,28 +71,15 @@ impl Default for PivotParams {
             max_accel_angular: DEFAULT_PIVOT_ORBIT_MAX_ACCEL_ANGULAR,
             orbit_radius: DEFAULT_PIVOT_ORBIT_RADIUS,
             inset_angle: DEFAULT_PIVOT_ORBIT_INSET_ANGLE,
-            compute_inset_angle: true,
             direction: PivotDirection::Forward,
         }
     }
 }
 
 impl PivotParams {
-    /// NOTE: Hacked compute inset angle will just set a known good default for now
-    ///
-    /// Resolve the absolute inset angle (rad) to use, honoring `compute_inset_angle`.
-    ///
-    /// When `compute_inset_angle` is set, the inset is a linear function of the
-    /// commanded peak angular velocity (`max_vel_angular`), clamped to `[0, π/2]`;
-    /// otherwise it is `|inset_angle|`.
+    /// Absolute inset angle (rad) to use: `|inset_angle|`.
     fn resolved_inset(&self) -> f32 {
-        if self.compute_inset_angle {
-            // let psi = DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL * self.max_vel_angular;
-            // psi.clamp(0.0, PI / 2.0)
-            DEFAULT_PIVOT_ORBIT_INSET_ANGLE
-        } else {
-            fabsf(self.inset_angle)
-        }
+        fabsf(self.inset_angle)
     }
 }
 
@@ -684,45 +663,6 @@ mod tests {
         assert!(fabsf(pos.center_x - neg.center_x) < 1e-6);
         assert!(fabsf(pos.center_y - neg.center_y) < 1e-6);
         assert!(fabsf(pos.orbit_target - neg.orbit_target) < 1e-6);
-    }
-
-    /// With `compute_inset_angle`, the provided `inset_angle` is ignored and the
-    /// inset follows the linear map of `max_vel_angular`, reflected in the
-    /// constant heading offset `s·(π/2 + ψ)`.
-    #[test]
-    fn computed_inset_overrides_provided() {
-        use crate::defaults::DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL;
-        let init = init_state_at(0.0, 0.0, 0.0);
-        let max_vel = 1.5_f32;
-        let params = PivotParams {
-            inset_angle: 999.0, // must be ignored
-            compute_inset_angle: true,
-            max_vel_angular: max_vel,
-            direction: PivotDirection::Forward,
-            ..PivotParams::default()
-        };
-        let traj = PivotTrajectory::from_target_heading(init, 0.5, params).unwrap();
-        let expected_psi =
-            (DEFAULT_PIVOT_INSET_ANGLE_PER_ANGULAR_VEL * max_vel).clamp(0.0, PI / 2.0);
-        // Forward + small CCW target ⇒ left circle (s = +1) ⇒ offset = π/2 + ψ.
-        assert!(fabsf(traj.heading_offset - (PI / 2.0 + expected_psi)) < 1e-5,
-            "offset {} != π/2 + ψ ({})", traj.heading_offset, PI / 2.0 + expected_psi);
-    }
-
-    /// The computed inset is clamped into `[0, π/2]` for large angular velocities.
-    #[test]
-    fn computed_inset_clamped_to_half_pi() {
-        let init = init_state_at(0.0, 0.0, 0.0);
-        let params = PivotParams {
-            compute_inset_angle: true,
-            max_vel_angular: 1000.0,
-            direction: PivotDirection::Forward,
-            ..PivotParams::default()
-        };
-        let traj = PivotTrajectory::from_target_heading(init, 0.5, params).unwrap();
-        // ψ clamped to π/2 ⇒ offset = π/2 + π/2 = π.
-        assert!(fabsf(traj.heading_offset - PI) < 1e-5,
-            "offset {} != π", traj.heading_offset);
     }
 
     #[test]

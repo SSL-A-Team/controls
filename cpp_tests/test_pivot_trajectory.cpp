@@ -120,18 +120,6 @@ TEST(PivotTrajBindings, HeadingOffsetConstant) {
   }
 }
 
-TEST(PivotTrajBindings, ComputedInsetOverridesProvided) {
-  PivotParams_t params = test_pivot_params();
-  params.inset_angle = 999.0f;          // must be ignored
-  params.compute_inset_angle = true;
-  Vector6C_t init = init_state_at(0.0f, 0.0f, 0.0f);
-  PivotTrajectory_t traj = {};
-  ASSERT_EQ(ateam_controls_pivot_traj_from_target_heading(init, 0.5f, params, &traj), ATEAM_CONTROLS_OK);
-  // Forward + small CCW target => left circle => offset = pi/2 + psi, psi in [0, pi/2].
-  EXPECT_GT(traj.heading_offset, PI / 2.0f - 1e-3f);
-  EXPECT_LE(traj.heading_offset, PI + 1e-3f);
-}
-
 TEST(PivotTrajBindings, BackwardDirection) {
   PivotParams_t params = test_pivot_params();
   params.inset_angle = PI / 6.0f;
