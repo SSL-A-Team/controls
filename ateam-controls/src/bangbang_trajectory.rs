@@ -1,6 +1,5 @@
-use core::f32::consts::PI;
-use libm::{cosf, sinf, sqrtf};
-use crate::{ControlsError, Vector3f, Vector6f, wrap_angle};
+use core::f32::consts::{FRAC_1_SQRT_2, PI};
+use crate::{ControlsError, Vector3f, Vector6f, sqrtf, wrap_angle};
 use crate::defaults::DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION;
 use crate::trajectory::Trajectory;
 
@@ -70,26 +69,7 @@ pub struct BangBangTraj3D {
 impl BangBangTraj3D {
     /// Compute optimal bang-bang trajectory to reach a target position from an initial state.
     pub fn from_target_pos(init_state: Vector6f, target_pos: Vector3f, params: TrajectoryParams) -> Result<Self, ControlsError> {
-        let mut alpha = PI / 4.0;
-        // Max angular error of `alpha` relative to the synchronizing direction.
-        let mut error_bound = PI / 4.0;
-        let mut x_traj;
-        let mut y_traj;
-        loop {
-            let cos_alpha = cosf(alpha);
-            let sin_alpha = sinf(alpha);
-            x_traj = solve_1d_pos(init_state[0], init_state[3], target_pos[0], cos_alpha * params.max_vel_linear, cos_alpha * params.max_accel_linear)?;
-            y_traj = solve_1d_pos(init_state[1], init_state[4], target_pos[1], sin_alpha * params.max_vel_linear, sin_alpha * params.max_accel_linear)?;
-            if error_bound <= DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION {
-                break
-            }
-            error_bound *= 0.5;
-            if x_traj.t4 > y_traj.t4 {
-                alpha -= error_bound;
-            } else {
-                alpha += error_bound;
-            }
-        }
+        let (x_traj, y_traj) = solve_xy_pos_synced(init_state, target_pos, params, DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION)?;
         // Compute theta target via shortest angular path so the trajectory
         // wraps through +/- pi instead of going the long way around.
         let theta_target = init_state[2] + wrap_angle(target_pos[2] - init_state[2]);
@@ -198,20 +178,22 @@ pub(crate) fn eval_1d_accel_at(traj: BangBangTraj1D, t: f32) -> Result<f32, Cont
 
 /// Takes the initial velocity sd0, the desired positive change in position ds, and the bang-bang acceleration sdd.
 /// Returns the positive acceleration time T1, the negative acceleration time T2, and the peak velocity reached Vpeak.
-fn triangular_profile(sd0: f32, ds: f32, sdd: f32) -> Result<(f32, f32, f32), ControlsError> {
+/// `inv_sdd` is `1 / sdd`, shared by the caller to avoid repeated divisions.
+fn triangular_profile(sd0: f32, ds: f32, sdd: f32, inv_sdd: f32) -> Result<(f32, f32, f32), ControlsError> {
     if sd0 < 0.0 || ds < 0.0 || sdd < 0.0 {
         return Err(ControlsError::InvalidInput);
     }
 
-    let t2 = sqrtf((sdd * ds + 0.5 * sd0 * sd0) / (sdd * sdd));
-    let t1 = t2 - sd0 / sdd;
+    let t2 = sqrtf((sdd * ds + 0.5 * sd0 * sd0) * inv_sdd * inv_sdd);
+    let t1 = t2 - sd0 * inv_sdd;
     let vpeak = sdd * t2;
     Ok((t1, t2, vpeak))
 }
 
 /// Takes the initial velocity sd0, the desired positive change in position ds, the bang-bang acceleration sdd, and the max velocity constraint sd_max.
 /// Returns the acceleration or deceleration time T1, the coasting time T2, the negative acceleration time T3, and the acceleration used for T1 (sdd1).
-fn trapezoidal_profile(sd0: f32, ds: f32, sdd: f32, sd_max: f32) -> Result<(f32, f32, f32, f32), ControlsError> {
+/// `inv_sdd` is `1 / sdd`, shared by the caller to avoid repeated divisions.
+fn trapezoidal_profile(sd0: f32, ds: f32, sdd: f32, inv_sdd: f32, sd_max: f32) -> Result<(f32, f32, f32, f32), ControlsError> {
     if sd0 < 0.0 || ds <= 0.0 || sdd <= 0.0 || sd_max <= 0.0 {  // allow sd0 to be zero
         return Err(ControlsError::InvalidInput);
     }
@@ -221,15 +203,15 @@ fn trapezoidal_profile(sd0: f32, ds: f32, sdd: f32, sd_max: f32) -> Result<(f32,
     let d1;
     let sdd1;
     if sd0 > sd_max {
-        t1 = (sd0 - sd_max) / sdd;  // deceleration time
+        t1 = (sd0 - sd_max) * inv_sdd;  // deceleration time
         d1 = sd_max * t1 + 0.5 * (sd0 - sd_max) * t1;  // distance traveled during deceleration
         sdd1 = -sdd;
     } else {
-        t1 = (sd_max - sd0) / sdd;  // acceleration time
+        t1 = (sd_max - sd0) * inv_sdd;  // acceleration time
         d1 = sd0 * t1 + 0.5 * (sd_max - sd0) * t1;  // distance traveled during acceleration
         sdd1 = sdd;
     }
-    let t3 = sd_max / sdd;  // breaking time
+    let t3 = sd_max * inv_sdd;  // breaking time
     let d3 = 0.5 * sd_max * t3;  // distance traveled during the deceleration
     let d2 = ds - d1 - d3;  // distance traveled during the coast
     let t2 = d2 / sd_max;  // coasting time
@@ -239,9 +221,9 @@ fn trapezoidal_profile(sd0: f32, ds: f32, sdd: f32, sd_max: f32) -> Result<(f32,
     Ok((t1, t2, t3, sdd1))
 }
 
-/// Returns the time it took to brake and the resulting position.
-fn compute_brake(s0: f32, sd0: f32, sdd: f32) -> (f32, f32) {
-    let time_to_rest = sd0.abs() / sdd.abs();
+/// Returns the time it took to brake at deceleration `1 / inv_sdd` and the resulting position.
+fn compute_brake(s0: f32, sd0: f32, inv_sdd: f32) -> (f32, f32) {
+    let time_to_rest = sd0.abs() * inv_sdd.abs();
     let sf = s0 + 0.5 * sd0 * time_to_rest;
     (time_to_rest, sf)
 }
@@ -263,12 +245,66 @@ pub(crate) fn solve_1d_vel(sd0: f32, sd_target: f32, sdd_max: f32) -> Result<Ban
     Ok(BangBangTraj1D { sdd1: sdd, sdd2: 0.0, sdd3: 0.0, t1: 0.0, t2: t, t3: t, t4: t, sd_final: sd_target })
 }
 
+/// (cos, sin) of the bisection step angles pi/2^(k+3) used by
+/// `solve_xy_pos_synced`, so the split direction is rotated without trig calls.
+/// Covers sync precisions down to pi/2^18 (~1.2e-5 rad).
+const XY_SYNC_ROTATIONS: [(f32, f32); 16] = [
+    (0.9238795, 0.38268343),
+    (0.98078525, 0.19509032),
+    (0.9951847, 0.09801714),
+    (0.99879545, 0.049067676),
+    (0.9996988, 0.024541229),
+    (0.9999247, 0.012271538),
+    (0.99998116, 0.0061358847),
+    (0.9999953, 0.0030679568),
+    (0.9999988, 0.0015339801),
+    (0.9999997, 0.0007669903),
+    (0.99999994, 0.00038349518),
+    (1.0, 0.0001917476),
+    (1.0, 9.58738e-05),
+    (1.0, 4.79369e-05),
+    (1.0, 2.396845e-05),
+    (1.0, 1.1984225e-05),
+];
+
+const _: () = assert!(PI / 4.0 / (1u32 << XY_SYNC_ROTATIONS.len()) as f32 <= DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION,
+    "XY_SYNC_ROTATIONS is too short for DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION");
+
+/// Bisect the angle `alpha` that splits the linear velocity/acceleration limits
+/// between X (cos alpha) and Y (sin alpha) so both axes finish at the same time,
+/// to within `precision` rad. `alpha` is tracked as the unit vector
+/// (cos alpha, sin alpha). If `precision` is finer than the last
+/// `XY_SYNC_ROTATIONS` step, bisection stops at the end of the table.
+fn solve_xy_pos_synced(init_state: Vector6f, target_pos: Vector3f, params: TrajectoryParams, precision: f32) -> Result<(BangBangTraj1D, BangBangTraj1D), ControlsError> {
+    let (mut cos_alpha, mut sin_alpha) = (FRAC_1_SQRT_2, FRAC_1_SQRT_2);
+    // Max angular error of `alpha` relative to the synchronizing direction.
+    let mut error_bound = PI / 4.0;
+    let mut step = 0;
+    loop {
+        let x_traj = solve_1d_pos(init_state[0], init_state[3], target_pos[0], cos_alpha * params.max_vel_linear, cos_alpha * params.max_accel_linear)?;
+        let y_traj = solve_1d_pos(init_state[1], init_state[4], target_pos[1], sin_alpha * params.max_vel_linear, sin_alpha * params.max_accel_linear)?;
+        if error_bound <= precision || step == XY_SYNC_ROTATIONS.len() {
+            return Ok((x_traj, y_traj));
+        }
+        error_bound *= 0.5;
+        let (cos_step, sin_step) = XY_SYNC_ROTATIONS[step];
+        step += 1;
+        // Rotate alpha by -/+ error_bound.
+        (cos_alpha, sin_alpha) = if x_traj.t4 > y_traj.t4 {
+            (cos_alpha * cos_step + sin_alpha * sin_step, sin_alpha * cos_step - cos_alpha * sin_step)
+        } else {
+            (cos_alpha * cos_step - sin_alpha * sin_step, sin_alpha * cos_step + cos_alpha * sin_step)
+        };
+    }
+}
+
 /// Solve one-dimensional bang-bang trajectory to reach target position `s_trg`.
 pub(crate) fn solve_1d_pos(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: f32) -> Result<BangBangTraj1D, ControlsError> {
     if sdd_max <= 0.0 || sd_max <= 0.0 {
         return Err(ControlsError::InvalidInput);
     }
 
+    let inv_sdd_max = 1.0 / sdd_max;
     let mut traj = BangBangTraj1D::default();
     let mut s = s0;
     let mut sd = sd0;
@@ -277,7 +313,7 @@ pub(crate) fn solve_1d_pos(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: 
     if sd != 0.0 {
         // a. check if initial velocity is in the wrong direction
         // b. check if full brake will overshoot s_trg
-        let (brake_time, s_after_full_brake) = compute_brake(s, sd, sdd_max);
+        let (brake_time, s_after_full_brake) = compute_brake(s, sd, inv_sdd_max);
         // Check if full brake position is outside the segment between s0 and s_trg
         if s_after_full_brake != s_trg && (s_after_full_brake - s).is_sign_positive() == (s_after_full_brake - s_trg).is_sign_positive() {
             // The trajectory requires a full brake to rest immediately to turn around
@@ -293,7 +329,7 @@ pub(crate) fn solve_1d_pos(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: 
     // Solve triangular profile and check if unconstrained velocity is greater than sd_max
     let ds = s_trg - s;
     let direction = ds.signum();
-    let (t1, t2, vpeak) = triangular_profile(sd.abs(), ds.abs(), sdd_max)?;
+    let (t1, t2, vpeak) = triangular_profile(sd.abs(), ds.abs(), sdd_max, inv_sdd_max)?;
     if vpeak < sd_max {
 
         // accelerate towards target
@@ -313,7 +349,7 @@ pub(crate) fn solve_1d_pos(s0: f32, sd0: f32, s_trg: f32, sd_max: f32, sdd_max: 
 
     } else {
         // Solve trapezoidal profile
-        let (t1, t2, t3, sdd1) = trapezoidal_profile(sd.abs(), ds.abs(), sdd_max, sd_max)?;
+        let (t1, t2, t3, sdd1) = trapezoidal_profile(sd.abs(), ds.abs(), sdd_max, inv_sdd_max, sd_max)?;
 
         // accelerate or decelerate to max velocity
         traj.sdd1 = direction * sdd1;  // NOTE: this could have already been set if brake to zero was added in the beginning of the trajectory, but the acceleration should be in the same direction here if that is the case
@@ -409,6 +445,21 @@ mod tests {
             let alpha = traj.y.sdd1.abs().atan2(traj.x.sdd1.abs());
             let ideal = ty.abs().atan2(tx.abs());
             assert!(fabsf(alpha - ideal) <= DEFAULT_XY_TRAJ_SYNC_ANGLE_PRECISION + 1e-4, "target ({tx}, {ty}): alpha {alpha} vs ideal {ideal}");
+        }
+    }
+
+    #[test]
+    fn pos_xy_sync_stops_at_rotation_table_end() {
+        // A precision finer than the table's last step still terminates and
+        // lands within that step of the ideal direction, with a unit-length split.
+        let last_step = PI / (1u32 << (XY_SYNC_ROTATIONS.len() + 2)) as f32;
+        for (tx, ty) in [(2.0f32, 2.0f32), (1.0, 3.0), (3.0, 1.0), (-1.5, 0.4)] {
+            let (x, y) = solve_xy_pos_synced(Vector6f::zeros(), Vector3f::new(tx, ty, 0.0), test_params(), 0.0).unwrap();
+            let alpha = y.sdd1.abs().atan2(x.sdd1.abs());
+            let ideal = ty.abs().atan2(tx.abs());
+            assert!(fabsf(alpha - ideal) <= last_step + 1e-5, "target ({tx}, {ty}): alpha {alpha} vs ideal {ideal}");
+            let norm = sqrtf(x.sdd1 * x.sdd1 + y.sdd1 * y.sdd1) / test_params().max_accel_linear;
+            assert!(fabsf(norm - 1.0) < 1e-5, "target ({tx}, {ty}): |(cos, sin)| = {norm}");
         }
     }
 

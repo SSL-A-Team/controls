@@ -33,7 +33,8 @@ pub type Matrix6x3f = nalgebra::Matrix6x3<f32>;
 pub type Matrix8x6f = nalgebra::SMatrix<f32, 8, 6>;
 pub type Rotation3f = nalgebra::Rotation3<f32>;
 
-use libm::{sinf, cosf, atan2f};
+use core::f32::consts::{PI, TAU};
+use libm::{sinf, cosf, roundf};
 
 
 /// Rotation matrix around z axis by theta radians
@@ -49,7 +50,31 @@ pub fn z_rotation_mat(theta: f32) -> Matrix3f {
 
 /// Wrap an angle to the range [-pi, pi]
 pub fn wrap_angle(angle: f32) -> f32 {
-    atan2f(sinf(angle), cosf(angle))
+    if (-PI..=PI).contains(&angle) {
+        return angle;
+    }
+    // Rounding in the subtraction can land one ulp past +/-pi.
+    (angle - TAU * roundf(angle / TAU)).clamp(-PI, PI)
+}
+
+/// Square root. Uses the FPU's correctly rounded `vsqrt.f32` on ARM targets with
+/// VFP (libm's `sqrtf` is a software routine there); identical results elsewhere.
+#[inline]
+pub fn sqrtf(x: f32) -> f32 {
+    #[cfg(all(target_arch = "arm", target_feature = "vfp2"))]
+    {
+        let r: f32;
+        // SAFETY: a single FPU instruction on registers only.
+        unsafe {
+            core::arch::asm!("vsqrt.f32 {0}, {1}", out(sreg) r, in(sreg) x,
+                options(pure, nomem, nostack));
+        }
+        r
+    }
+    #[cfg(not(all(target_arch = "arm", target_feature = "vfp2")))]
+    {
+        libm::sqrtf(x)
+    }
 }
 
 /// Error type for ateam-controls operations.
@@ -108,3 +133,25 @@ impl defmt::Format for ControlsError {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_angle_matches_atan2_form() {
+        // In-range angles pass through exactly.
+        for a in [0.0f32, 1.0, -2.5, PI, -PI] {
+            assert_eq!(wrap_angle(a), a);
+        }
+        // Out-of-range angles agree with atan2(sin, cos) and stay within [-pi, pi].
+        let mut a = -60.0f32;
+        while a <= 60.0 {
+            let w = wrap_angle(a);
+            let reference = libm::atan2f(sinf(a), cosf(a));
+            assert!((-PI..=PI).contains(&w), "{a}: {w} out of range");
+            assert!(wrap_angle(w - reference).abs() < 1e-5, "{a}: {w} vs {reference}");
+            a += 0.001;
+        }
+        assert!(wrap_angle(f32::NAN).is_nan());
+    }
+}

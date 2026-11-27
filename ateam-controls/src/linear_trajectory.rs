@@ -1,4 +1,5 @@
-use libm::{atan2f, fabsf, sqrtf};
+use libm::{atan2f, fabsf};
+use crate::sqrtf;
 use crate::bangbang_trajectory::{BangBangTraj1D, solve_1d_pos, solve_1d_vel, eval_1d_state_at, eval_1d_accel_at};
 use crate::defaults::DEFAULT_CONTROL_DT_US;
 use crate::{ControlsError, Vector2f, Vector3f, Vector6f, wrap_angle};
