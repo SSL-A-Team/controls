@@ -999,6 +999,9 @@ pub struct StateEstimator<const L: usize, const K: usize> {
     /// Unremoved, the dead reckoning from the EKF horizon to now integrates it into a
     /// standing velocity and position offset (0.05 m/s^2 gave ~16 mm/s and ~4 mm).
     accel_bias: SVector<f32, 2>,
+    /// IMU input fed to the EKF on the last tick: [acc_x_mps2, acc_y_mps2, gyro_w_radps]
+    /// with the learned accelerometer bias removed.
+    imu_input: SVector<f32, EKF_INPUT_LEN>,
 }
 
 impl<const L: usize, const K: usize> StateEstimator<L, K> {
@@ -1015,6 +1018,7 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
             vision_filter,
             odometer,
             accel_bias: SVector::zeros(),
+            imu_input: SVector::zeros(),
         }
     }
 
@@ -1089,6 +1093,7 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
             imu_accel.y - self.accel_bias.y,
             imu_accel.z,
         );
+        self.imu_input = u;
 
         self.ekf.tick(
             u,
@@ -1099,6 +1104,12 @@ impl<const L: usize, const K: usize> StateEstimator<L, K> {
         )?;
 
         Ok(())
+    }
+
+    /// IMU input fed to the EKF on the last tick, i.e. the measurements after the
+    /// learned accelerometer bias is removed: [acc_x_mps2, acc_y_mps2, gyro_w_radps].
+    pub fn get_imu_input(&self) -> SVector<f32, EKF_INPUT_LEN> {
+        self.imu_input
     }
 
     pub fn init(
